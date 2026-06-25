@@ -34,8 +34,34 @@
         });
         let demands = [];
         let timeInterval;
-        const alertUrgent = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
-        const alertNormal = new Audio('https://actions.google.com/sounds/v1/impacts/mechanical_switch.ogg');
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playTone(frequency, duration, type = 'square', volume = 0.3) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.value = frequency;
+            gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
+        function playNormalAlert() {
+            playTone(800, 0.15, 'sine', 0.3);
+            setTimeout(() => playTone(1000, 0.15, 'sine', 0.3), 200);
+            setTimeout(() => playTone(1200, 0.2, 'sine', 0.3), 400);
+        }
+
+        function playUrgentAlert() {
+            for (let i = 0; i < 6; i++) {
+                setTimeout(() => {
+                    playTone(880, 0.12, 'square', 0.4);
+                }, i * 250);
+            }
+        }
 
         socket.emit('identify', 'cozinha');
 
@@ -108,13 +134,15 @@
         socket.on('demand:new', (demand) => {
             demands.push(demand);
             render();
-            alertNormal.play().catch(() => {});
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            playNormalAlert();
         });
 
         socket.on('demand:urgent', (demand) => {
             demands.push(demand);
             render();
-            alertUrgent.play().catch(() => {});
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            playUrgentAlert();
         });
 
         socket.on('demand:updated', (updatedDemand) => {
