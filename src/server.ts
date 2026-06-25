@@ -34,6 +34,10 @@ fastify.get('/cozinha', async (request, reply) => {
     return reply.type('text/html').send(html);
 });
 
+fastify.get('/health', async (request, reply) => {
+    return { status: 'ok', timestamp: new Date().toISOString() };
+});
+
 fastify.get('/gerente', async (request, reply) => {
     const html = fs.readFileSync(path.join(__dirname, 'views', 'gerente.html'), 'utf8');
     return reply.type('text/html').send(html);

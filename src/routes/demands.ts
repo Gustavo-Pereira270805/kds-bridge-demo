@@ -45,12 +45,43 @@ fastify.patch<{ Params: { id : string }, Body: UpdateStatusBody }> ('/:id', asyn
 
         const updatedDemand = db.prepare('SELECT * FROM demands WHERE id = ?').get(id) as Demand;
 
-        fastify.io.emit('demand:updated', updatedDemand);
+        (fastify as any).io.emit('demand:updated', updatedDemand);
         return updatedDemand;
 });
 
 fastify.get('/history', async (request, reply) => {
     const stmt = db.prepare("SELECT * FROM demands ORDER BY created_at DESC LIMIT 100");
     return stmt.all() as Demand[];
+});
+
+fastify.get('/metrics', async (request, reply) => {
+    const total = (db.prepare(
+        "SELECT COUNT(*) as count FROM demands WHERE date(created_at) = date('now')"
+    ).get() as { count: number }).count;
+
+    const avgTime = (db.prepare(`
+        SELECT ROUND(AVG(
+            (julianday(completed_at) - julianday(created_at)) * 24 * 60
+        )) as avg_minutes
+        FROM demands
+        WHERE status = 'completed'
+          AND completed_at IS NOT NULL
+          AND date(created_at) = date('now')
+    `).get() as { avg_minutes: number | null }).avg_minutes;
+
+    const topProduct = db.prepare(`
+        SELECT product_name, SUM(quantity) as total_qty
+        FROM demands
+        WHERE date(created_at) = date('now')
+        GROUP BY product_name
+        ORDER BY total_qty DESC
+        LIMIT 1
+    `).get() as { product_name: string; total_qty: number } | undefined;
+
+    return {
+        total,
+        avgTimeMinutes: avgTime ?? 0,
+        topProduct: topProduct?.product_name ?? '-'
+    };
 });
 }

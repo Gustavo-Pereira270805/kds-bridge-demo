@@ -6,61 +6,154 @@
     <title>Salão - KDS Bridge</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
- 
-        body { font-family: sans-serif; padding: 1rem; font-size: 16px; }
-        select, input, button { width: 100%; padding: 12px; margin-bottom: 10px; font-size: 18px; }
-        button { background-color: #007bff; color: white; border: none; border-radius: 4px; }
-        .urgent { background-color: #dc3545; }
+        * { box-sizing: border-box; }
+        body { font-family: sans-serif; padding: 1rem; font-size: 16px; background: #f5f5f5; margin: 0; }
+        h2, h3 { margin-top: 0; }
+        select, input, button { width: 100%; padding: 12px; margin-bottom: 10px; font-size: 18px; border-radius: 6px; border: 1px solid #ccc; }
+        button { background-color: #007bff; color: white; border: none; cursor: pointer; min-height: 48px; }
+        button.urgent-btn { background-color: #dc3545; }
+        button.complete-btn { background-color: #28a745; width: auto; padding: 10px 20px; font-size: 16px; }
+        .section { background: white; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .demand-list { display: flex; flex-direction: column; gap: 10px; }
+        .demand-card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; align-items: center; }
+        .demand-card.urgent { border-left: 4px solid #dc3545; background: #fff5f5; }
+        .demand-card .info { flex: 1; }
+        .demand-card .name { font-weight: bold; font-size: 18px; }
+        .demand-card .meta { font-size: 14px; color: #666; }
+        .demand-card .time { font-size: 13px; color: #999; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .badge.urgent { background: #dc3545; color: white; }
+        .badge.normal { background: #6c757d; color: white; }
+        .empty-state { text-align: center; color: #999; padding: 20px; }
     </style>
 </head>
 <body>
-    <h2>Registrar Demanda</h2>
-    <form id="demandForm">
-        <select id="productSelect" required>
-            <option value="">Carregando produtos...</option>
-        </select>
-        <input type="number" id="quantity" placeholder="Quantidade" min="1" value="1" required>
-        
-        <label style="display: block; margin-bottom: 15px;">
-            <input type="checkbox" id="isUrgent" style="width: auto;"> Marcar como Urgente
-        </label>
-        
-        <button type="submit">Enviar para Cozinha</button>
-    </form>
+    <div class="section">
+        <h2>Registrar Demanda</h2>
+        <form id="demandForm">
+            <select id="productSelect" required>
+                <option value="">Carregando produtos...</option>
+            </select>
+            <input type="number" id="quantity" placeholder="Quantidade" min="1" value="1" required>
+            <label style="display: block; margin-bottom: 10px;">
+                <input type="checkbox" id="isUrgent" style="width: auto;"> Marcar como Urgente
+            </label>
+            <button type="submit">Enviar para Cozinha</button>
+        </form>
+    </div>
+
+    <div class="section">
+        <h3>Demandas Ativas</h3>
+        <div id="demandList" class="demand-list">
+            <div class="empty-state">Nenhuma demanda ativa no momento.</div>
+        </div>
+    </div>
 
     <script>
         const socket = io();
-        socket.emit('identify', 'salao'); 
+        socket.emit('identify', 'salao');
+        let demands = [];
+
+        function timeAgo(dateStr) {
+            const diff = Math.floor((Date.now() - new Date(dateStr + 'Z').getTime()) / 1000);
+            if (diff < 60) return 'agora';
+            const min = Math.floor(diff / 60);
+            if (min < 60) return `há ${min} min`;
+            const h = Math.floor(min / 60);
+            return `há ${h}h ${min % 60}min`;
+        }
+
+        function renderDemands() {
+            const container = document.getElementById('demandList');
+            const pending = demands.filter(d => d.status === 'pending');
+            if (pending.length === 0) {
+                container.innerHTML = '<div class="empty-state">Nenhuma demanda ativa no momento.</div>';
+                return;
+            }
+            const sorted = pending.sort((a, b) => {
+                if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
+                if (a.priority !== 'urgent' && b.priority === 'urgent') return 1;
+                return new Date(a.created_at) - new Date(b.created_at);
+            });
+            container.innerHTML = sorted.map(d => `
+                <div class="demand-card ${d.priority}">
+                    <div class="info">
+                        <div class="name">${d.quantity}x ${d.product_name} <span class="badge ${d.priority}">${d.priority === 'urgent' ? 'URGENTE' : 'Normal'}</span></div>
+                        <div class="time">${timeAgo(d.created_at)}</div>
+                    </div>
+                    <button class="complete-btn" onclick="completeDemand(${d.id})">Concluir</button>
+                </div>
+            `).join('');
+        }
+
+        async function completeDemand(id) {
+            await fetch(`/api/demands/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'completed' })
+            });
+        }
+
         async function loadProducts() {
             const response = await fetch('/api/products');
             const products = await response.json();
-            
             const select = document.getElementById('productSelect');
-            select.innerHTML = products.map(p => 
+            select.innerHTML = products.map(p =>
                 `<option value="${p.id}">${p.name} (${p.unit})</option>`
             ).join('');
         }
 
+        async function loadActiveDemands() {
+            const response = await fetch('/api/demands');
+            demands = await response.json();
+            renderDemands();
+        }
+
         document.getElementById('demandForm').addEventListener('submit', async (e) => {
-            e.preventDefault(); 
-            
+            e.preventDefault();
             const payload = {
                 product_id: parseInt(document.getElementById('productSelect').value),
                 quantity: parseInt(document.getElementById('quantity').value),
                 priority: document.getElementById('isUrgent').checked ? 'urgent' : 'normal'
             };
-
             await fetch('/api/demands', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-
             document.getElementById('quantity').value = 1;
             document.getElementById('isUrgent').checked = false;
         });
 
+        socket.on('demand:new', (demand) => {
+            demands.push(demand);
+            renderDemands();
+        });
+
+        socket.on('demand:urgent', (demand) => {
+            demands.push(demand);
+            renderDemands();
+        });
+
+        socket.on('demand:updated', (updated) => {
+            const idx = demands.findIndex(d => d.id === updated.id);
+            if (idx !== -1) {
+                if (updated.status === 'completed' || updated.status === 'cancelled') {
+                    demands.splice(idx, 1);
+                } else {
+                    demands[idx] = updated;
+                }
+            }
+            renderDemands();
+        });
+
+        socket.on('connect', () => {
+            socket.emit('identify', 'salao');
+            loadActiveDemands();
+        });
+
         loadProducts();
+        loadActiveDemands();
     </script>
 </body>
 </html>

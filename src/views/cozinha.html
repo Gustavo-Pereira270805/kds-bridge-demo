@@ -5,62 +5,106 @@
     <title>Cozinha - KDS Bridge</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        body { font-family: sans-serif; background: #222; color: white; padding: 20px; }
+        * { box-sizing: border-box; }
+        body { font-family: sans-serif; background: #222; color: white; padding: 20px; margin: 0; }
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; }
-        .card { background: #333; padding: 20px; border-radius: 8px; font-size: 24px; text-align: center; }
-        .card.urgent { background: #dc3545; animation: pulse 1.5s infinite; } /* Destaque urgente [cite: 87] */
+        .card { background: #333; padding: 20px; border-radius: 8px; font-size: 24px; text-align: center; position: relative; }
+        .card.urgent { background: #dc3545; animation: pulse 1.5s infinite; }
+        .card .qty { font-size: 36px; font-weight: bold; }
+        .card .name { font-size: 20px; margin: 5px 0; }
+        .card .elapsed { font-size: 14px; color: #aaa; margin-top: 8px; }
+        .card.urgent .elapsed { color: #ffcccc; }
+        .card.urgent .urgent-label { font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
+        .empty-state { grid-column: 1 / -1; text-align: center; padding: 40px; color: #666; font-size: 24px; }
+        .reconnect-banner { display: none; background: #ffc107; color: #333; text-align: center; padding: 10px; font-weight: bold; }
     </style>
 </head>
 <body>
+    <div id="reconnectBanner" class="reconnect-banner">Reconectando ao servidor...</div>
     <h1>Demandas Ativas</h1>
     <div id="demandsGrid" class="grid"></div>
 
     <script>
-        const socket = io();
-        let demands = []; 
+        const socket = io({
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000
+        });
+        let demands = [];
+        let timeInterval;
         const alertSound = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
 
         socket.emit('identify', 'cozinha');
 
+        socket.on('connect', () => {
+            document.getElementById('reconnectBanner').style.display = 'none';
+            socket.emit('identify', 'cozinha');
+            carregarDemandasPendentes();
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('reconnectBanner').style.display = 'block';
+        });
+
+        socket.on('reconnect_attempt', () => {
+            document.getElementById('reconnectBanner').style.display = 'block';
+        });
+
+        function timeAgo(dateStr) {
+            const diff = Math.floor((Date.now() - new Date(dateStr + 'Z').getTime()) / 1000);
+            if (diff < 60) return 'agora';
+            const min = Math.floor(diff / 60);
+            if (min < 60) return `há ${min} min`;
+            const h = Math.floor(min / 60);
+            return `há ${h}h ${min % 60}min`;
+        }
+
         async function carregarDemandasPendentes() {
             try {
-                // Chama a rota GET /api/demands que criamos no backend
                 const response = await fetch('/api/demands');
-                const pendentes = await response.json();
-                
-                // Sobrescreve o array vazio local com os dados reais do SQLite
-                demands = pendentes; 
-                
-                // Desenha os cards na tela
+                demands = await response.json();
                 render();
             } catch (error) {
                 console.error('Falha ao buscar fila do banco:', error);
             }
         }
 
-        // Executa a carga inicial assim que a tela abre
         carregarDemandasPendentes();
 
         function render() {
             const grid = document.getElementById('demandsGrid');
-            
-            const sortedDemands = demands.sort((a, b) => {
+
+            const sortedDemands = [...demands].sort((a, b) => {
                 if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
                 if (a.priority !== 'urgent' && b.priority === 'urgent') return 1;
                 return new Date(a.created_at) - new Date(b.created_at);
             });
 
+            if (sortedDemands.length === 0) {
+                grid.innerHTML = '<div class="empty-state">Nenhuma demanda ativa</div>';
+                return;
+            }
+
             grid.innerHTML = sortedDemands.map(d => `
                 <div class="card ${d.priority}">
-                    <strong>${d.quantity}x</strong><br>
-                    ${d.product_name}
+                    ${d.priority === 'urgent' ? '<div class="urgent-label">Urgente</div>' : ''}
+                    <div class="qty">${d.quantity}x</div>
+                    <div class="name">${d.product_name}</div>
+                    <div class="elapsed" data-created="${d.created_at}">${timeAgo(d.created_at)}</div>
                 </div>
             `).join('');
+
+            if (timeInterval) clearInterval(timeInterval);
+            timeInterval = setInterval(() => {
+                document.querySelectorAll('.elapsed[data-created]').forEach(el => {
+                    el.textContent = timeAgo(el.dataset.created);
+                });
+            }, 30000);
         }
 
         socket.on('demand:new', (demand) => {
-            console.log('[Receptor] Pacote recebido via Socket:', demand);
             demands.push(demand);
             render();
         });
@@ -68,7 +112,7 @@
         socket.on('demand:urgent', (demand) => {
             demands.push(demand);
             render();
-            alertSound.play().catch(e => console.log('O navegador bloqueou o autoplay de áudio.'));
+            alertSound.play().catch(e => console.log('Navegador bloqueou autoplay de áudio.'));
         });
 
         socket.on('demand:updated', (updatedDemand) => {
