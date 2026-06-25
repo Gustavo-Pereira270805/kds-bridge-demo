@@ -53,6 +53,7 @@
         const socket = io();
         socket.emit('identify', 'salao');
         let demands = [];
+        let timeInterval;
 
         function timeAgo(dateStr) {
             const diff = Math.floor((Date.now() - new Date(dateStr + 'Z').getTime()) / 1000);
@@ -79,11 +80,18 @@
                 <div class="demand-card ${d.priority}">
                     <div class="info">
                         <div class="name">${d.quantity}x ${d.product_name} <span class="badge ${d.priority}">${d.priority === 'urgent' ? 'URGENTE' : 'Normal'}</span></div>
-                        <div class="time">${timeAgo(d.created_at)}</div>
+                        <div class="time" data-created="${d.created_at}">${timeAgo(d.created_at)}</div>
                     </div>
                     <button class="complete-btn" onclick="completeDemand(${d.id})">Concluir</button>
                 </div>
             `).join('');
+
+            if (timeInterval) clearInterval(timeInterval);
+            timeInterval = setInterval(() => {
+                document.querySelectorAll('.time[data-created]').forEach(el => {
+                    el.textContent = timeAgo(el.dataset.created);
+                });
+            }, 30000);
         }
 
         async function completeDemand(id) {
