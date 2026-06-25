@@ -12,8 +12,8 @@
         .card.urgent { background: #dc3545; animation: pulse 1.5s infinite; }
         .card .qty { font-size: 36px; font-weight: bold; }
         .card .name { font-size: 20px; margin: 5px 0; }
-        .card .elapsed { font-size: 14px; color: #aaa; margin-top: 8px; }
-        .card.urgent .elapsed { color: #ffcccc; }
+        .card .elapsed { font-size: 16px; color: #ffc107; margin-top: 8px; font-weight: bold; }
+        .card.urgent .elapsed { color: #fff; }
         .card.urgent .urgent-label { font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
         .empty-state { grid-column: 1 / -1; text-align: center; padding: 40px; color: #666; font-size: 24px; }
@@ -34,7 +34,8 @@
         });
         let demands = [];
         let timeInterval;
-        const alertSound = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+        const alertUrgent = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+        const alertNormal = new Audio('https://actions.google.com/sounds/v1/impacts/mechanical_switch.ogg');
 
         socket.emit('identify', 'cozinha');
 
@@ -92,7 +93,7 @@
                     ${d.priority === 'urgent' ? '<div class="urgent-label">Urgente</div>' : ''}
                     <div class="qty">${d.quantity}x</div>
                     <div class="name">${d.product_name}</div>
-                    <div class="elapsed" data-created="${d.created_at}">${timeAgo(d.created_at)}</div>
+                    <div class="elapsed" data-created="${d.created_at}">&#9202; ${timeAgo(d.created_at)}</div>
                 </div>
             `).join('');
 
@@ -107,12 +108,13 @@
         socket.on('demand:new', (demand) => {
             demands.push(demand);
             render();
+            alertNormal.play().catch(() => {});
         });
 
         socket.on('demand:urgent', (demand) => {
             demands.push(demand);
             render();
-            alertSound.play().catch(e => console.log('Navegador bloqueou autoplay de áudio.'));
+            alertUrgent.play().catch(() => {});
         });
 
         socket.on('demand:updated', (updatedDemand) => {
