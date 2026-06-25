@@ -55,8 +55,12 @@
         let demands = [];
         let timeInterval;
 
+        function parseDate(dateStr) {
+            return new Date(dateStr + 'Z');
+        }
+
         function timeAgo(dateStr) {
-            const diff = Math.floor((Date.now() - new Date(dateStr + 'Z').getTime()) / 1000);
+            const diff = Math.floor((Date.now() - parseDate(dateStr).getTime()) / 1000);
             if (diff < 60) return 'agora';
             const min = Math.floor(diff / 60);
             if (min < 60) return `há ${min} min`;
@@ -74,7 +78,7 @@
             const sorted = pending.sort((a, b) => {
                 if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
                 if (a.priority !== 'urgent' && b.priority === 'urgent') return 1;
-                return new Date(a.created_at) - new Date(b.created_at);
+                return parseDate(a.created_at) - parseDate(b.created_at);
             });
             container.innerHTML = sorted.map(d => `
                 <div class="demand-card ${d.priority}">
@@ -82,7 +86,7 @@
                         <div class="name">${d.quantity}x ${d.product_name} <span class="badge ${d.priority}">${d.priority === 'urgent' ? 'URGENTE' : 'Normal'}</span></div>
                         <div class="time" data-created="${d.created_at}">${timeAgo(d.created_at)}</div>
                     </div>
-                    <button class="complete-btn" onclick="completeDemand(${d.id})">Concluir</button>
+                    <button class="complete-btn" data-id="${d.id}">Concluir</button>
                 </div>
             `).join('');
 
@@ -94,43 +98,72 @@
             }, 30000);
         }
 
-        async function completeDemand(id) {
-            await fetch(`/api/demands/${id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: 'completed' })
-            });
-        }
+        document.getElementById('demandList').addEventListener('click', async (e) => {
+            const btn = e.target.closest('.complete-btn');
+            if (!btn) return;
+            const id = parseInt(btn.dataset.id);
+            btn.disabled = true;
+            btn.textContent = '...';
+            try {
+                await fetch(`/api/demands/${id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'completed' })
+                });
+            } catch (err) {
+                console.error('Erro ao concluir demanda:', err);
+                btn.disabled = false;
+                btn.textContent = 'Concluir';
+            }
+        });
 
         async function loadProducts() {
-            const response = await fetch('/api/products');
-            const products = await response.json();
-            const select = document.getElementById('productSelect');
-            select.innerHTML = products.map(p =>
-                `<option value="${p.id}">${p.name} (${p.unit})</option>`
-            ).join('');
+            try {
+                const response = await fetch('/api/products');
+                const products = await response.json();
+                const select = document.getElementById('productSelect');
+                select.innerHTML = products.map(p =>
+                    `<option value="${p.id}">${p.name} (${p.unit})</option>`
+                ).join('');
+            } catch (err) {
+                console.error('Erro ao carregar produtos:', err);
+            }
         }
 
         async function loadActiveDemands() {
-            const response = await fetch('/api/demands');
-            demands = await response.json();
-            renderDemands();
+            try {
+                const response = await fetch('/api/demands');
+                demands = await response.json();
+                renderDemands();
+            } catch (err) {
+                console.error('Erro ao carregar demandas ativas:', err);
+            }
         }
 
         document.getElementById('demandForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            const btn = e.target.querySelector('button[type="submit"]');
             const payload = {
                 product_id: parseInt(document.getElementById('productSelect').value),
                 quantity: parseInt(document.getElementById('quantity').value),
                 priority: document.getElementById('isUrgent').checked ? 'urgent' : 'normal'
             };
-            await fetch('/api/demands', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            document.getElementById('quantity').value = 1;
-            document.getElementById('isUrgent').checked = false;
+            btn.disabled = true;
+            btn.textContent = 'Enviando...';
+            try {
+                await fetch('/api/demands', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                document.getElementById('quantity').value = 1;
+                document.getElementById('isUrgent').checked = false;
+            } catch (err) {
+                console.error('Erro ao criar demanda:', err);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Enviar para Cozinha';
+            }
         });
 
         socket.on('demand:new', (demand) => {

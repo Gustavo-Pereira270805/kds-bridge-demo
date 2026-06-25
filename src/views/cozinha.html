@@ -79,8 +79,12 @@
             document.getElementById('reconnectBanner').style.display = 'block';
         });
 
+        function parseDate(dateStr) {
+            return new Date(dateStr + 'Z');
+        }
+
         function timeAgo(dateStr) {
-            const diff = Math.floor((Date.now() - new Date(dateStr + 'Z').getTime()) / 1000);
+            const diff = Math.floor((Date.now() - parseDate(dateStr).getTime()) / 1000);
             if (diff < 60) return 'agora';
             const min = Math.floor(diff / 60);
             if (min < 60) return `há ${min} min`;
@@ -91,10 +95,17 @@
         async function carregarDemandasPendentes() {
             try {
                 const response = await fetch('/api/demands');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 demands = await response.json();
                 render();
+                document.getElementById('reconnectBanner').style.display = 'none';
             } catch (error) {
                 console.error('Falha ao buscar fila do banco:', error);
+                if (demands.length === 0) {
+                    document.getElementById('reconnectBanner').textContent = 'Erro ao carregar demandas. Tentando novamente...';
+                    document.getElementById('reconnectBanner').style.display = 'block';
+                    setTimeout(carregarDemandasPendentes, 5000);
+                }
             }
         }
 
@@ -106,7 +117,7 @@
             const sortedDemands = [...demands].sort((a, b) => {
                 if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
                 if (a.priority !== 'urgent' && b.priority === 'urgent') return 1;
-                return new Date(a.created_at) - new Date(b.created_at);
+                return parseDate(a.created_at) - parseDate(b.created_at);
             });
 
             if (sortedDemands.length === 0) {

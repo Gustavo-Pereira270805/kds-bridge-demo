@@ -36,17 +36,26 @@ fastify.patch<{ Params: { id : string }, Body: UpdateStatusBody }> ('/:id', asyn
     const { id } = request.params;
     const {status, completed_by} = request.body;
 
-    const updateStmt = db.prepare(`
-        UPDATE demands
-        SET status = ?, completed_by = ?, completed_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-        `);
-        updateStmt.run(status, completed_by || null, id);
+    const existing = db.prepare('SELECT * FROM demands WHERE id = ?').get(id) as Demand | undefined;
+    if (!existing) {
+        return reply.status(404).send('Demanda não encontrada');
+    }
 
-        const updatedDemand = db.prepare('SELECT * FROM demands WHERE id = ?').get(id) as Demand;
+    const isTerminal = status === 'completed' || status === 'cancelled';
+    const stmt = isTerminal
+        ? db.prepare(`UPDATE demands SET status = ?, completed_by = ?, completed_at = CURRENT_TIMESTAMP WHERE id = ?`)
+        : db.prepare(`UPDATE demands SET status = ?, completed_by = ? WHERE id = ?`);
 
-        (fastify as any).io.emit('demand:updated', updatedDemand);
-        return updatedDemand;
+    if (isTerminal) {
+        stmt.run(status, completed_by || null, id);
+    } else {
+        stmt.run(status, completed_by || null, id);
+    }
+
+    const updatedDemand = db.prepare('SELECT * FROM demands WHERE id = ?').get(id) as Demand;
+
+    (fastify as any).io.emit('demand:updated', updatedDemand);
+    return updatedDemand;
 });
 
 fastify.get('/history', async (request, reply) => {

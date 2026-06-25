@@ -41,6 +41,7 @@ export function seedDatabase() {
     try {
       insertDailyMenus.run();
     } catch (error) {
+      console.log('[Seed] Cardápio do dia já existe, pulando...');
   }
   console.log('[Seed] Banco Populado com 10 produtos de teste');
 }

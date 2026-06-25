@@ -73,54 +73,75 @@
         socket.emit('identify', 'gerente');
 
         async function fetchMetrics() {
-            const res = await fetch('/api/demands/metrics');
-            const data = await res.json();
-            document.getElementById('totalDemands').innerText = data.total;
-            document.getElementById('avgTime').innerText = data.avgTimeMinutes > 0 ? `${data.avgTimeMinutes} min` : '-';
-            document.getElementById('topProduct').innerText = data.topProduct;
+            try {
+                const res = await fetch('/api/demands/metrics');
+                const data = await res.json();
+                document.getElementById('totalDemands').innerText = data.total;
+                document.getElementById('avgTime').innerText = data.avgTimeMinutes > 0 ? `${data.avgTimeMinutes} min` : '-';
+                document.getElementById('topProduct').innerText = data.topProduct;
+            } catch (err) {
+                console.error('Erro ao buscar métricas:', err);
+            }
         }
 
         async function fetchHistory() {
-            const response = await fetch('/api/demands/history');
-            const demands = await response.json();
-            const tbody = document.getElementById('historyTableBody');
-            if (demands.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Nenhuma demanda registrada ainda.</td></tr>';
-                return;
+            try {
+                const response = await fetch('/api/demands/history');
+                const demands = await response.json();
+                const tbody = document.getElementById('historyTableBody');
+                if (demands.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Nenhuma demanda registrada ainda.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = demands.map(d => {
+                    const formattedTime = new Date(d.created_at + 'Z').toLocaleTimeString('pt-BR');
+                    const statusLabel = d.status === 'pending' ? 'Pendente' : d.status === 'completed' ? 'Concluído' : 'Cancelado';
+                    return `
+                        <tr>
+                            <td>#${d.id}</td>
+                            <td><strong>${d.product_name}</strong></td>
+                            <td>${d.quantity}</td>
+                            <td>${d.priority === 'urgent' ? 'Urgente' : 'Normal'}</td>
+                            <td>${statusLabel}</td>
+                            <td>${formattedTime}</td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error('Erro ao buscar histórico:', err);
             }
-            tbody.innerHTML = demands.map(d => {
-                const formattedTime = new Date(d.created_at + 'Z').toLocaleTimeString('pt-BR');
-                const statusLabel = d.status === 'pending' ? 'Pendente' : d.status === 'completed' ? 'Concluído' : 'Cancelado';
-                return `
-                    <tr>
-                        <td>#${d.id}</td>
-                        <td><strong>${d.product_name}</strong></td>
-                        <td>${d.quantity}</td>
-                        <td>${d.priority === 'urgent' ? 'Urgente' : 'Normal'}</td>
-                        <td>${statusLabel}</td>
-                        <td>${formattedTime}</td>
-                    </tr>
-                `;
-            }).join('');
         }
 
         async function fetchProducts() {
-            const res = await fetch('/api/products/all');
-            const products = await res.json();
-            const container = document.getElementById('productList');
-            container.innerHTML = products.map(p => `
-                <div class="product-row">
-                    <span><strong>${p.name}</strong> <small style="color:#999">(${p.category} · ${p.unit})</small></span>
-                    <button class="toggle-btn ${p.active ? 'active' : 'inactive'}" onclick="toggleProduct(${p.id})">
-                        ${p.active ? 'Ativo' : 'Inativo'}
-                    </button>
-                </div>
-            `).join('');
+            try {
+                const res = await fetch('/api/products/all');
+                const products = await res.json();
+                const container = document.getElementById('productList');
+                container.innerHTML = products.map(p => `
+                    <div class="product-row">
+                        <span><strong>${p.name}</strong> <small style="color:#999">(${p.category} · ${p.unit})</small></span>
+                        <button class="toggle-btn ${p.active ? 'active' : 'inactive'}" data-id="${p.id}">
+                            ${p.active ? 'Ativo' : 'Inativo'}
+                        </button>
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.error('Erro ao buscar produtos:', err);
+            }
         }
 
-        async function toggleProduct(id) {
-            await fetch(`/api/products/${id}`, { method: 'PATCH' });
-        }
+        document.getElementById('productList').addEventListener('click', async (e) => {
+            const btn = e.target.closest('.toggle-btn');
+            if (!btn) return;
+            const id = parseInt(btn.dataset.id);
+            btn.disabled = true;
+            try {
+                await fetch(`/api/products/${id}`, { method: 'PATCH' });
+            } catch (err) {
+                console.error('Erro ao alternar produto:', err);
+                btn.disabled = false;
+            }
+        });
 
         async function refreshAll() {
             await Promise.all([fetchMetrics(), fetchHistory(), fetchProducts()]);
