@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerente - KDS Bridge (Demo)</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #f8f9fa; color: #333; }
+        .metrics-container { display: flex; gap: 20px; margin-bottom: 30px; }
+        .metric-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); flex: 1; text-align: center; }
+        .metric-card h3 { margin: 0 0 10px 0; font-size: 16px; color: #666; }
+        .metric-card p { margin: 0; font-size: 28px; font-weight: bold; color: #28a745; }
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #007bff; color: white; }
+        tr:hover { background-color: #f1f1f1; }
+    </style>
+</head>
+<body>
+    <h1>Painel de Controle Operacional (Gerente)</h1>
+
+    <div class="metrics-container">
+        <div class="metric-card">
+            <h3>Total de Demandas (Hoje)</h3>
+            <p id="totalDemands">0</p>
+        </div>
+        <div class="metric-card">
+            <h3>Item Mais Pedido</h3>
+            <p id="topProduct">-</p>
+        </div>
+    </div>
+
+    <h2>Histórico de Demandas do Dia</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Produto</th>
+                <th>Quantidade</th>
+                <th>Prioridade</th>
+                <th>Status</th>
+                <th>Horário</th>
+            </tr>
+        </thead>
+        <tbody id="historyTableBody">
+            <tr>
+                <td colspan="6" style="text-align: center;">Carregando histórico...</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <script>
+        
+        async function fetchMetricsAndHistory() {
+            try {
+                const response = await fetch('/api/demands/history');
+                const demands = await response.json();
+
+        
+                document.getElementById('totalDemands').innerText = demands.length;
+                
+        
+                if (demands.length > 0) {
+                    const counts = {};
+                    demands.forEach(d => counts[d.product_name] = (counts[d.product_name] || 0) + d.quantity);
+                    const topItem = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+                    document.getElementById('topProduct').innerText = topItem;
+                }
+
+        
+                const tbody = document.getElementById('historyTableBody');
+                if (demands.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center;">Nenhuma demanda registrada ainda.</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = demands.map(d => {
+                    const formattedTime = new Date(d.created_at).toLocaleTimeString('pt-BR');
+                    return `
+                        <tr>
+                            <td>#${d.id}</td>
+                            <td><strong>${d.product_name}</strong></td>
+                            <td>${d.quantity}</td>
+                            <td>${d.priority === 'urgent' ? '🚨 Urgente' : 'Normal'}</td>
+                            <td>${d.status === 'pending' ? '⏳ Pendente' : '✅ Concluído'}</td>
+                            <td>${formattedTime}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+            } catch (error) {
+                console.error("Erro ao buscar histórico:", error);
+            }
+        }
+
+        
+        fetchMetricsAndHistory();
+
+        
+        setInterval(fetchMetricsAndHistory, 5000);
+    </script>
+</body>
+</html>

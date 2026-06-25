@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Salão - KDS Bridge</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+ 
+        body { font-family: sans-serif; padding: 1rem; font-size: 16px; }
+        select, input, button { width: 100%; padding: 12px; margin-bottom: 10px; font-size: 18px; }
+        button { background-color: #007bff; color: white; border: none; border-radius: 4px; }
+        .urgent { background-color: #dc3545; }
+    </style>
+</head>
+<body>
+    <h2>Registrar Demanda</h2>
+    <form id="demandForm">
+        <select id="productSelect" required>
+            <option value="">Carregando produtos...</option>
+        </select>
+        <input type="number" id="quantity" placeholder="Quantidade" min="1" value="1" required>
+        
+        <label style="display: block; margin-bottom: 15px;">
+            <input type="checkbox" id="isUrgent" style="width: auto;"> Marcar como Urgente
+        </label>
+        
+        <button type="submit">Enviar para Cozinha</button>
+    </form>
+
+    <script>
+        const socket = io();
+        socket.emit('identify', 'salao'); 
+        async function loadProducts() {
+            const response = await fetch('/api/products');
+            const products = await response.json();
+            
+            const select = document.getElementById('productSelect');
+            select.innerHTML = products.map(p => 
+                `<option value="${p.id}">${p.name} (${p.unit})</option>`
+            ).join('');
+        }
+
+        document.getElementById('demandForm').addEventListener('submit', async (e) => {
+            e.preventDefault(); 
+            
+            const payload = {
+                product_id: parseInt(document.getElementById('productSelect').value),
+                quantity: parseInt(document.getElementById('quantity').value),
+                priority: document.getElementById('isUrgent').checked ? 'urgent' : 'normal'
+            };
+
+            await fetch('/api/demands', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            document.getElementById('quantity').value = 1;
+            document.getElementById('isUrgent').checked = false;
+        });
+
+        loadProducts();
+    </script>
+</body>
+</html>
