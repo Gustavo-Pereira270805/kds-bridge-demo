@@ -147,6 +147,13 @@
             renderDemands();
         });
 
+        socket.on('product:updated', async () => {
+            const select = document.getElementById('productSelect');
+            const selectedValue = select.value;
+            await loadProducts();
+            if (selectedValue) select.value = selectedValue;
+        });
+
         socket.on('connect', () => {
             socket.emit('identify', 'salao');
             loadActiveDemands();
