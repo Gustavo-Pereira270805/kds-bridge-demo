@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cozinha Fria - KDS Bridge</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0a1628; color: #f1faee; padding: 20px; min-height: 100vh;
+        }
+
+        .reconnect-banner {
+            display: none; background: #f4a261; color: #111;
+            text-align: center; padding: 8px 16px; font-weight: 700; font-size: 14px;
+            position: fixed; top: 0; left: 0; right: 0; z-index: 999;
+        }
+
+        #globalTimer {
+            position: fixed; top: 12px; right: 16px; z-index: 998;
+            font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums;
+            padding: 6px 16px; border-radius: 10px; background: rgba(0,0,0,0.55);
+            border: 2px solid #1a3054; color: #5a6a8a; letter-spacing: 2px;
+        }
+        #globalTimer.t-green { color: #2a9d8f; border-color: #2a9d8f; }
+        #globalTimer.t-orange { color: #f4a261; border-color: #f4a261; }
+        #globalTimer.t-red { color: #e63946; border-color: #e63946; }
+        #globalTimer.t-urgent { animation: timerPulse 1s infinite; }
+        .card-timer {
+            font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+            color: #5a6a8a; margin-top: 4px; letter-spacing: 0.5px;
+        }
+        .card-timer.t-green { color: #2a9d8f; }
+        .card-timer.t-orange { color: #f4a261; }
+        .card-timer.t-red { color: #e63946; }
+        .card-timer.t-urgent { animation: timerPulse 1s infinite; }
+
+        #crossCancelToast {
+            display: none; position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
+            z-index: 1200; background: #e63946; color: #fff; font-size: 17px; font-weight: 800;
+            padding: 14px 24px; border-radius: 10px; border: 2px solid #ff8080;
+            box-shadow: 0 8px 30px rgba(230,57,70,0.5); text-align: center; max-width: 90%;
+        }
+
+        h1 {
+            font-size: 18px; font-weight: 800; margin-bottom: 20px; text-align: center;
+            text-transform: uppercase; letter-spacing: 2px;
+            background: #0d1f3c; color: #00d4ff; padding: 12px 16px;
+            border-radius: 8px; border-bottom: 3px solid #00d4ff;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 12px;
+        }
+
+        .card {
+            background: #0d1f3c; padding: 16px 18px; border-radius: 10px;
+            border-left: 4px solid #1a3054; position: relative;
+            animation: fadeInUp 0.25s ease;
+        }
+
+        .card.urgent { background: #2d0a0a; border-left-color: #e63946; border-left-width: 6px; animation: urgentPulse 2s infinite; }
+        .card.breached { border-left-color: #f4a261; }
+        .card.cooking { background: #0a1a14; border-left-color: #2a9d8f; }
+        .card.late { background: linear-gradient(135deg, #0d1f3c 0%, #2a0d0d 100%); border-left-color: #e63946; }
+        .card.critical { background: #4a0000; border-left-color: #ff0000; animation: criticalPulse 0.8s infinite; }
+        .card.stockout { background: #2d1a00; border: 2px solid #f4a261; border-left-width: 6px; animation: stockoutPulse 1.5s infinite; }
+        .card.flash-in { animation: flashIn 0.5s ease-out 1, fadeInUp 0.25s ease; }
+        .card.urgent.flash-in { animation: flashIn 0.5s ease-out 1, urgentPulse 2s infinite 0.5s; }
+        .card.critical.flash-in { animation: flashIn 0.5s ease-out 1, criticalPulse 0.8s infinite 0.5s; }
+        .card.stockout.flash-in { animation: flashIn 0.5s ease-out 1, stockoutPulse 1.5s infinite 0.5s; }
+        .card.cross-cancelled { border: 2px solid #ff0000 !important; animation: shake 0.5s ease 3, crossCancelPulse 1s infinite !important; }
+
+        .card .urgent-label {
+            font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px;
+            color: #e63946; margin-bottom: 6px;
+        }
+
+        .card .card-top { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 6px; }
+
+        .card .qty {
+            font-size: 26px; font-weight: 800; color: #5a6a8a; line-height: 1;
+            white-space: nowrap; min-width: 36px;
+        }
+        .card.urgent .qty { color: #fff; }
+
+        .card .product-info { flex: 1; min-width: 0; }
+        .card .name {
+            font-size: 22px; font-weight: 700; color: #e0e8f0; line-height: 1.2;
+            word-break: break-word;
+        }
+        .card.urgent .name { color: #fff; }
+
+        .card .unit-label { font-size: 13px; color: #4a6080; margin-top: 1px; display: inline; }
+        .card.urgent .unit-label { color: rgba(255,255,255,0.6); }
+
+        .card .cooking-badge {
+            display: inline-block; background: #2a9d8f; color: #fff;
+            font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 3px;
+            text-transform: uppercase; letter-spacing: 1px; margin-top: 4px;
+        }
+
+        .card .time-row {
+            display: flex; align-items: center; gap: 14px; margin-top: 8px;
+            font-size: 13px; font-weight: 600; flex-wrap: wrap;
+        }
+        .card .elapsed { color: #8899bb; }
+        .card .elapsed span { color: #f4a261; font-weight: 700; }
+        .card.urgent .elapsed { color: rgba(255,255,255,0.8); }
+        .card.urgent .elapsed span { color: #fff; }
+
+        .card .eta { color: #2a9d8f; font-weight: 700; }
+        .card .eta.overdue { color: #e63946; font-weight: 800; }
+        .card.urgent .eta { color: rgba(255,255,255,0.7); }
+        .card.urgent .eta.overdue { color: #fff; }
+
+        .card .progress-wrap { margin-top: 8px; }
+        .card .progress-bar {
+            height: 4px; background: #1a3054; border-radius: 2px; overflow: hidden;
+        }
+        .card.urgent .progress-bar { background: rgba(255,255,255,0.15); }
+        .card .progress-fill {
+            height: 100%; border-radius: 2px; transition: width 30s linear;
+        }
+
+        .card .actions { display: flex; gap: 10px; margin-top: 14px; }
+        .card .actions button {
+            flex: 1; padding: 12px 16px; border: none; border-radius: 8px;
+            font-size: 15px; font-weight: 700; cursor: pointer; min-height: 46px;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            transition: background 0.15s ease; font-family: inherit;
+        }
+        .card .actions .ready-btn { background: #2a9d8f; color: #fff; }
+        .card .actions .ready-btn:hover { background: #238b7d; }
+        .card .actions .ready-btn.confirm-pending { background: #f4a261; color: #1a1a1a; }
+        .card .actions .ready-btn.confirm-pending:hover { background: #e76f51; color: #1a1a1a; }
+        .card .actions .cancel-btn {
+            background: #1a3054; color: #8899bb;
+            min-width: 64px; min-height: 64px; font-size: 18px;
+            padding: 14px 20px; border-radius: 10px;
+        }
+        .card .actions .cancel-btn:hover { background: #e63946; color: #fff; }
+        .card .actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .ready-strip {
+            margin-top: 16px; padding-top: 12px;
+            border-top: 1px solid #1a3054;
+        }
+        .ready-strip-header {
+            font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
+            color: #2a9d8f; margin-bottom: 8px;
+        }
+        .ready-strip .ready-pill {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: #0a2a1a; border: 1px solid #2a9d8f; border-radius: 6px;
+            padding: 5px 12px; margin: 0 6px 6px 0; font-size: 13px;
+            font-weight: 600; color: #8ab8a8; white-space: nowrap;
+            animation: gentlePulse 2.5s infinite;
+        }
+        .ready-strip .ready-pill .pill-qty { color: #5a6a8a; font-weight: 700; }
+        .ready-strip .ready-pill .pill-name { color: #c0d0e0; }
+        .ready-strip .ready-pill .pill-unit { color: #5a6a8a; font-size: 11px; }
+
+        .empty-state { grid-column: 1 / -1; text-align: center; padding: 50px 20px; color: #2a3a5c; font-size: 16px; font-weight: 500; }
+
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #1a3054; border-radius: 3px; }
+
+        @keyframes urgentPulse {
+            0%, 100% { box-shadow: inset 0 0 0 0 rgba(230,57,70,0); }
+            50% { box-shadow: inset 0 0 40px 0 rgba(230,57,70,0.15); }
+        }
+        @keyframes criticalPulse {
+            0%, 100% { box-shadow: inset 0 0 0 0 rgba(255,0,0,0); }
+            50% { box-shadow: inset 0 0 50px 0 rgba(255,0,0,0.35); }
+        }
+        @keyframes stockoutPulse {
+            0%, 100% { box-shadow: inset 0 0 0 0 rgba(244,162,97,0); }
+            50% { box-shadow: inset 0 0 40px 0 rgba(244,162,97,0.3); }
+        }
+        @keyframes gentlePulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(42,157,143,0); }
+            50% { box-shadow: 0 0 14px 0 rgba(42,157,143,0.45); }
+        }
+        @keyframes flashIn {
+            0% { background: #ffffff; box-shadow: 0 0 30px 6px rgba(255,255,255,0.8); }
+            100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-8px); }
+            40% { transform: translateX(8px); }
+            60% { transform: translateX(-6px); }
+            80% { transform: translateX(6px); }
+        }
+        @keyframes crossCancelPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(255,0,0,0.7); }
+            50% { box-shadow: 0 0 22px 5px rgba(255,0,0,0.35); }
+        }
+        @keyframes timerPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.07); }
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 768px) {
+            body { padding: 12px; }
+            h1 { font-size: 16px; }
+            .grid { grid-template-columns: 1fr; }
+            .card .name { font-size: 18px; }
+            .card { padding: 12px 14px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="reconnectBanner" class="reconnect-banner">Reconectando ao servidor...</div>
+    <h1>COZINHA FRIA</h1>
+    <div id="demandsGrid" class="grid"></div>
+    <div id="readyStrip" class="ready-strip"></div>
+
+    <div id="globalTimer">--:--</div>
+    <div id="crossCancelToast"></div>
+
+    <div id="cancelModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center;backdrop-filter:blur(4px);">
+        <div style="background:#0d1f3c;border-radius:16px;padding:28px;max-width:420px;width:90%;border:1px solid #1a3054;">
+            <h3 style="color:#f1faee;margin:0 0 16px;font-size:18px;">Cancelar Demanda</h3>
+            <label style="color:#8899bb;font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Motivo:</label>
+            <select id="cancelReasonSelect" style="width:100%;padding:12px;border:2px solid #1a3054;border-radius:10px;font-size:14px;font-family:inherit;background:#1a3054;color:#f1faee;margin-bottom:12px;">
+                <option value="">-- Selecione --</option>
+            </select>
+            <input type="text" id="cancelReasonFree" placeholder="Observações adicionais (opcional)" style="width:100%;padding:12px;border:2px solid #1a3054;border-radius:10px;font-size:14px;font-family:inherit;background:#1a3054;color:#f1faee;margin-bottom:16px;">
+            <div style="display:flex;gap:10px;">
+                <button id="confirmCancelBtn" style="flex:1;padding:14px;background:#e63946;color:white;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;">Confirmar Cancelamento</button>
+                <button id="closeCancelBtn" style="flex:1;padding:14px;background:#1a3054;color:#8899bb;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;">Voltar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io({
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000
+        });
+        let demands = [];
+        let timeInterval;
+        let stationId = null;
+        let audioCtx = null;
+        const pendingConfirm = {};
+        const flashIds = new Set();
+        let crossCancelToastTimer = null;
+
+        try {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            if (AC) audioCtx = new AC();
+        } catch (e) { console.warn('Web Audio API não disponível'); }
+
+        function playTone(frequency, duration, type, volume) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type || 'square';
+            osc.frequency.value = frequency;
+            gain.gain.setValueAtTime(volume || 0.3, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
+        function playNormalAlert() {
+            playTone(700, 0.3, 'sine', 0.25);
+        }
+
+        function playUrgentAlert() {
+            for (let i = 0; i < 6; i++) {
+                setTimeout(() => playTone(880, 0.12, 'square', 0.4), i * 250);
+            }
+        }
+
+        function playStockoutAlert() {
+            for (let i = 0; i < 12; i++) {
+                setTimeout(() => playTone(1000, 0.15, 'square', 0.6), i * 200);
+            }
+        }
+
+        function playCrossCancelAlert() {
+            for (let i = 0; i < 4; i++) {
+                setTimeout(() => playTone(300, 0.18, 'sawtooth', 0.4), i * 400);
+                setTimeout(() => playTone(1400, 0.18, 'sawtooth', 0.35), i * 400 + 200);
+            }
+        }
+
+        socket.emit('join', 'cozinha_fria');
+
+        socket.on('connect', () => {
+            document.getElementById('reconnectBanner').style.display = 'none';
+            socket.emit('join', 'cozinha_fria');
+            carregarDemandas();
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('reconnectBanner').style.display = 'block';
+        });
+
+        socket.on('reconnect_attempt', () => {
+            document.getElementById('reconnectBanner').style.display = 'block';
+        });
+
+        function parseDate(dateStr) {
+            if (!dateStr) return new Date();
+            if (dateStr instanceof Date) return isNaN(dateStr.getTime()) ? new Date() : dateStr;
+            if (typeof dateStr === 'number') return new Date(dateStr);
+            var s = String(dateStr).trim();
+            if (!s) return new Date();
+            var d = new Date(s);
+            if (!isNaN(d.getTime())) return d;
+            d = new Date(s.replace(' ', 'T'));
+            if (!isNaN(d.getTime())) return d;
+            d = new Date(s.replace(' ', 'T').replace(/([+-]\d{2}):?(\d{2})$/, '') + 'Z');
+            if (!isNaN(d.getTime())) return d;
+            return new Date();
+        }
+
+        function timeAgo(dateStr) {
+            const diff = Math.floor((Date.now() - parseDate(dateStr).getTime()) / 1000);
+            if (diff < 60) return 'agora';
+            const min = Math.floor(diff / 60);
+            if (min < 60) return `há ${min} min`;
+            const h = Math.floor(min / 60);
+            return `há ${h}h ${min % 60}min`;
+        }
+
+        function etaDisplay(expectedReadyAt) {
+            if (!expectedReadyAt) return '';
+            const remaining = Math.ceil((parseDate(expectedReadyAt).getTime() - Date.now()) / 60000);
+            if (remaining <= 0) return 'ATRASADO';
+            if (remaining === 1) return '~1 min';
+            return `~${remaining} min`;
+        }
+
+        function isOverdue(expectedReadyAt) {
+            if (!expectedReadyAt) return false;
+            return parseDate(expectedReadyAt).getTime() < Date.now();
+        }
+
+        function calcProgress(createdAt, expectedReadyAt) {
+            if (!expectedReadyAt) return null;
+            const now = Date.now();
+            const start = parseDate(createdAt).getTime();
+            const deadline = parseDate(expectedReadyAt).getTime();
+            const total = deadline - start;
+            if (total <= 0) return 100;
+            const elapsed = now - start;
+            const pct = Math.min(100, Math.max(0, (elapsed / total) * 100));
+            return pct;
+        }
+
+        function progressColor(pct, isUrgent) {
+            if (pct >= 75) return '#e63946';
+            if (pct >= 50) return '#f4a261';
+            return isUrgent ? '#457b9d' : '#2a9d8f';
+        }
+
+        async function carregarDemandas() {
+            try {
+                if (!stationId) {
+                    const ksRes = await fetch('/api/v1/kitchen-stations');
+                    const stations = await ksRes.json();
+                    const fria = stations.find(s => s.code === 'fria');
+                    if (fria) stationId = fria.id;
+                }
+
+                const response = await fetch('/api/v1/demands');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                demands = await response.json();
+                render();
+                document.getElementById('reconnectBanner').style.display = 'none';
+            } catch (error) {
+                console.error('Falha ao buscar fila:', error);
+                if (demands.length === 0) {
+                    document.getElementById('reconnectBanner').textContent = 'Erro ao carregar. Tentando novamente...';
+                    document.getElementById('reconnectBanner').style.display = 'block';
+                    setTimeout(carregarDemandas, 5000);
+                }
+            }
+        }
+
+        carregarDemandas();
+
+        function render() {
+            for (const key in pendingConfirm) {
+                clearTimeout(pendingConfirm[key]);
+                delete pendingConfirm[key];
+            }
+            const grid = document.getElementById('demandsGrid');
+            const readyStrip = document.getElementById('readyStrip');
+
+            const filtered = demands.filter(d =>
+                d.kitchen_station_id === stationId &&
+                (d.status === 'pending' || d.status === 'ready')
+            );
+
+            const pending = filtered.filter(d => d.status === 'pending');
+            const ready = filtered.filter(d => d.status === 'ready');
+
+            const sortedPending = [...pending].sort((a, b) => {
+                if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
+                if (a.priority !== 'urgent' && b.priority === 'urgent') return 1;
+                return parseDate(a.created_at) - parseDate(b.created_at);
+            });
+
+            if (sortedPending.length === 0 && ready.length === 0) {
+                grid.innerHTML = '<div class="empty-state">Nenhuma demanda ativa</div>';
+                readyStrip.innerHTML = '';
+                flashIds.clear();
+                return;
+            }
+
+            grid.innerHTML = sortedPending.map(d => {
+                const classes = ['card'];
+                const overdue = !!(d.expected_ready_at && isOverdue(d.expected_ready_at));
+                if (d.priority === 'urgent') classes.push('urgent');
+                if (overdue && d.priority === 'urgent') classes.push('critical');
+                else if (overdue) classes.push('late');
+                if (d.stockout_reported) classes.push('stockout');
+                if (d.cooking_started) classes.push('cooking');
+                if (d.sla_breached_cozinha || overdue) classes.push('breached');
+                if (flashIds.has(d.id)) classes.push('flash-in');
+
+                const etaText = etaDisplay(d.expected_ready_at);
+                const etaClass = overdue ? 'eta overdue' : 'eta';
+                const unitText = d.unit_label ? ` <span class="unit-label">(${d.unit_label})</span>` : '';
+                const cookingBadge = d.cooking_started ? ' <span class="cooking-badge">EM PREPARO</span>' : '';
+                const urgentLabel = d.priority === 'urgent' ? '<div class="urgent-label">URGENTE</div>' : '';
+
+                const pct = calcProgress(d.created_at, d.expected_ready_at);
+                let progressBar = '';
+                if (pct !== null) {
+                    const color = progressColor(pct, d.priority === 'urgent');
+                    progressBar = `<div class="progress-wrap"><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${color};"></div></div></div>`;
+                }
+
+                return `
+                <div class="${classes.join(' ')}">
+                    ${urgentLabel}
+                    <div class="card-top">
+                        <div class="qty">${d.quantity}x</div>
+                        <div class="product-info">
+                            <div class="name">${d.product_name}${unitText}</div>
+                            ${cookingBadge}
+                            <div class="card-timer" data-eta="${d.expected_ready_at || ''}" data-priority="${d.priority}">${etaDisplayCountdown(d.expected_ready_at)}</div>
+                        </div>
+                    </div>
+                    <div class="time-row">
+                        <div class="elapsed" data-created="${d.created_at}"><span>${timeAgo(d.created_at)}</span></div>
+                        ${etaText ? `<div class="${etaClass}">ETA ${etaText}</div>` : ''}
+                    </div>
+                    ${progressBar}
+                    <div class="actions">
+                        <button class="ready-btn" data-id="${d.id}">PRONTO</button>
+                        <button class="cancel-btn" data-id="${d.id}">CANCELAR</button>
+                    </div>
+                </div>`;
+            }).join('');
+
+            if (ready.length > 0) {
+                const sortedReady = [...ready].sort((a, b) => parseDate(a.created_at) - parseDate(b.created_at));
+                readyStrip.innerHTML =
+                    '<div class="ready-strip-header">PRONTO PARA RETIRAR &middot; ' + ready.length + '</div>' +
+                    sortedReady.map(d => {
+                        const unitText = d.unit_label ? ' <span class="pill-unit">' + d.unit_label + '</span>' : '';
+                        return '<div class="ready-pill"><span class="pill-qty">' + d.quantity + 'x</span><span class="pill-name">' + d.product_name + '</span>' + unitText + '</div>';
+                    }).join('');
+            } else {
+                readyStrip.innerHTML = '';
+            }
+
+            flashIds.clear();
+
+            if (timeInterval) clearInterval(timeInterval);
+            timeInterval = setInterval(() => {
+                document.querySelectorAll('.elapsed[data-created]').forEach(el => {
+                    el.innerHTML = '<span>' + timeAgo(el.dataset.created) + '</span>';
+                });
+                render();
+            }, 30000);
+        }
+
+        document.addEventListener('click', async (e) => {
+            const readyBtn = e.target.closest('.ready-btn');
+            const cancelBtn = e.target.closest('.cancel-btn');
+
+            if (readyBtn) {
+                const id = readyBtn.dataset.id;
+                if (pendingConfirm[id]) {
+                    clearTimeout(pendingConfirm[id]);
+                    delete pendingConfirm[id];
+                    readyBtn.classList.remove('confirm-pending');
+                    readyBtn.disabled = true;
+                    readyBtn.textContent = '...';
+                    try {
+                        await fetch(`/api/v1/demands/${id}/ready`, { method: 'PATCH' });
+                    } catch (err) {
+                        console.error('Erro ao marcar pronto:', err);
+                        readyBtn.disabled = false;
+                        readyBtn.textContent = 'PRONTO';
+                    }
+                } else {
+                    readyBtn.classList.add('confirm-pending');
+                    readyBtn.textContent = 'CONFIRMAR?';
+                    pendingConfirm[id] = setTimeout(() => {
+                        delete pendingConfirm[id];
+                        if (readyBtn.isConnected) {
+                            readyBtn.classList.remove('confirm-pending');
+                            readyBtn.textContent = 'PRONTO';
+                        }
+                    }, 3000);
+                }
+            }
+
+            if (cancelBtn) {
+                const id = cancelBtn.dataset.id;
+                document.getElementById('cancelModal').style.display = 'flex';
+                document.getElementById('cancelModal').dataset.demandId = id;
+                if (cancelReasons.length === 0) loadCancelReasons();
+            }
+        });
+
+        let cancelReasons = [];
+
+        async function loadCancelReasons() {
+            try {
+                const res = await fetch('/api/v1/admin/cancel-reasons');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const all = await res.json();
+                cancelReasons = Array.isArray(all) ? all.filter(r => r.category === 'cozinha') : [];
+                const sel = document.getElementById('cancelReasonSelect');
+                sel.innerHTML = '<option value="">-- Selecione --</option>';
+                cancelReasons.forEach(r => {
+                    const opt = document.createElement('option');
+                    opt.value = r.id;
+                    opt.textContent = r.name || r.reason || r.label || String(r.id);
+                    sel.appendChild(opt);
+                });
+            } catch (e) {
+                console.error('Erro ao carregar motivos de cancelamento:', e);
+            }
+        }
+
+        loadCancelReasons();
+
+        var closeCancelBtn = document.getElementById('closeCancelBtn');
+        var confirmCancelBtn = document.getElementById('confirmCancelBtn');
+        if (closeCancelBtn) closeCancelBtn.addEventListener('click', () => {
+            document.getElementById('cancelModal').style.display = 'none';
+            document.getElementById('cancelReasonSelect').value = '';
+            document.getElementById('cancelReasonFree').value = '';
+        });
+        if (confirmCancelBtn) confirmCancelBtn.addEventListener('click', async () => {
+            const modal = document.getElementById('cancelModal');
+            const id = modal.dataset.demandId;
+            const reasonId = document.getElementById('cancelReasonSelect').value || null;
+            const freeText = document.getElementById('cancelReasonFree').value || null;
+
+            const confirmBtn = document.getElementById('confirmCancelBtn');
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = '...';
+
+            try {
+                await fetch(`/api/v1/demands/${id}/cancel-cozinha`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cancel_reason_id: reasonId, reason: freeText })
+                });
+                modal.style.display = 'none';
+                document.getElementById('cancelReasonSelect').value = '';
+                document.getElementById('cancelReasonFree').value = '';
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Confirmar Cancelamento';
+            } catch (err) {
+                console.error('Erro ao cancelar:', err);
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Confirmar Cancelamento';
+                alert('Erro ao cancelar demanda. Tente novamente.');
+            }
+        });
+
+        socket.on('demand:new', (demand) => {
+            demands.push(demand);
+            if (demand && demand.id) flashIds.add(demand.id);
+            render();
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+            playNormalAlert();
+        });
+
+        socket.on('demand:urgent', (demand) => {
+            demands.push(demand);
+            if (demand && demand.id) flashIds.add(demand.id);
+            render();
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+            playUrgentAlert();
+        });
+
+        socket.on('demand:ready', () => { render(); });
+        socket.on('demand:updated', () => { render(); });
+        socket.on('demand:retrieved', (updated) => {
+            demands = demands.filter(d => d.id !== updated.id);
+            render();
+        });
+
+        socket.on('demand:cancelled', (updated) => {
+            demands = demands.filter(d => d.id !== updated.id);
+            render();
+        });
+
+        socket.on('demand:annulled', (updated) => {
+            demands = demands.filter(d => d.id !== (updated && updated.id));
+            render();
+        });
+
+        socket.on('demand:cross-cancel', (data) => {
+            if (!data || data.cancelled_by !== 'salao') return;
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+            playCrossCancelAlert();
+            if (data.id) {
+                const btn = document.querySelector('.ready-btn[data-id="' + data.id + '"]');
+                const card = btn ? btn.closest('.card') : null;
+                if (card) {
+                    card.classList.add('cross-cancelled');
+                    setTimeout(() => {
+                        if (card.isConnected) card.classList.remove('cross-cancelled');
+                    }, 6000);
+                }
+            }
+            showCrossCancelToast(data.message || 'ATENÇÃO: Item cancelado pelo Salão já estava em preparo!');
+        });
+
+        socket.on('demand:stockout', (updated) => {
+            const idx = demands.findIndex(d => d.id === updated.id);
+            if (idx !== -1) demands[idx] = updated;
+            render();
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+            playStockoutAlert();
+        });
+
+        socket.on('demand:queue-updated', () => {
+            carregarDemandas();
+        });
+
+        socket.on('kitchen:capacity-updated', () => {
+            carregarDemandas();
+        });
+
+        function showCrossCancelToast(message) {
+            const toast = document.getElementById('crossCancelToast');
+            if (!toast) return;
+            toast.textContent = message;
+            toast.style.display = 'block';
+            if (crossCancelToastTimer) clearTimeout(crossCancelToastTimer);
+            crossCancelToastTimer = setTimeout(() => {
+                toast.style.display = 'none';
+            }, 8000);
+        }
+
+        function etaDisplayCountdown(expectedReadyAt) {
+            if (!expectedReadyAt) return '';
+            const remaining = Math.ceil((parseDate(expectedReadyAt).getTime() - Date.now()) / 1000);
+            if (remaining <= 0) return '-' + formatTimerSec(Math.abs(remaining));
+            return formatTimerSec(remaining);
+        }
+
+        function formatTimerSec(totalSec) {
+            const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+            const ss = String(totalSec % 60).padStart(2, '0');
+            return mm + ':' + ss;
+        }
+
+        function timerColorClass(remainingMs, totalMs) {
+            const ratio = totalMs > 0 ? remainingMs / totalMs : 0;
+            if (remainingMs < 0 || ratio < 0.25) return 't-red';
+            if (ratio <= 0.5) return 't-orange';
+            return 't-green';
+        }
+
+        function updateGlobalTimer() {
+            const el = document.getElementById('globalTimer');
+            if (!el) return;
+            const now = Date.now();
+            const candidates = demands.filter(d =>
+                d.kitchen_station_id === stationId &&
+                (d.status === 'pending' || d.status === 'ready') &&
+                d.expected_ready_at
+            );
+            el.classList.remove('t-green', 't-orange', 't-red', 't-urgent');
+            if (candidates.length === 0) {
+                el.textContent = '--:--';
+            } else {
+                const urgentCandidates = candidates.filter(d => d.priority === 'urgent');
+                const pool = urgentCandidates.length > 0 ? urgentCandidates : candidates;
+                let target = pool[0];
+                let minRemaining = Infinity;
+                pool.forEach(d => {
+                    const r = parseDate(d.expected_ready_at).getTime() - now;
+                    if (r < minRemaining) { minRemaining = r; target = d; }
+                });
+                const total = target.sla_minutes
+                    ? target.sla_minutes * 60000
+                    : (parseDate(target.expected_ready_at).getTime() - parseDate(target.created_at).getTime());
+                const absSec = Math.floor(Math.abs(minRemaining) / 1000);
+                const mm = String(Math.floor(absSec / 60)).padStart(2, '0');
+                const ss = String(absSec % 60).padStart(2, '0');
+                el.textContent = (minRemaining < 0 ? '-' : '') + mm + ':' + ss;
+                if (minRemaining < 0 || (total > 0 && minRemaining / total < 0.25)) el.classList.add('t-red');
+                else if (total > 0 && minRemaining / total <= 0.5) el.classList.add('t-orange');
+                else el.classList.add('t-green');
+                if (target.priority === 'urgent') el.classList.add('t-urgent');
+            }
+
+            document.querySelectorAll('.card-timer[data-eta]').forEach(el => {
+                const eta = el.dataset.eta;
+                if (!eta) return;
+                const remaining = parseDate(eta).getTime() - now;
+                const absSec = Math.floor(Math.abs(remaining) / 1000);
+                const mm = String(Math.floor(absSec / 60)).padStart(2, '0');
+                const ss = String(absSec % 60).padStart(2, '0');
+                el.textContent = (remaining < 0 ? '-' : '') + mm + ':' + ss;
+
+                const d = demands.find(d => d.expected_ready_at === eta);
+                if (d) {
+                    const total = d.sla_minutes ? d.sla_minutes * 60000 : 999999;
+                    const cls = timerColorClass(remaining, total);
+                    el.className = 'card-timer ' + cls;
+                    if (d.priority === 'urgent' && remaining < 0) el.classList.add('t-urgent');
+                }
+            });
+        }
+
+        setInterval(updateGlobalTimer, 1000);
+
+        setInterval(function() {
+            carregarDemandas();
+        }, 5000);
+    </script>
+</body>
+</html>
