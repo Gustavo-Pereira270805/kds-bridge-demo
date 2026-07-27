@@ -15,7 +15,13 @@ O KDS Bridge é um sistema B2B operacional para restaurantes. Tem 7 views em pro
 - **Sem design tokens**: 100+ cores hardcoded espalhadas por 7 arquivos inline.
 - **Divergência visual**: salão (light) e cozinha (dark) parecem produtos diferentes.
 - **Vermelho puro `#ff0000`** em `.card.critical` com `0.8s infinite pulse` — risco vestibular e perigo de fadiga visual em plantões de 8h.
-- **13 `alert()` + 3 `confirm()` calls** em kiosk (16 native dialogs total) — prendem a UI até input físico. Distribuição real: `dashboard.html`=10 alert, `salao.html`=1, `cozinha-quente.html`=1, `cozinha-fria.html`=1, `gerente.html`=0; `admin.html`=3 confirm.
+- **18 `alert()` + 3 `confirm()` calls** em kiosk (21 native dialogs total) — prendem a UI até input físico. Distribuição real (grep `\balert\(`):
+  - `dashboard.html`=10 alert (linhas 1279, 1281, 1282, 1284, 1322, 1431, 1437, 1447, 1474, 1500)
+  - `salao.html`=5 alert (linhas 489, 526, 566, 804, 844) — 4 em catch blocks como `alert(err.message)`, 1 com literal
+  - `cozinha-quente.html`=1 alert (linha 626)
+  - `cozinha-fria.html`=1 alert (linha 607)
+  - `gerente.html`=1 alert (linha 417, em catch)
+  - `admin.html`=3 confirm (linhas 332, 520, 568)
 - **8 valores diferentes de `border-radius`** sem escala.
 - **Sombras `rgba(0,0,0,0.06)`** quase invisíveis em fundo `#f4f4f5`.
 - **`prefers-reduced-motion`**: zero referências no código — todos os `*Pulse` rodam sem respeito ao OS.
@@ -233,7 +239,7 @@ Recomendação: adicionar pré-load com `<link rel="preload" as="style">` para r
                   color: var(--c-text); margin: 0; }
 .empty-state p { font-size: 13px; margin: 0; max-width: 320px; }
 
-/* === Toast (replace 13 alert() + 3 confirm() calls) === */
+/* === Toast (substitui 18 alert() + 3 confirm() calls) === */
 .toast { position: fixed; right: var(--sp-5); top: var(--sp-5);
          background: var(--c-surface); padding: var(--sp-3) var(--sp-4);
          border-radius: var(--radius-md); box-shadow: var(--shadow-elevated);
@@ -273,7 +279,7 @@ Recomendação: adicionar pré-load com `<link rel="preload" as="style">` para r
 | `.mono` | `var(--font-mono) + tabular-nums` | card-timer, col-timer, #globalTimer, KPI values, qty, scores, SLA inputs, datas calendário, durações histórico |
 | `.empty-state` | icon SVG stroked 1.5 + h4 14px + p 13px max-320px | Todas as 7 views em seus pontos de lista vazia |
 | `.skeleton-block` | shimmer 1.5s | dashboard:245, gerente:268, salao:245, admin CRUD tbodies |
-| `.toast` | 3 variantes (info/warn/error). Helper `showToast(msg, kind)` em cada view | Substitui os 17 `alert()` |
+| `.toast` | 3 variantes (info/warn/error). Helper `showToast(msg, kind)` em cada view | Substitui os 18 `alert()` (e 3 `confirm()` viram `.modal`) |
 
 ## 6. Mudanças Comportamentais Globais
 
@@ -297,19 +303,19 @@ Aplica-se apenas em `.reconnect-banner` (kitchen), `.modal-backdrop`, `.top-head
 
 Auditar `cozinha-quente.html:72-83` e trocar keyframes que animam `box-shadow` (caro) por `transform: scale(1.01) + opacity`. Manter o efeito visual, mudar só a engine.
 
-### 6.6 Substituir 13 `alert()` + 3 `confirm()`
+### 6.6 Substituir 18 `alert()` + 3 `confirm()`
 
-**`alert()` → `.toast` (13 calls total):**
+**`alert()` → `.toast` (18 calls total):**
 
-| View | Qtde | Linhas | Substituição |
-|---|---|---|---|
-| `dashboard.html` | 10 | 1279, 1281, 1282, 1284, 1322, 1431, 1437, 1447, 1474, 1500 | `.toast-error` para erros de fetch/validation (ex: "Biblioteca XLSX não carregada", "Datas inválidas") |
-| `salao.html` | 1 | 804 | `.toast-warn` para "Selecione um produto para continuar." |
-| `cozinha-quente.html` | 1 | 626 | `.toast-error` para "Erro ao cancelar demanda" (não-blocker em kiosk) |
-| `cozinha-fria.html` | 1 | 607 | `.toast-error` para fetch failure (não-blocker em kiosk) |
-| `gerente.html` | 0 | — | — |
-| `admin.html` | 0 | — | — |
-| `cozinha.html` | 0 | — | — |
+| View | Qtde | Linhas | Natureza | Substituição |
+|---|---|---|---|---|
+| `dashboard.html` | 10 | 1279, 1281, 1282, 1284, 1322, 1431, 1437, 1447, 1474, 1500 | valilação form + erro de fetch/export | `.toast-warn` para as 4 de validação de data; `.toast-error` para as 6 de erro de execução |
+| `salao.html` | 5 | 489, 526, 566, 804, 844 | 4 em catch (`alert(err.message)`), 1 com literal (`alert('Selecione um produto...')`) | `.toast-error` para os 4 do catch; `.toast-warn` para "Selecione um produto" |
+| `cozinha-quente.html` | 1 | 626 | em catch | `.toast-error` (não-blocker em kiosk) |
+| `cozinha-fria.html` | 1 | 607 | em catch | `.toast-error` (não-blocker em kiosk) |
+| `gerente.html` | 1 | 417 | em catch | `.toast-error` |
+| `admin.html` | 0 | — | — | — |
+| `cozinha.html` | 0 | — | — | — |
 
 **`confirm()` → `.modal` de confirmação (3 calls, todas em admin.html):**
 

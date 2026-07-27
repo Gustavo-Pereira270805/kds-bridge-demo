@@ -26,6 +26,17 @@
 - **Commits:** Atomic per task. Conventional commit style (`feat:`, `refactor:`, `fix:`, `style:`). DO NOT push or create PRs unless explicitly requested.
 - **Per AGENTS.md gotcha:** Any `.catch(function() {})` empty body is forbidden — always include `console.error(err)`. Any `buildContent`/innerHTML must be wrapped in try/catch.
 - **Per AGENTS.md gotcha:** When re-attaching event listeners on each load, store handler on DOM element (`el._ch = handler`) to allow `removeEventListener`.
+- **Restart dev server (use this exact snippet whenever a task says "restart the dev server"):**
+  ```powershell
+  $port = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
+  if ($port) { taskkill /PID $port.OwningProcess /F }
+  Start-Process cmd -ArgumentList "/c npm run dev" -WindowStyle Minimized
+  Start-Sleep -Seconds 5
+  ```
+  Never run `npm run dev` directly via the bash tool — it times out and kills the server.
+- **Browser verification (use Webwright):** For visual checks, invoke OpenCode's `skill` tool with `name: "webwright"` (or run `/skill webwright`) — per AGENTS.md it replaces Playwright MCP for browser testing of these views. After loading, drive Firefox through Bash+Playwright, screenshots land on disk, inspect them with `Read`.
+- **Line-number drift:** Tasks 11/12/13/15 reference exact line numbers (e.g. "alert at line 1279", "empty state at line 461"). These were captured at the writing-time state of the codebase. **Always `grep` for the actual pattern first** to find the current line — earlier Phase 2 tasks (4-10) may have shifted lines in the same files. Line numbers in this plan are starting hints, not anchors.
+- **`@fastify/static` already installed:** Per pre-flight scan, the project's `package.json` already lists `@fastify/static` at `^9.x.x`. Task 1 Step 2 ("Install") is a no-op; the implementer should `npm install` defensively (which will also install fresh deps in a fresh worktree) but does not need to add the dep.
 
 ---
 
@@ -35,13 +46,13 @@
 - `src/views/styles/theme.css` — Shared design tokens + base classes. ~150 lines.
 
 **Files modified:**
-- `package.json` — Add `@fastify/static` dep.
+- `package.json` — Already has `@fastify/static` dep; needs `build` script update to copy `src/views/styles/*` → `dist/views/styles/` so production serving works.
 - `src/server.ts` — Register `@fastify/static` plugin (lines ~22-46).
-- `src/views/salao.html` — Phase 2 token refactor (lines 9-275 inline CSS) + Phase 3 (1 alert → toast, skeleton, empty states, tabular-nums).
+- `src/views/salao.html` — Phase 2 token refactor (lines 9-275 inline CSS) + Phase 3 (5 alerts → toast, empty state, tabular-nums).
 - `src/views/cozinha-quente.html` — Phase 2 (`#ff0000` removal, card.critical recolor, focus-visible) + Phase 3 (1 alert → toast).
 - `src/views/cozinha-fria.html` — Phase 2 (cyan → `--c-accent-cold`, `#ff0000` removal) + Phase 3 (1 alert → toast).
 - `src/views/cozinha.html` — Phase 2 tidy (legacy, low priority).
-- `src/views/gerente.html` — Phase 2 (`badge-annulled` neutral recolor, tabular-nums in KPIs) + Phase 3 (skeleton, empty state).
+- `src/views/gerente.html` — Phase 2 (`badge-annulled` neutral recolor, tabular-nums in KPIs) + Phase 3 (1 alert → toast, skeleton, empty state).
 - `src/views/admin.html` — Phase 2 (radius unification, tabular-nums in SLA inputs) + Phase 3 (3 `confirm()` → modal, skeleton in tbodies).
 - `src/views/dashboard.html` — Phase 2 (`.mono` in 11 KPIs + score cards, `.btn-ghost` in period-selector) + Phase 3 (10 `alert()` → toast, empty state).
 
@@ -69,18 +80,15 @@ npx tsc --noEmit
 ```
 Expected: Both pass with zero errors. If they don't, stop and fix existing errors before proceeding (out of scope for this plan otherwise).
 
-- [ ] **Step 2: Install @fastify/static**
+- [ ] **Step 2: Verify @fastify/static is in package.json (skip install)**
 
-Run:
-```powershell
-npm install @fastify/static
-npm install -D @types/@fastify-static 2>$null
-```
-Note: `@fastify/static` ships its own types as of v7+, so the `@types` install may 404. If so, ignore — types are already in-package.
+Per pre-flight scan, `@fastify/static` is already listed in `package.json` at `^9.x.x`. If you are in a fresh worktree, run `npm install` defensively to populate `node_modules` (the package-lock is committed, so the install is deterministic). Do NOT add a new dep — Task 1's commit happens only if package.json/package-lock.json changed (which it should not — worktree install keeps the lockfile pinned).
+
+If for some reason `@fastify/static` is NOT in `package.json`, run `npm install @fastify/static`. The `@types` package is unnecessary — types ship with `@fastify/static` v7+.
 
 - [ ] **Step 3: Verify package.json entry**
 
-Read `package.json` `dependencies` block. Confirm `"@fastify/static": "^7.x.x"` (or similar recent version) is present.
+Read `package.json` `dependencies` block. Confirm `"@fastify/static": "^9.x.x"` (or similar recent version) is present.
 
 - [ ] **Step 4: Run tsc to verify types resolve**
 
@@ -90,11 +98,14 @@ npx tsc --noEmit
 ```
 Expected: 0 errors. If `Cannot find module '@fastify/static'` appears, run `npm install` again; the previous install may have been interrupted.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Commit (only if package.json/lock changed)**
 
+If `git status` shows no changes to `package.json` or `package-lock.json` (the dep was already present), skip this commit — there is nothing to commit. Task 1 has no code deliverable of its own; it's a verification gate. Proceed to Task 2.
+
+Otherwise:
 ```powershell
 git add package.json package-lock.json
-git commit -m "chore: add @fastify/static for serving shared theme.css"
+git commit -m "chore: verify @fastify/static availability for serving shared theme.css"
 ```
 
 ---
@@ -324,24 +335,47 @@ await fastify.register(fastifyStatic, {
 
 Note: This must be `await`ed inside the boot function — verify that `server.ts` already uses top-level await or wraps boot in an `async` function (it does, per AGENTS.md).
 
-- [ ] **Step 4: Typecheck + build**
+- [ ] **Step 4: Update `package.json` build script to include `styles/` in the dist**
+
+Read `package.json` `scripts.build` block. Currently it's:
+```json
+"build": "tsc && npx copyfiles -f src/views/*.html dist/views"
+```
+
+This copies only `*.html` files — `dist/views/styles/theme.css` would NOT exist after build, breaking `npm start` (production serving from `dist/`).
+
+Update to:
+```json
+"build": "tsc && npx copyfiles -f src/views/*.html dist/views && npx copyfiles -f src/views/styles/* dist/views/styles"
+```
+
+Verify by reading `package.json` after the edit.
+
+- [ ] **Step 5: Typecheck + build**
 
 Run:
 ```powershell
 npx tsc --noEmit
+npm.cmd run build
 ```
-Expected: 0 errors. If error `"Property 'register' does not exist on type..."` appears, verify Fastify plugin types are auto-augmented (they should be).
-
-- [ ] **Step 5: Start dev server in background**
-
-Run:
+Expected: 0 tsc errors. Build succeeds. Then verify the new file landed:
 ```powershell
+Test-Path dist\views\styles\theme.css
+```
+Expected: `True`. If `False`, the copyfiles glob didn't match — recheck the script edit from Step 4. If error `"Property 'register' does not exist on type..."` appears in tsc output, verify Fastify plugin types are auto-augmented (they should be).
+
+- [ ] **Step 6: Restart dev server using the Global Constraints snippet**
+
+Run the snippet from Global Constraints verbatim:
+```powershell
+$port = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
+if ($port) { taskkill /PID $port.OwningProcess /F }
 Start-Process cmd -ArgumentList "/c npm run dev" -WindowStyle Minimized
 Start-Sleep -Seconds 5
 ```
 Wait 5s for DB lazy-init.
 
-- [ ] **Step 6: Curl `/styles/theme.css` to verify it serves**
+- [ ] **Step 7: Curl `/styles/theme.css` to verify it serves**
 
 Run:
 ```powershell
@@ -349,12 +383,14 @@ Invoke-WebRequest -Uri "http://localhost:3000/styles/theme.css" -UseBasicParsing
 ```
 Expected: `StatusCode = 200`, `Length > 3000` (theme.css is ~3000 chars).
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```powershell
-git add src/views/styles/theme.css src/server.ts
+git add src/views/styles/theme.css src/server.ts package.json package-lock.json
 git commit -m "feat: add shared theme.css with design tokens + @fastify/static registration"
 ```
+
+The commit message names both new files (theme.css, server.ts) and the package.json build-script change. If `package-lock.json` did not change (expected, since no new dep was added), omit it from the `git add`.
 
 ---
 
@@ -937,51 +973,135 @@ git commit -m "feat(dashboard): replace 10 alert() with non-blocking toast helpe
 
 ---
 
-## Task 12: Phase 3 — `showToast` in `salao.html` (1 alert), `cozinha-quente.html` (1 alert), `cozinha-fria.html` (1 alert), `gerente.html` (0 alerts)
+## Task 12: Phase 3 — `showToast` in `salao.html` (5 alerts), `cozinha-quente.html` (1 alert), `cozinha-fria.html` (1 alert), `gerente.html` (1 alert)
 
 **Files:**
-- Modify: `src/views/salao.html`, `src/views/cozinha-quente.html`, `src/views/cozinha-fria.html`
+- Modify: `src/views/salao.html`, `src/views/cozinha-quente.html`, `src/views/cozinha-fria.html`, `src/views/gerente.html`
 
 **Interfaces:**
-- Produces: Each of these 3 views has its own `showToast` helper inline (per AGENTS.md "JS is inline per view" architecture). Total 3 `alert()` calls removed.
+- Produces: Each of these 4 views gets its own `showToast` helper inline (per AGENTS.md "JS is inline per view" architecture). Total 8 `alert()` calls removed (5 in salao, 1 in cozinha-quente, 1 in cozinha-fria, 1 in gerente). Combined with Task 11's 10 dashboard alerts → 18 alert() total eliminated.
 
-- [ ] **Step 1: Read salao alert context**
+**Critical: Line numbers below were captured pre-Phase-2 and may have drifted.** Always grep for the pattern first:
+```powershell
+Select-String -Path src\views\<file>.html -Pattern "alert\(" -AllMatches
+```
+Then Read each occurrence's surrounding context (10-15 lines) to make the edit.
 
-Read `src/views/salao.html:800-810` to see the alert at line 804.
+- [ ] **Step 1: Locate all `alert()` calls in salao.html**
 
-- [ ] **Step 2: Insert showToast helper + replace alert in salao**
+Run:
+```powershell
+Select-String -Path src\views\salao.html -Pattern "alert\(" -AllMatches | ForEach-Object { "$($_.LineNumber): $($_.Line.Trim())" }
+```
 
-Find an insertion point in the salao script (after existing `loadActiveDemands` and helpers, before any IIFE end). Insert the same `showToast` function as Task 11 Step 2.
+Expected: 5 hits. Distribution as of pre-flight baseline:
+- Line 489: `alert(err.message);` (inside a catch block)
+- Line 526: `alert(err.message);` (inside a catch block)
+- Line 566: `alert(err.message);` (inside a catch block)
+- Line 804: `alert('Selecione um produto para continuar.');` (form validation)
+- Line 844: `alert(err.message);` (inside a catch block)
 
-Then replace line 804:
-- Old: `alert('Selecione um produto para continuar.');`
-- New: `showToast('Selecione um produto para continuar.', 'warn');`
+The actual line numbers may have shifted due to Task 4's Phase 2 refactor. Trust the grep output, not these line numbers.
 
-Verify that the existing `#toast` element (`salao.html:284` with `role="alert"`) is unaffected — that's the existing inner toast for live updates, separate from the new generic `showToast` helper. They can coexist; the new helper appends a `.toast` class element to body, while the existing `#toast` is a single fixed element. Optionally consolidate later.
+Read each hit with 10 lines of context (e.g. `Read :485-500`) to understand the catch variable name (`err` vs `e`) and capture the variable name for the toast wiring.
 
-- [ ] **Step 3: Repeat for cozinha-quente**
+- [ ] **Step 2: Insert showToast helper in salao.html**
 
-Read `src/views/cozinha-quente.html:620-630` to see the alert at line 626. Insert the same `showToast` helper. Replace:
+Find an insertion point in the salao script (after existing `loadActiveDemands` and helpers, before any IIFE end). Insert the same `showToast` function from Task 11 Step 2:
+
+```javascript
+function showToast(msg, kind /* 'error' | 'warn' | 'info' */) {
+  var t = document.createElement('div');
+  t.className = 'toast toast-' + (kind || 'info');
+  t.setAttribute('role', 'alert');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  var duration = (kind === 'error') ? 12000 : 4000;
+  setTimeout(function() {
+    t.style.opacity = '0';
+    setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 250);
+  }, duration);
+}
+```
+
+**Verify** that the existing `#toast` element (`salao.html:284` with `role="alert"`) is unaffected — that's the original inner toast for live updates (cross-cancel notifications). The new `showToast` helper appends a `.toast` class element to body; the existing `#toast` is a separate fixed single element. They coexist; do NOT consolidate in this task.
+
+- [ ] **Step 3: Replace all 5 alert() calls in salao.html**
+
+For each of the 5 occurrences, apply targeted `edit`:
+
+| Pre-flight line | Old | New |
+|---|---|---|
+| ~489 | `alert(err.message);` | `showToast(err.message, 'error');` |
+| ~526 | `alert(err.message);` | `showToast(err.message, 'error');` |
+| ~566 | `alert(err.message);` | `showToast(err.message, 'error');` |
+| ~804 | `alert('Selecione um produto para continuar.');` | `showToast('Selecione um produto para continuar.', 'warn');` |
+| ~844 | `alert(err.message);` | `showToast(err.message, 'error');` |
+
+**CRITICAL** — each `alert(err.message)` line is textually IDENTICAL. Use unique surrounding context (catch variable, surrounding function names) to make each `edit` `oldString` unique. If you cannot construct a unique oldString via 5 lines of surrounding context, use a 2-step approach: insert a sentinel comment first (`// <N>`), then edit the sentinel.
+
+Verify the catch variable is named `err` (read Step 5 of AGENTS.md silent-error gotcha: the catch must keep its `console.error(err)` line — the toast replaces only the `alert(err.message)` line, NOT the `console.error` line). Final catch pattern:
+```javascript
+} catch (err) {
+  console.error('contexto do erro:', err);
+  showToast(err.message, 'error');
+}
+```
+
+- [ ] **Step 4: Insert showToast helper in cozinha-quente.html**
+
+Insert the same `showToast` function near the top of the script (after existing helper functions, before any IIFE end). Then locate the single `alert()` call via grep:
+```powershell
+Select-String -Path src\views\cozinha-quente.html -Pattern "alert\(" -AllMatches
+```
+(Will return `playNormalAlert` etc. as substring matches — ignore those. Filter for `alert('` or `alert("` only — there should be exactly 1 such match, originally line 626.)
+
+Replace:
 - Old: `alert('Erro ao cancelar demanda. Tente novamente.');`
 - New: `showToast('Erro ao cancelar demanda. Tente novamente.', 'error');`
 
-- [ ] **Step 4: Repeat for cozinha-fria**
+Preserve any adjacent `console.error(err)` — important per AGENTS.md silent-error gotcha.
 
-Read `src/views/cozinha-fria.html:605-615` to see the alert at line 607. Insert `showToast`. Replace:
+- [ ] **Step 5: Insert showToast helper in cozinha-fria.html**
+
+Same as Step 4, but for `cozinha-fria.html`. The single alert is at line ~607. Replace:
 - Old: `alert('Erro ao cancelar demanda. Tente novamente.');`
 - New: `showToast('Erro ao cancelar demanda. Tente novamente.', 'error');`
 
-- [ ] **Step 5: Restart + verify each**
+- [ ] **Step 6: Insert showToast helper in gerente.html + replace 1 alert**
 
-Restart dev. Open each of the 3 views via Webwright. Force the error path (e.g. via DevTools: block the cancel API fetch, then click "Cancelar" — toast should appear, no browser dialog).
+Insert `showToast` near top of script. Grep for `alert(`:
+```powershell
+Select-String -Path src\views\gerente.html -Pattern "alert\(" -AllMatches
+```
+Expected: 1 hit at line ~417: `alert(err.message);` (inside a catch).
 
-For salao: click "Confirmar" (or whatever submits the form) without selecting a product → expect toast "Selecione um produto para continuar."
+Read 15 lines of context. Replace:
+- Old: `alert(err.message);`
+- New: `showToast(err.message, 'error');`
 
-- [ ] **Step 6: Commit**
+Preserve any `console.error(err)` adjacent.
+
+- [ ] **Step 7: Restart + verify each via Webwright**
+
+Restart the dev server (use the Global Constraints snippet).
+
+For each of the 4 views, open via Webwright:
+
+- `salao.html`: 
+  - Click the form submit ("Confirmar" / "Cadastrar") without selecting a product → expect `showToast('Selecione um produto...', 'warn')` toast at top-right (warn variant: orange left border), 4s duration
+  - DevTools: block the API endpoint for one of the demand operations (e.g. `*demands*`) and trigger a UI action that calls those operations → expect `showToast(err.message, 'error')` toast (error variant: red left border), 12s duration. Check browser console for the preserved `console.error`.
+- `cozinha-quente.html`: Block cancel-demand API fetch via DevTools, then click "Cancelar" on a card → expect `showToast('Erro ao cancelar demanda...', 'error')`.
+- `cozinha-fria.html`: Same flow as cozinha-quente.
+- `gerente.html`: Find a path that triggers the catch handler (e.g. force fetch failure via DevTools) → expect `showToast(err.message, 'error')`.
+
+Verify 0 console errors (other than the intentional blocked-fetch ones in DevTools). Verify the existing `#toast` element in salao (`role="alert"` at line 284) still works for cross-cancel notifications.
+
+- [ ] **Step 8: Commit**
 
 ```powershell
-git add src/views/salao.html src/views/cozinha-quente.html src/views/cozinha-fria.html
-git commit -m "feat(salao,cozinha-*): replace 3 alert() with non-blocking toast helper"
+git add src/views/salao.html src/views/cozinha-quente.html src/views/cozinha-fria.html src/views/gerente.html
+git commit -m "feat(salao,cozinha-*,gerente): replace 8 alert() with non-blocking toast helper"
 ```
 
 ---
@@ -1223,9 +1343,19 @@ Read `gerente.html:355-360` to find the `'Nenhuma demanda registrada ainda.'` st
 
 - [ ] **Step 5: Dashboard — empty-period state**
 
-Find the dashboard code path where `buildContent(data)` returns because data is empty (e.g. `if (data.total === 0) { return '<div ...>'; }`). Read the script around `:460-470` (the `'Nenhuma troca registrada no período'` empty state at line 461) and the broader KPI-area emptiness.
+Find the dashboard code path where `buildContent(data)` returns because data is empty (e.g. `if (data.total === 0) { return '<div ...>'; }`).
 
-Replace the empty-state strings with the Dashboard empty-period markup above, scoped to applicable render functions.
+**Line drift:** the original `'Nenhuma troca registrada no período'` empty state was at line 461 pre-Phase-2; by the time Task 15 runs, Task 9 (`.mono` wraps) + Task 11 (`showToast` insert near script top) + Task 14 (loading-block expand at body line 245) will have shifted line numbers by ~15-25 lines downward. Don't trust the line number.
+
+Grep to find the actual current location:
+```powershell
+Select-String -Path src\views\dashboard.html -Pattern "Nenhuma troca" -AllMatches
+```
+Also grep for broader emptiness indicators the dashboard may use (e.g. `Nenhum`, `Sem dados`, `0 registros`):
+```powershell
+Select-String -Path src\views\dashboard.html -Pattern "Nenhuma|Sem dados|0 registros" -AllMatches
+```
+Read 20 lines of context around each hit, then replace the empty-state strings with the Dashboard empty-period markup from Step 1, scoped to the applicable render functions. Don't break the existing try/catch wrapper per AGENTS.md `buildContent` gotcha.
 
 - [ ] **Step 6: Restart + verify each**
 
