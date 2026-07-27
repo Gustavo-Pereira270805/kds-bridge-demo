@@ -10,3 +10,5 @@ dashboard/.env
 downloads/
 test_webwright/
 .playwright-mcp/
+.worktrees/
+.superpowers/
