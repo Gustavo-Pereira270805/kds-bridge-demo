@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
 import { Server } from 'socket.io';
 import path from 'path';
 import fs from 'fs';
@@ -44,6 +45,12 @@ const views = {
   admin: fs.readFileSync(path.join(__dirname, 'views', 'admin.html'), 'utf8'),
   dashboard: fs.readFileSync(path.join(__dirname, 'views', 'dashboard.html'), 'utf8'),
 };
+
+fastify.register(fastifyStatic, {
+  root: path.join(__dirname, 'views', 'styles'),
+  prefix: '/styles/',
+  prefixAvoidTrailingSlash: true,
+});
 
 fastify.get('/salao', async (_request, reply) => {
   return reply.type('text/html').send(views.salao);

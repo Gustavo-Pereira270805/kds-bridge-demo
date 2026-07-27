@@ -1,0 +1,182 @@
+/* KDS Bridge — shared design tokens. Linked by all 7 views via
+   <link rel="stylesheet" href="/styles/theme.css"> in their <head>.
+   Inline <style> blocks in each view continue to exist and may
+   reference these tokens via var(--...). */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+  /* === Color === */
+  --c-primary: #1d3557;
+  --c-primary-tint: #457b9d;
+  --c-accent-warm: #2a9d8f;     /* teal — cooking/ok */
+  --c-accent-cold: #00a8c8;     /* cyan desaturated — cozinha-fria */
+  --c-warn: #f4a261;            /* orange — late/stockout */
+  --c-danger: #e63946;          /* red — urgent/cancel */
+  --c-danger-strong: #c81d25;   /* #ff0000 banido — ainda perigoso, mas não vestibular */
+  --c-replacement: #8e7cc3;     /* roxo dessaturado (era #9b59b6) */
+
+  /* === Surfaces === */
+  --c-bg-light: #f4f4f5;
+  --c-bg-dark: #0f0f0f;
+  --c-bg-dark-cold: #0a1628;
+  --c-surface: #ffffff;
+  --c-surface-dark: #1a1a1a;
+  --c-surface-dark-cold: #0d1f3c;
+
+  /* === Text === */
+  --c-text: #1e1e1e;
+  --c-text-muted: #6b7280;
+  --c-text-invert: #f4f4f5;
+  --c-text-invert-muted: #9ca3af;
+
+  /* === Borders === */
+  --c-border-light: #e0e0e0;
+  --c-border-dark: #2a2a2a;
+  --c-border-dark-cold: #1a3054;
+
+  /* === Alert state backgrounds === */
+  --alert-urgent-bg-dark: #2d0a0a;
+  --alert-urgent-bg-light: #fef2f2;
+  --alert-warn-bg-dark: #2d1a00;
+  --alert-warn-bg-light: #fff7ed;
+  --alert-ok-bg-dark: #0a1a14;
+  --alert-ok-bg-light: #f0fdf8;
+  --alert-replacement-bg-dark: #1a1025;
+  --alert-replacement-bg-light: #f5f0fa;
+
+  /* === Radius scale (collapses 8 valores → 4) === */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-pill: 999px;
+
+  /* === Shadow — tinted, layered === */
+  --shadow-card: 0 1px 0 rgba(255,255,255,0.04) inset, 0 6px 18px -8px rgba(29,53,87,0.18);
+  --shadow-card-hover: 0 1px 0 rgba(255,255,255,0.06) inset, 0 12px 32px -10px rgba(29,53,87,0.28);
+  --shadow-card-dark: 0 1px 0 rgba(255,255,255,0.04) inset, 0 6px 18px -8px rgba(0,0,0,0.55);
+  --shadow-elevated: 0 12px 32px -10px rgba(29,53,87,0.35);
+
+  /* === Spacing scale (4px-based) === */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-7: 32px; --sp-8: 40px;
+
+  /* === Typography === */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+  --fw-regular: 400; --fw-medium: 500; --fw-semi: 600;
+  --fw-bold: 700; --fw-heavy: 800;
+
+  /* === Motion === */
+  --t-fast: 150ms; --t-base: 200ms; --t-slow: 300ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* === Z-index scale === */
+  --z-base: 0; --z-content: 10; --z-sticky: 100;
+  --z-toast: 200; --z-modal: 300;
+}
+
+/* === Base classes === */
+.btn { padding: 12px 24px; font-size: 14px; font-weight: var(--fw-semi);
+       border-radius: var(--radius-md); border: 0; cursor: pointer;
+       transition: transform var(--t-fast) var(--ease-out),
+                   background var(--t-fast) var(--ease-out),
+                   box-shadow var(--t-fast) var(--ease-out); }
+.btn-primary { background: var(--c-primary); color: var(--c-text-invert); }
+.btn-primary:hover { filter: brightness(1.1); }
+.btn-secondary { background: var(--c-surface); color: var(--c-text);
+                 border: 1px solid var(--c-border-light); }
+.btn-secondary:hover { border-color: var(--c-primary-tint); }
+.btn-danger { background: var(--c-danger); color: var(--c-text-invert); }
+.btn-danger:hover { filter: brightness(1.08); }
+.btn-ghost { background: transparent; color: var(--c-primary);
+             padding: 8px 16px; border: 1px solid transparent; }
+.btn-ghost:hover { background: rgba(29,53,87,0.06); }
+
+.badge-pill { border-radius: var(--radius-pill); padding: 4px 12px;
+              font-size: 11px; font-weight: var(--fw-heavy);
+              text-transform: uppercase; letter-spacing: 1px;
+              display: inline-block; }
+
+.card-base { background: var(--c-surface); border-radius: var(--radius-xl);
+             padding: var(--sp-4); box-shadow: var(--shadow-card);
+             transition: box-shadow var(--t-base) var(--ease-out),
+                         transform var(--t-base) var(--ease-out); }
+.card-base:hover { box-shadow: var(--shadow-card-hover); }
+
+.card-base-dark { background: var(--c-surface-dark);
+                  border-radius: var(--radius-lg);
+                  border-left: 4px solid var(--c-border-dark);
+                  padding: var(--sp-4) var(--sp-5); }
+
+.mono { font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0; }
+
+/* === Focus-visible ring (teclado, não mouse) === */
+:focus-visible {
+  outline: 2px solid var(--c-accent-warm);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* === Active pressed (toque/clique físico) === */
+.btn:active, button:active {
+  transform: translateY(1px);
+  transition-duration: 40ms;
+}
+
+/* === Skeleton shimmer === */
+.skeleton-block {
+  background: linear-gradient(90deg,
+    var(--c-border-light) 25%, #f0f0f0 50%, var(--c-border-light) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+/* === Empty state composto === */
+.empty-state {
+  text-align: center; padding: var(--sp-8) var(--sp-5);
+  color: var(--c-text-muted); display: flex; flex-direction: column;
+  align-items: center; gap: var(--sp-3);
+}
+.empty-state svg { width: 48px; height: 48px;
+                   stroke: var(--c-text-muted); stroke-width: 1.5;
+                   fill: none; }
+.empty-state h4 { font-size: 14px; font-weight: var(--fw-semi);
+                  color: var(--c-text); margin: 0; }
+.empty-state p { font-size: 13px; margin: 0; max-width: 320px; }
+.empty-state .btn-ghost { margin-top: var(--sp-2); }
+
+/* === Toast (substitui alert()) === */
+.toast { position: fixed; right: var(--sp-5); top: var(--sp-5);
+         background: var(--c-surface); padding: var(--sp-3) var(--sp-4);
+         border-radius: var(--radius-md); box-shadow: var(--shadow-elevated);
+         z-index: var(--z-toast); max-width: 360px;
+         transition: opacity var(--t-base) var(--ease-out);
+         font-size: 14px; color: var(--c-text); }
+.toast-error { border-left: 4px solid var(--c-danger); }
+.toast-warn { border-left: 4px solid var(--c-warn); }
+.toast-info  { border-left: 4px solid var(--c-primary-tint); }
+
+/* === prefers-reduced-motion: mata animação, preserva estado === */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  /* Explicit overrides: estado visual preservado (cor de fundo/borda) */
+  .card.critical, .card.cross-cancelled, .card.urgent, .card.stockout,
+  .badge.ready-badge, .col-timer, .card-timer {
+    animation: none !important;
+  }
+  .skeleton-block { animation: none;
+                    background: var(--c-border-light); }
+}
