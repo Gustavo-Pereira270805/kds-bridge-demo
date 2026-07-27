@@ -1,0 +1,55 @@
+- generic [active] [ref=f3e1]:
+  - generic [ref=f3e2]:
+    - generic [ref=f3e3]: Quinta-feira, 23 de julho de 2026
+    - generic [ref=f3e4]: ·
+    - generic [ref=f3e5]: Cardápio 9
+  - alert
+  - generic [ref=f3e6]:
+    - heading "Registrar Demanda" [level=2] [ref=f3e7]
+    - generic [ref=f3e8]:
+      - searchbox "Buscar produto (cardápio do dia ou todos)..." [ref=f3e10]
+      - generic [ref=f3e11]:
+        - spinbutton "Quantidade" [ref=f3e12]: "1"
+        - combobox [disabled] [ref=f3e13]:
+          - option "Selecione um produto primeiro" [selected]
+      - generic [ref=f3e14]:
+        - generic [ref=f3e15] [cursor=pointer]:
+          - checkbox "Marcar como Urgente" [ref=f3e16]
+          - text: Marcar como Urgente
+        - generic [ref=f3e17] [cursor=pointer]:
+          - checkbox "Troca" [ref=f3e18]
+          - text: Troca
+      - button "📤 Enviar para Cozinha" [ref=f3e19] [cursor=pointer]
+  - generic [ref=f3e20]:
+    - heading "⏳ Demandas Ativas" [level=3] [ref=f3e21]
+    - generic [ref=f3e22]:
+      - generic [ref=f3e24]:
+        - generic [ref=f3e25]:
+          - generic [ref=f3e26]:
+            - text: 1x ARROZ BRANCO (★ 1 GN)
+            - generic [ref=f3e27]: URGENTE
+            - generic [ref=f3e28]: PRONTA
+          - generic [ref=f3e29]: ⏱️ há 33h 10min
+          - generic [ref=f3e30]: "ETA: ATRASADO"
+          - generic [ref=f3e31]: ✅ Pronto para retirar!
+        - button "Confirmar Retirada" [ref=f3e33] [cursor=pointer]
+      - generic [ref=f3e34]:
+        - generic [ref=f3e35]:
+          - generic [ref=f3e36]:
+            - text: 1x ARROZ BRANCO (★ 1 GN)
+            - generic [ref=f3e37]: Normal
+          - generic [ref=f3e38]: ⏱️ há 33h 11min
+          - generic [ref=f3e39]: "ETA: ATRASADO"
+        - generic [ref=f3e40]:
+          - button "Cancelar" [ref=f3e41] [cursor=pointer]
+          - button "Zerou" [ref=f3e42] [cursor=pointer]
+      - generic [ref=f3e43]:
+        - generic [ref=f3e44]:
+          - generic [ref=f3e45]:
+            - text: 1x ARROZ BRANCO (★ 1 GN)
+            - generic [ref=f3e46]: Normal
+          - generic [ref=f3e47]: ⏱️ há 33h 11min
+          - generic [ref=f3e48]: "ETA: ATRASADO"
+        - generic [ref=f3e49]:
+          - button "Cancelar" [ref=f3e50] [cursor=pointer]
+          - button "Zerou" [ref=f3e51] [cursor=pointer]

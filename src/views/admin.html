@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Gerenciamento KDS Bridge</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f4f4f5; color: #1e1e1e; padding: 20px; min-height: 100vh;
+        }
+        h1 { margin-top: 0; font-weight: 700; color: white; }
+        h2 { margin: 20px 0 10px 0; font-weight: 700; font-size: 20px; color: #1d3557; }
+        h3 { font-weight: 600; font-size: 16px; color: #374151; margin-bottom: 10px; }
+
+        .tabs { display: flex; gap: 0; margin-bottom: 0; }
+        .tab {
+            padding: 14px 24px; background: #e5e7eb; border: none; cursor: pointer;
+            font-size: 15px; font-weight: 600; border-radius: 12px 12px 0 0;
+            color: #374151; transition: all 0.2s ease; font-family: inherit;
+        }
+        .tab:hover { background: #d1d5db; }
+        .tab.active { background: #1d3557; color: white; }
+
+        .panel {
+            display: none; background: white; padding: 24px;
+            border-radius: 0 14px 14px 14px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            animation: fadeInUp 0.3s ease;
+        }
+        .panel.active { display: block; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        th, td {
+            padding: 12px 14px; text-align: left; border-bottom: 1px solid #e5e7eb;
+            font-size: 14px;
+        }
+        th {
+            background: #1d3557; color: white;
+            font-weight: 600; font-size: 13px; text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        tr:nth-child(even) { background-color: #f9fafb; }
+        tr:hover { background-color: #f0fdf8; }
+
+        input, select {
+            padding: 10px 14px; border: 2px solid #e0e0e0; border-radius: 10px;
+            font-size: 14px; font-family: inherit;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            background: white;
+        }
+        input:focus, select:focus {
+            border-color: #2a9d8f; box-shadow: 0 0 0 3px rgba(42,157,143,0.2);
+            outline: none;
+        }
+        input[type="number"] { width: 80px; }
+
+        button {
+            padding: 10px 20px; border: none; border-radius: 10px; cursor: pointer;
+            font-size: 14px; font-weight: 700; font-family: inherit;
+            letter-spacing: 0.5px; text-transform: uppercase;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+            transition: all 0.2s ease;
+        }
+        button:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        button:active { transform: translateY(0); box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; filter: none; transform: none; }
+
+        .btn-sm { padding: 6px 14px; font-size: 12px; border-radius: 8px; }
+        .btn-primary { background: #1d3557; color: white; }
+        .btn-success { background: #2a9d8f; color: white; }
+        .btn-danger { background: #e63946; color: white; }
+        .btn-warning { background: #f4a261; color: #1e1e1e; }
+
+        .row { display: flex; gap: 12px; align-items: flex-end; margin-bottom: 12px; flex-wrap: wrap; }
+        .form-group { display: flex; flex-direction: column; gap: 4px; }
+        .form-group label {
+            font-weight: 600; font-size: 12px; color: #6b7280;
+            text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .divider { border-top: 2px solid #f3f4f6; margin: 20px 0; }
+
+        .toast {
+            position: fixed; bottom: 24px; right: 24px;
+            padding: 14px 24px; border-radius: 12px; color: white;
+            font-weight: 700; font-size: 14px; z-index: 999;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            animation: slideUp 0.3s ease;
+        }
+        .toast.success { background: #2a9d8f; }
+        .toast.error { background: #e63946; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #e5e7eb; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 3px; }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 768px) {
+            body { padding: 12px; }
+            .tabs { overflow-x: auto; white-space: nowrap; }
+            .tab { padding: 10px 16px; font-size: 13px; }
+            .panel { padding: 16px; }
+            .row { flex-direction: column; align-items: stretch; }
+        }
+    </style>
+</head>
+<body>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;background:#1d3557;color:white;padding:20px 30px;border-radius:0 0 16px 16px;margin:-20px -20px 20px -20px;">
+        <h1 style="margin:0;">⚙️ Painel de Gerenciamento</h1>
+        <a href="/gerente" style="padding:12px 24px;background:#6c757d;color:white;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;text-decoration:none;letter-spacing:0.5px;text-transform:uppercase;box-shadow:0 2px 8px rgba(0,0,0,0.2);transition:all 0.2s ease;">← Voltar ao Painel</a>
+    </div>
+
+    <div class="tabs">
+        <button class="tab active" onclick="switchTab('products')">Produtos</button>
+        <button class="tab" onclick="switchTab('cozinhas')">Cozinhas</button>
+        <button class="tab" onclick="switchTab('menus')">Cardápios</button>
+        <button class="tab" onclick="switchTab('unidades')">Unidades</button>
+        <button class="tab" onclick="switchTab('reasons')">Motivos Cancelamento</button>
+    </div>
+
+    <!-- Painel: Produtos -->
+    <div id="panel-products" class="panel active">
+        <h2>Gerenciar Produtos</h2>
+        <div class="divider"></div>
+        <h3>Adicionar Produto</h3>
+        <div class="row">
+            <div class="form-group"><label>Nome</label><input type="text" id="newName" style="width:200px;"></div>
+            <div class="form-group"><label>Categoria</label><input type="text" id="newCategory" style="width:150px;"></div>
+            <div class="form-group"><label>Cozinha</label><select id="newStation" style="width:180px;"></select></div>
+            <div class="form-group"><label>SLA Normal</label><input type="number" id="newSlaN" value="10" min="1" style="width:80px;"></div>
+            <div class="form-group"><label>SLA Urgente</label><input type="number" id="newSlaU" value="7" min="1" style="width:80px;"></div>
+            <div class="form-group"><label>&nbsp;</label><button class="btn-success" onclick="addProduct()">Criar</button></div>
+        </div>
+        <div class="divider"></div>
+        <table id="productsTable">
+            <thead><tr><th>Nome</th><th>Categoria</th><th>Cozinha</th><th>SLA N</th><th>SLA U</th><th>Ativo</th><th>Ações</th></tr></thead>
+            <tbody><tr><td colspan="7">Carregando...</td></tr></tbody>
+        </table>
+    </div>
+
+    <!-- Painel: Cozinhas -->
+    <div id="panel-cozinhas" class="panel">
+        <h2>Capacidade das Cozinhas</h2>
+        <table id="stationsTable">
+            <thead><tr><th>Nome</th><th>Código</th><th>Capacidade (cozinheiros)</th><th>Salvar</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- Painel: Cardápios -->
+    <div id="panel-menus" class="panel">
+        <h2>Produtos por Cardápio</h2>
+        <div class="row">
+            <div class="form-group"><label>Cardápio #</label><select id="menuSelect" onchange="loadMenuProducts()" style="width:150px;"></select></div>
+            <div class="form-group"><label>&nbsp;</label><button class="btn-primary" onclick="setTodayMenu()">Usar Hoje</button></div>
+        </div>
+        <div style="display:flex;gap:20px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:300px;">
+                <h3>No Cardápio</h3>
+                <div id="menuProductList"></div>
+            </div>
+            <div style="flex:1;min-width:300px;">
+                <h3>Disponíveis</h3>
+                <div id="availableProductList"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Painel: Unidades -->
+    <div id="panel-unidades" class="panel">
+        <h2>Unidades de Medida</h2>
+        <div class="row">
+            <div class="form-group"><label>Código</label><input type="text" id="newUnitCode" style="width:150px;"></div>
+            <div class="form-group"><label>Nome</label><input type="text" id="newUnitLabel" style="width:200px;"></div>
+            <div class="form-group"><label>&nbsp;</label><button class="btn-success" onclick="addUnit()">Adicionar</button></div>
+        </div>
+        <div class="divider"></div>
+        <table>
+            <thead><tr><th>Código</th><th>Nome</th><th style="width:50px;">Fav</th><th style="width:60px;">Ativo</th><th style="width:130px;">Ações</th></tr></thead>
+            <tbody id="unitsTableBody"></tbody>
+        </table>
+        <div class="divider"></div>
+        <div class="row" style="align-items:flex-end;">
+            <div class="form-group"><label>Produto</label><select id="unitProductSelect" style="width:250px;"></select></div>
+            <div class="form-group"><label>Vincular Unidades</label><div id="unitCheckboxes" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;border:2px solid #e0e0e0;border-radius:10px;min-height:36px;"></div></div>
+            <div class="form-group"><label>&nbsp;</label><button class="btn-primary" onclick="saveProductUnits()">Salvar Vínculos</button></div>
+        </div>
+    </div>
+
+    <!-- Painel: Motivos de Cancelamento -->
+    <div class="panel" id="panel-reasons">
+        <h2>Gestão de Motivos de Cancelamento</h2>
+
+        <div class="row">
+            <div class="form-group">
+                <label>Motivo</label>
+                <input type="text" id="reasonLabel" placeholder="Ex: Erro no pedido" style="min-width:250px;">
+            </div>
+            <div class="form-group">
+                <label>Categoria</label>
+                <select id="reasonCategory">
+                    <option value="salao">Salão</option>
+                    <option value="cozinha">Cozinha</option>
+                </select>
+            </div>
+            <button class="btn-success" id="addReasonBtn" style="align-self:flex-end;">Adicionar</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <table>
+            <thead>
+                <tr><th>Motivo</th><th>Categoria</th><th>Status</th><th style="width:140px;">Ações</th></tr>
+            </thead>
+            <tbody id="reasonsTableBody"><tr><td colspan="4" style="text-align:center;">Carregando...</td></tr></tbody>
+        </table>
+    </div>
+
+<script>
+function toast(msg, ok) {
+    var el = document.createElement('div');
+    el.className = 'toast ' + (ok ? 'success' : 'error');
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(function() { el.remove(); }, 3000);
+}
+
+function api(url, opts) {
+    return fetch(url, opts).then(function(res) {
+        if (!res.ok) {
+            return res.json().then(function(e) { throw new Error(e.error || 'Erro ' + res.status); })
+                .catch(function(e2) { throw e2 instanceof Error ? e2 : new Error('Erro ' + res.status); });
+        }
+        return res.json().catch(function() { return {}; });
+    });
+}
+
+var tokens = localStorage.getItem('admin_token') || '';
+if (tokens) {
+    api('/api/v1/auth/me', { headers: { Authorization: 'Bearer ' + tokens } }).catch(function() {
+        tokens = '';
+        localStorage.removeItem('admin_token');
+    });
+}
+
+function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+    document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+    event.target.classList.add('active');
+    document.getElementById('panel-' + name).classList.add('active');
+    if (name === 'cozinhas') loadStations();
+    if (name === 'menus') loadMenus();
+    if (name === 'unidades') loadUnitsPanel();
+    if (name === 'reasons') loadReasons();
+}
+
+// === PRODUTOS ===
+var allStations = [];
+function loadProducts() {
+    api('/api/v1/products/all').then(function(prods) {
+        var tbody = document.querySelector('#productsTable tbody');
+        tbody.innerHTML = prods.map(function(p) {
+            var stName = '';
+            if (p.kitchen_station_id) {
+                var st = allStations.find(function(s) { return s.id === p.kitchen_station_id; });
+                stName = st ? st.name : p.kitchen_station_id;
+            }
+            return '<tr>' +
+                '<td><strong>' + p.name + '</strong></td>' +
+                '<td>' + p.category + '</td>' +
+                '<td><select onchange="updateProduct(\'' + p.id + '\',\'kitchen_station_id\',this.value)" style="width:200px;">' +
+                    '<option value="">--</option>' +
+                    allStations.map(function(s) { return '<option value="' + s.id + '"' + (p.kitchen_station_id === s.id ? ' selected' : '') + '>' + s.name + '</option>'; }).join('') +
+                '</select></td>' +
+                '<td><input type="number" value="' + p.sla_minutes_normal + '" min="1" onchange="updateProduct(\'' + p.id + '\',\'sla_minutes_normal\',this.value)" style="width:70px;"></td>' +
+                '<td><input type="number" value="' + p.sla_minutes_urgente + '" min="1" onchange="updateProduct(\'' + p.id + '\',\'sla_minutes_urgente\',this.value)" style="width:70px;"></td>' +
+                '<td>' + (p.active ? '<span style="color:#2a9d8f;">Sim</span>' : '<span style="color:#e63946;">Não</span>') + '</td>' +
+                '<td>' +
+                    '<button class="btn-sm ' + (p.active ? 'btn-warning' : 'btn-success') + '" onclick="toggleProduct(\'' + p.id + '\')">' + (p.active ? 'Desativar' : 'Ativar') + '</button> ' +
+                    '<button class="btn-sm btn-danger" onclick="deleteProduct(\'' + p.id + '\',\'' + p.name + '\')">X</button>' +
+                '</td>' +
+            '</tr>';
+        }).join('');
+    }).catch(function() { toast('Erro ao carregar produtos', false); });
+}
+
+function addProduct() {
+    var name = document.getElementById('newName').value.trim();
+    var cat = document.getElementById('newCategory').value.trim();
+    var st = document.getElementById('newStation').value;
+    var slaN = parseInt(document.getElementById('newSlaN').value) || 10;
+    var slaU = parseInt(document.getElementById('newSlaU').value) || 7;
+    if (!name) { toast('Nome é obrigatório', false); return; }
+    api('/api/v1/admin/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, category: cat, kitchen_station_id: st || null, sla_minutes_normal: slaN, sla_minutes_urgente: slaU })
+    }).then(function() {
+        document.getElementById('newName').value = '';
+        document.getElementById('newCategory').value = '';
+        loadProducts();
+        toast('Produto criado', true);
+    }).catch(function(e) { toast(e.message, false); });
+}
+
+function updateProduct(id, field, value) {
+    var body = {};
+    body[field] = field.includes('sla') ? parseInt(value) : value;
+    api('/api/v1/admin/products/' + id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    }).catch(function() {});
+}
+
+function toggleProduct(id) {
+    api('/api/v1/products/' + id, { method: 'PATCH' }).then(function() { loadProducts(); }).catch(function() {});
+}
+
+function deleteProduct(id, name) {
+    if (!confirm('Excluir "' + name + '"?')) return;
+    api('/api/v1/admin/products/' + id, { method: 'DELETE' }).then(function() { loadProducts(); toast('Produto excluído', true); }).catch(function(e) { toast(e.message, false); });
+}
+
+// === COZINHAS ===
+function loadStations() {
+    api('/api/v1/kitchen-stations').then(function(stations) {
+        allStations = stations;
+        var tbody = document.querySelector('#stationsTable tbody');
+        tbody.innerHTML = stations.map(function(s) {
+            return '<tr><td><strong>' + s.name + '</strong></td><td>' + s.code + '</td>' +
+                '<td><input type="number" id="cap-' + s.id + '" value="' + s.capacity + '" min="1" style="width:70px;"></td>' +
+                '<td><button class="btn-primary btn-sm" onclick="updateCapacity(\'' + s.id + '\')">Salvar</button></td></tr>';
+        }).join('');
+        if (document.getElementById('panel-products').classList.contains('active')) loadProducts();
+        var sel = document.getElementById('newStation');
+        sel.innerHTML = '<option value="">Sem cozinha</option>' + stations.map(function(s) { return '<option value="' + s.id + '">' + s.name + '</option>'; }).join('');
+    });
+}
+
+function updateCapacity(id) {
+    var cap = parseInt(document.getElementById('cap-' + id).value);
+    if (!cap || cap < 1) { toast('Capacidade deve ser >= 1', false); return; }
+    if (tokens) {
+        api('/api/v1/kitchen-stations/' + id, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tokens },
+            body: JSON.stringify({ capacity: cap })
+        }).then(function() { toast('Capacidade atualizada', true); loadStations(); }).catch(function(e) { toast(e.message, false); });
+    } else {
+        api('/api/v1/kitchen-stations/' + id, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ capacity: cap })
+        }).then(function() { toast('Capacidade atualizada', true); loadStations(); }).catch(function(e) { toast(e.message, false); });
+    }
+}
+
+// === MENUS ===
+function loadMenus() {
+    api('/api/v1/admin/menus').then(function(menus) {
+        var sel = document.getElementById('menuSelect');
+        sel.innerHTML = menus.map(function(m) { return '<option value="' + m.id + '">Cardápio ' + m.number + ' — ' + m.name + '</option>'; }).join('');
+        loadMenuProducts();
+    });
+}
+
+function loadMenuProducts() {
+    var menuId = document.getElementById('menuSelect').value;
+    if (!menuId) return;
+    api('/api/v1/admin/menus/' + menuId + '/products').then(function(data) {
+        var menuProds = data.menu_products || [];
+        var allProds = data.all_products || [];
+        document.getElementById('menuProductList').innerHTML = menuProds.length === 0
+            ? '<p style="color:#999;">Nenhum produto neste cardápio</p>'
+            : menuProds.map(function(p) {
+                return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid #eee;">' +
+                    '<span>' + p.name + ' <small style="color:#999;">(' + p.category + ')</small></span>' +
+                    '<button class="btn-sm btn-danger" onclick="removeFromMenu(\'' + menuId + '\',\'' + p.product_id + '\')">Remover</button></div>';
+            }).join('');
+
+        var menuProdIds = new Set(menuProds.map(function(p) { return p.product_id; }));
+        document.getElementById('availableProductList').innerHTML = allProds.filter(function(p) { return !menuProdIds.has(p.id); }).map(function(p) {
+            return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid #eee;">' +
+                '<span>' + p.name + ' <small style="color:#999;">(' + p.category + ')</small></span>' +
+                '<button class="btn-sm btn-success" onclick="addToMenu(\'' + menuId + '\',\'' + p.id + '\')">Adicionar</button></div>';
+        }).join('');
+    });
+}
+
+function addToMenu(menuId, productId) {
+    api('/api/v1/admin/menus/' + menuId + '/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product_id: productId })
+    }).then(function() { loadMenuProducts(); toast('Produto adicionado ao cardápio', true); }).catch(function(e) { toast(e.message, false); });
+}
+
+function removeFromMenu(menuId, productId) {
+    api('/api/v1/admin/menus/' + menuId + '/products/' + productId, { method: 'DELETE' })
+        .then(function() { loadMenuProducts(); toast('Produto removido do cardápio', true); }).catch(function(e) { toast(e.message, false); });
+}
+
+function setTodayMenu() {
+    var menuId = document.getElementById('menuSelect').value;
+    if (!menuId) { toast('Selecione um cardápio', false); return; }
+    api('/api/v1/admin/menus/' + menuId + '/set-today', { method: 'POST' })
+        .then(function() { toast('Cardápio definido como o de hoje!', true); })
+        .catch(function(e) { toast(e.message, false); });
+}
+
+// === UNIDADES ===
+function loadUnitsPanel() {
+    api('/api/v1/units?all=true').then(function(allUnits) {
+        // Tabela de gestão
+        var tbody = document.getElementById('unitsTableBody');
+        tbody.innerHTML = allUnits.map(function(u) {
+            var star = u.featured ? '\u2605' : '\u2606';
+            var starColor = u.featured ? 'color:#f4a261;' : '';
+            var rowStyle = u.active ? '' : 'opacity:0.5;';
+            return '<tr style="' + rowStyle + '">' +
+                '<td><input type="text" id="ucode-' + u.id + '" value="' + esc(u.code) + '" style="width:120px;"></td>' +
+                '<td><input type="text" id="ulabel-' + u.id + '" value="' + esc(u.label) + '" style="width:200px;"></td>' +
+                '<td><span onclick="toggleUnitFeatured(\'' + u.id + '\')" style="cursor:pointer;font-size:18px;' + starColor + '" title="Favoritar">' + star + '</span></td>' +
+                '<td>' + (u.active
+                    ? '<span style="color:#2a9d8f;cursor:pointer;" onclick="toggleUnitActive(\'' + u.id + '\')" title="Desativar">Sim</span>'
+                    : '<span style="color:#e63946;cursor:pointer;" onclick="toggleUnitActive(\'' + u.id + '\')" title="Reativar">Nao</span>') + '</td>' +
+                '<td>' +
+                    '<button class="btn-sm btn-primary" onclick="saveUnit(\'' + u.id + '\')">Salvar</button> ' +
+                    '<button class="btn-sm btn-danger" onclick="deleteUnit(\'' + u.id + '\',\'' + esc(u.label) + '\')">X</button>' +
+                '</td>' +
+            '</tr>';
+        }).join('');
+
+        // Checkboxes para vínculo com produto (só ativas)
+        document.getElementById('unitCheckboxes').innerHTML = allUnits.filter(function(u) { return u.active; }).map(function(u) {
+            return '<label style="white-space:nowrap;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:4px;"><input type="checkbox" class="unit-cb" value="' + u.id + '" style="accent-color:#2a9d8f;"> ' + u.label + '</label>';
+        }).join('');
+    });
+    api('/api/v1/products/all').then(function(prods) {
+        var sel = document.getElementById('unitProductSelect');
+        sel.innerHTML = '<option value="">Selecione um produto...</option>' +
+            prods.map(function(p) { return '<option value="' + p.id + '">' + p.name + '</option>'; }).join('');
+        sel.onchange = function() {
+            if (!this.value) { document.querySelectorAll('.unit-cb').forEach(function(cb) { cb.checked = false; }); return; }
+            api('/api/v1/units/by-product/' + encodeURIComponent(this.value)).then(function(prodUnits) {
+                var ids = new Set(prodUnits.map(function(u) { return u.id; }));
+                document.querySelectorAll('.unit-cb').forEach(function(cb) { cb.checked = ids.has(cb.value); });
+            });
+        };
+    });
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function addUnit() {
+    var code = document.getElementById('newUnitCode').value.trim();
+    var label = document.getElementById('newUnitLabel').value.trim();
+    if (!code || !label) { toast('Preencha código e nome', false); return; }
+    api('/api/v1/admin/units', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: code, label: label })
+    }).then(function() {
+        document.getElementById('newUnitCode').value = '';
+        document.getElementById('newUnitLabel').value = '';
+        loadUnitsPanel();
+        toast('Unidade criada', true);
+    }).catch(function(e) { toast(e.message, false); });
+}
+
+function saveProductUnits() {
+    var prodId = document.getElementById('unitProductSelect').value;
+    if (!prodId) { toast('Selecione um produto', false); return; }
+    var ids = [];
+    document.querySelectorAll('.unit-cb:checked').forEach(function(cb) { ids.push(cb.value); });
+    api('/api/v1/admin/units/bind-product', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product_id: prodId, unit_ids: ids })
+    }).then(function() { toast('Vínculos salvos', true); }).catch(function(e) { toast(e.message, false); });
+}
+
+function toggleUnitFeatured(id) {
+    api('/api/v1/admin/units/' + id + '/featured', { method: 'PATCH' })
+        .then(function() { loadUnitsPanel(); })
+        .catch(function(e) { toast(e.message, false); });
+}
+
+function toggleUnitActive(id) {
+    api('/api/v1/admin/units/' + id + '/active', { method: 'PATCH' })
+        .then(function() { loadUnitsPanel(); })
+        .catch(function(e) { toast(e.message, false); });
+}
+
+function saveUnit(id) {
+    var code = document.getElementById('ucode-' + id).value.trim();
+    var label = document.getElementById('ulabel-' + id).value.trim();
+    if (!code || !label) { toast('Preencha código e nome', false); return; }
+    api('/api/v1/admin/units/' + id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: code, label: label })
+    }).then(function() { toast('Unidade atualizada', true); })
+      .catch(function(e) { toast(e.message, false); });
+}
+
+function deleteUnit(id, label) {
+    if (!confirm('Excluir unidade "' + label + '"?')) return;
+    api('/api/v1/admin/units/' + id, { method: 'DELETE' })
+        .then(function() { loadUnitsPanel(); toast('Unidade excluída', true); })
+        .catch(function(e) { toast(e.message, false); });
+}
+
+// === MOTIVOS DE CANCELAMENTO ===
+function loadReasons() {
+    api('/api/v1/admin/cancel-reasons').then(function(reasons) {
+        var tbody = document.getElementById('reasonsTableBody');
+        tbody.innerHTML = reasons.map(function(r) {
+            var categoryBadge = r.category === 'salao'
+                ? '<span style="background:#1d3557;color:white;padding:3px 10px;border-radius:20px;font-size:12px;">Salão</span>'
+                : '<span style="background:#f4a261;color:white;padding:3px 10px;border-radius:20px;font-size:12px;">Cozinha</span>';
+            return '<tr>' +
+                '<td><strong>' + r.label + '</strong></td>' +
+                '<td>' + categoryBadge + '</td>' +
+                '<td>' +
+                    '<button class="btn-sm ' + (r.active ? 'btn-warning' : 'btn-danger') + '" data-action="toggle" data-id="' + r.id + '">' + (r.active ? 'Ativo' : 'Inativo') + '</button>' +
+                '</td>' +
+                '<td>' +
+                    '<button class="btn-sm btn-danger" data-action="delete" data-id="' + r.id + '">Excluir</button>' +
+                '</td>' +
+                '</tr>';
+        }).join('');
+    }).catch(function() { toast('Erro ao carregar motivos', false); });
+}
+
+function addReason() {
+    var label = document.getElementById('reasonLabel').value.trim();
+    var category = document.getElementById('reasonCategory').value;
+    if (!label) { toast('Motivo é obrigatório', false); return; }
+    api('/api/v1/admin/cancel-reasons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: label, category: category })
+    }).then(function() {
+        document.getElementById('reasonLabel').value = '';
+        loadReasons();
+        toast('Motivo adicionado', true);
+    }).catch(function(e) { toast(e.message, false); });
+}
+
+function toggleReason(id) {
+    api('/api/v1/admin/cancel-reasons/' + id, { method: 'PATCH' }).then(function() { loadReasons(); }).catch(function(e) { toast(e.message, false); });
+}
+
+function deleteReason(id) {
+    if (!confirm('Excluir este motivo?')) return;
+    api('/api/v1/admin/cancel-reasons/' + id, { method: 'DELETE' }).then(function() { loadReasons(); toast('Motivo excluído', true); }).catch(function(e) { toast(e.message, false); });
+}
+
+document.getElementById('addReasonBtn').addEventListener('click', addReason);
+
+document.getElementById('reasonsTableBody').addEventListener('click', function(e) {
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    var action = btn.getAttribute('data-action');
+    var id = btn.getAttribute('data-id');
+    if (action === 'toggle') toggleReason(id);
+    if (action === 'delete') deleteReason(id);
+});
+
+// Init
+loadStations();
+loadProducts();
+</script>
+</body>
+</html>

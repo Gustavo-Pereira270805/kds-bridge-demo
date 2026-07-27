@@ -16,9 +16,11 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
   fastify.get('/', async (request, reply) => {
     try {
       const demands = await query<Demand>(
-        `SELECT * FROM demands
-         WHERE status IN ('pending', 'ready')
-         ORDER BY priority DESC, created_at ASC`
+        `SELECT d.*, rp.name AS replaced_name
+         FROM demands d
+         LEFT JOIN products rp ON rp.id = d.replaced_product_id
+         WHERE d.status IN ('pending', 'ready')
+         ORDER BY d.priority DESC, d.created_at ASC`
       );
       return demands;
     } catch (error) {
@@ -131,7 +133,7 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
            priority, notes, is_replacement, replaced_product_id
          )
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-         RETURNING *`,
+          RETURNING *, (SELECT name FROM products WHERE id = replaced_product_id) AS replaced_name`,
         [
           dailyMenuId,
           product_id,
@@ -457,15 +459,13 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
 
         // Ao promover de normal para urgente, ajusta o SLA para o SLA urgente do produto
         if (demand.status === 'pending' && demand.priority === 'normal' && demand.product_id) {
-          const [product] = await query<{ sla_minutes_urgente: number }>(
+          const [product] = await query<{ sla_minutes_urgente: number | null }>(
             'SELECT sla_minutes_urgente FROM products WHERE id = $1',
             [demand.product_id]
           );
-          const novoSla = product
-            ? Math.min(
-                demand.sla_minutes ?? product.sla_minutes_urgente,
-                product.sla_minutes_urgente
-              )
+          const urgente = product?.sla_minutes_urgente;
+          const novoSla = (urgente != null && Number(urgente) > 0)
+            ? Math.min(demand.sla_minutes ?? Infinity, Number(urgente))
             : demand.sla_minutes;
           await query(
             `UPDATE demands SET priority = 'urgent', sla_minutes = $1 WHERE id = $2`,
@@ -490,7 +490,9 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
         }
 
         const [updated] = await query<Demand>(
-          'SELECT * FROM demands WHERE id = $1',
+          `SELECT d.*, rp.name AS replaced_name
+           FROM demands d LEFT JOIN products rp ON rp.id = d.replaced_product_id
+           WHERE d.id = $1`,
           [id]
         );
 

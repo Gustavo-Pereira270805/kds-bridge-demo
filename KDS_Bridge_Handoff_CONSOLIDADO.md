@@ -1,7 +1,7 @@
 # KDS Bridge — Handoff Consolidado
 
 > Documento único gerado a partir de 6 handoffs (v1.0 → v2.4), removendo redundâncias e histórico obsoleto, mantendo tudo que é necessário para dar continuidade ao projeto.
-> Estado do sistema refletido aqui: **v2.5 (implementado + corrigido)**. Atualizado em 23/07/2026 com correções de bugs pós-implementação.
+> Estado do sistema refletido aqui: **v2.5 (implementado + corrigido)**. Atualizado em 23/07/2026 com duas rodadas de correções de bugs pós-implementação.
 > O plano detalhado de implementação está em `PLANO_MUDANCAS_CLIENTE.md`. As seções marcadas com **[v2.5]** descrevem funcionalidades implementadas em 22/07/2026 e corrigidas em 23/07/2026.
 
 ---
@@ -476,7 +476,7 @@ Causa raiz: um `<div id="cancelModal">` foi inserido **depois** da tag `</script
 
 ## 17. Correções de bugs pós-implementação (23/07/2026)
 
-**Bugs identificados e corrigidos (9 itens):**
+**Bugs identificados e corrigidos — rodada 1 (9 itens, 23/07/2026):**
 
 | Bug | Arquivo | Solução |
 |-----|---------|---------|
@@ -489,6 +489,19 @@ Causa raiz: um `<div id="cancelModal">` foi inserido **depois** da tag `</script
 | Dashboard: dropdown cozinhas | `dashboard.html` | `console.error` + feedback visual |
 | Dashboard: exportar | `dashboard.html` | Botão inicia disabled, habilita ao carregar |
 | Dashboard: indicador gráfico | `dashboard.html` | Event listener com referência correta |
+
+**Bugs identificados e corrigidos — rodada 2 (8 itens, 23/07/2026):**
+
+| Bug | Arquivo | Solução |
+|-----|---------|---------|
+| SLA após zerou virava 0 | `demands.ts:268-279` | `Math.min(sla, null)` → 0. Corrigido com guard `urgente != null && > 0` |
+| Timers de demanda pequenos | `cozinha-quente.html`, `cozinha-fria.html` | `.card-timer` de 13px para 19px, font-weight 800 |
+| Pedidos "Troca" sem indicador visual | `cozinha-quente.html`, `cozinha-fria.html`, `demands.ts`, `types.ts` | Badge roxo "TROCA" + nome do item substituído (`replaced_name`) nas queries |
+| Anular demanda retornava 500 e deixava inconsistência | `admin.ts`, `supabase_schema.sql` | Transação atômica (`client.query()` no lugar de `query()`); constraint `demand_events.event_type` não incluía `'annulled'` — migration aplicada |
+| Export Excel "Por Dia" gerava aba "0723" vazia | `dashboard.html` | Nome da aba corrigido para `DD/MM`; closure IIFE para capturar variáveis corretas; exporta produtos + cancelamentos por dia |
+| Export PDF "Por Dia": imagens achatadas, página em branco, sem data | `dashboard.html` | Scale 1.5→2; removido `pdf.addPage()` extra entre dias; header azul com data `DD/MM/AAAA` por página |
+| Gráfico "Evolução das Notas" com nome escapado + apenas 1 linha | `dashboard.html` | Unicode escapado corrigido; séries trocadas para Quente A (vermelho), Quente B (laranja), Fria (ciano), Salão (azul) |
+| Sistema de notas sem datas dos erros individuais | `performance.service.ts`, `analytics.ts`, `dashboard.html` | Nova função `getDetractorDates()`; endpoint `/performance` retorna `detractor_dates`; tabela no frontend com hora, tipo, produto e detalhe de cada ocorrência |
 
 ---
 
@@ -507,7 +520,7 @@ Causa raiz: um `<div id="cancelModal">` foi inserido **depois** da tag `</script
 - [x] Migration v2.5 aplicada no Supabase (colunas novas + constraint `annulled` + view `daily_menu_effective`)
 - [ ] Validar que todo produto tem pelo menos uma linha em `product_units` e SLA normal/urgente definidos
 
-### Correções (v2.5) — 23/07/2026
+### Correções (v2.5) — rodada 1, 23/07/2026
 - [x] Bug dashboard week/month: `Math.floor(rangeNum)` + remover `::integer`
 - [x] Preempção zerou SLA: `SELECT` movido para depois do `recomputeStationQueue` + `demand:queue-updated`
 - [x] Timers cozinha-quente: `#timerA` e `#timerB` por coluna + `.card-timer` por demanda
@@ -517,6 +530,17 @@ Causa raiz: um `<div id="cancelModal">` foi inserido **depois** da tag `</script
 - [x] Dashboard botão Exportar: inicia desabilitado, habilita ao carregar dados
 - [x] Dashboard `cmpIndicatorSelect`: `removeEventListener` usa referência correta
 - [x] Salão `loadUnitsForProduct`: `console.error` no catch
+
+### Correções (v2.5) — rodada 2, 23/07/2026
+- [x] SLA zerou: guard `urgente != null && > 0` no `Math.min`
+- [x] Timers das demandas ampliados (13px → 19px)
+- [x] Badge "TROCA" roxo nas cozinhas + campo `replaced_name` nas queries
+- [x] Anulação atômica: `client.query()` no lugar de `query()` dentro da transação
+- [x] Constraint `demand_events.event_type` inclui `'annulled'` (migration aplicada)
+- [x] Excel "Por Dia": nome `DD/MM`, closure IIFE, mais dados por aba
+- [x] PDF "Por Dia": scale 2, header com data, sem página em branco
+- [x] Gráfico notas: título corrigido, 4 linhas (Quente A/B, Fria, Salão)
+- [x] Datas dos erros de dedução no `/performance` + tabela no frontend
 
 ### Pendências de arquitetura
 - [ ] Revisar se `RETOOL_URL` / CORS restrito ainda fazem sentido, já que o Retool foi abandonado
@@ -550,7 +574,7 @@ Causa raiz: um `<div id="cancelModal">` foi inserido **depois** da tag `</script
 
 ## 20. Sumário de mudanças (v2.5 — implementado 22/07/2026, corrigido 23/07/2026)
 
-> O plano detalhado com especificações técnicas, queries, endpoints e ordem de implementação está em `PLANO_MUDANCAS_CLIENTE.md`. Todos os 21 itens do plano original foram implementados. Em 23/07/2026, 9 bugs pós-implementação foram corrigidos (ver §19).
+> O plano detalhado com especificações técnicas, queries, endpoints e ordem de implementação está em `PLANO_MUDANCAS_CLIENTE.md`. Todos os 21 itens do plano original foram implementados. Em 23/07/2026, 17 bugs pós-implementação foram corrigidos em duas rodadas (9 + 8, ver §17 e §19).
 
 ### Nomenclatura
 - **"Rotura" → "Zerou"** em todos os labels de UI. Código interno (`stockout`, `stockout_reported`) e colunas DB mantidos.
@@ -589,3 +613,6 @@ Causa raiz: um `<div id="cancelModal">` foi inserido **depois** da tag `</script
 3. A correção do bug dashboard (§17) é pré-requisito para o novo seletor de data
 4. Exportação PDF/Excel roda no navegador do gerente (notebook), não no Orange Pi
 5. Preservar todos os IDs existentes no HTML — convenção do projeto (§14)
+6. **CHECK constraint de `demand_events.event_type` precisa incluir `'annulled'`** — a migration no `supabase_schema.sql:344-352` faz isso, mas pode precisar ser aplicada manualmente se o banco não tiver a migração v2.5. Sem ela, `logDemandEvent(id, 'annulled', ...)` falha com erro de constraint
+7. **Transações no admin.ts exigem `client.query()` (PoolClient), não `query()` (Pool)** — a função global `query()` pega uma conexão diferente do pool, fora da transação. Dentro de `BEGIN`/`COMMIT`, usar `client.query()` explicitamente
+8. **Gráfico de notas mostra 4 linhas:** Quente A (vermelho), Quente B (laranja), Fria (ciano), Salão (azul) — expandir se novas estações forem adicionadas

@@ -1,9 +1,12 @@
 node_modules/
 dist/
 .env
-demo.db
-demo.db-shm
-demo.db-wal
 *.db
 *.db-shm
 *.db-wal
+.DS_Store
+dashboard/__pycache__/
+dashboard/.env
+downloads/
+test_webwright/
+.playwright-mcp/

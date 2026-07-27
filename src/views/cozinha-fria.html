@@ -30,8 +30,8 @@
         #globalTimer.t-red { color: #e63946; border-color: #e63946; }
         #globalTimer.t-urgent { animation: timerPulse 1s infinite; }
         .card-timer {
-            font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
-            color: #5a6a8a; margin-top: 4px; letter-spacing: 0.5px;
+            font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums;
+            color: #5a6a8a; margin-top: 6px; letter-spacing: 1px;
         }
         .card-timer.t-green { color: #2a9d8f; }
         .card-timer.t-orange { color: #f4a261; }
@@ -75,6 +75,13 @@
         .card.critical.flash-in { animation: flashIn 0.5s ease-out 1, criticalPulse 0.8s infinite 0.5s; }
         .card.stockout.flash-in { animation: flashIn 0.5s ease-out 1, stockoutPulse 1.5s infinite 0.5s; }
         .card.cross-cancelled { border: 2px solid #ff0000 !important; animation: shake 0.5s ease 3, crossCancelPulse 1s infinite !important; }
+        .card.replacement { border-left-color: #9b59b6; border-left-width: 6px; background: #1a1025; }
+        .card.replacement .replacement-badge {
+            display: inline-block; background: #9b59b6; color: #fff;
+            font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 4px;
+            text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;
+        }
+        .card.replacement .replaced-name { font-size: 11px; color: #9b59b6; margin-top: 2px; font-style: italic; }
 
         .card .urgent-label {
             font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px;
@@ -438,12 +445,15 @@
                 if (d.cooking_started) classes.push('cooking');
                 if (d.sla_breached_cozinha || overdue) classes.push('breached');
                 if (flashIds.has(d.id)) classes.push('flash-in');
+                if (d.is_replacement) classes.push('replacement');
 
                 const etaText = etaDisplay(d.expected_ready_at);
                 const etaClass = overdue ? 'eta overdue' : 'eta';
                 const unitText = d.unit_label ? ` <span class="unit-label">(${d.unit_label})</span>` : '';
                 const cookingBadge = d.cooking_started ? ' <span class="cooking-badge">EM PREPARO</span>' : '';
                 const urgentLabel = d.priority === 'urgent' ? '<div class="urgent-label">URGENTE</div>' : '';
+                const replacementBadge = d.is_replacement ? '<div class="replacement-badge">TROCA</div>' : '';
+                const replacedInfo = d.is_replacement && d.replaced_name ? `<div class="replaced-name">Substitui: ${d.replaced_name}</div>` : '';
 
                 const pct = calcProgress(d.created_at, d.expected_ready_at);
                 let progressBar = '';
@@ -454,11 +464,12 @@
 
                 return `
                 <div class="${classes.join(' ')}">
-                    ${urgentLabel}
+                    ${urgentLabel}${replacementBadge}
                     <div class="card-top">
                         <div class="qty">${d.quantity}x</div>
                         <div class="product-info">
                             <div class="name">${d.product_name}${unitText}</div>
+                            ${replacedInfo}
                             ${cookingBadge}
                             <div class="card-timer" data-eta="${d.expected_ready_at || ''}" data-priority="${d.priority}">${etaDisplayCountdown(d.expected_ready_at)}</div>
                         </div>

@@ -1,0 +1,76 @@
+- generic [ref=f3e1]:
+  - generic [ref=f3e2]:
+    - generic [ref=f3e3]: Quinta-feira, 23 de julho de 2026
+    - generic [ref=f3e4]: ·
+    - generic [ref=f3e5]: Cardápio 9
+  - alert
+  - generic [ref=f3e6]:
+    - heading "Registrar Demanda" [level=2] [ref=f3e7]
+    - generic [ref=f3e8]:
+      - generic [ref=f3e9]:
+        - searchbox "Buscar produto (cardápio do dia ou todos)..." [active] [ref=f3e10]: Arroz
+        - generic [ref=f3e52]:
+          - generic [ref=f3e266] [cursor=pointer]:
+            - generic [ref=f3e267]: ARROZ BRANCOGuarnicao
+            - generic [ref=f3e268]: ★ Hoje
+          - generic [ref=f3e269] [cursor=pointer]:
+            - generic [ref=f3e270]: ARROZ DE PEIXE COM COCOGuarnicao
+            - generic [ref=f3e271]: ★ Hoje
+          - generic [ref=f3e272] [cursor=pointer]:
+            - generic [ref=f3e273]: ARROZ INTEGRALGuarnicao
+            - generic [ref=f3e274]: ★ Hoje
+          - generic [ref=f3e275] [cursor=pointer]:
+            - generic [ref=f3e276]: ARROZ SABOROSOGuarnicao
+            - generic [ref=f3e277]: ★ Hoje
+          - generic [ref=f3e278] [cursor=pointer]: ARROZ À ESPANHOLAGuarnicao
+          - generic [ref=f3e280] [cursor=pointer]: ARROZ À GREGAGuarnicao
+          - generic [ref=f3e282] [cursor=pointer]: ARROZ COM BRÓCOLISGuarnicao
+          - generic [ref=f3e284] [cursor=pointer]: ARROZ DE FESTAGuarnicao
+          - generic [ref=f3e286] [cursor=pointer]: ARROZ DE QUEIJOGuarnicao
+          - generic [ref=f3e288] [cursor=pointer]: ARROZ DE QUEIJO COM ALHO PORÓGuarnicao
+          - generic [ref=f3e290] [cursor=pointer]: ARROZ PIAMONTÊSGuarnicao
+      - generic [ref=f3e11]:
+        - spinbutton "Quantidade" [ref=f3e12]: "1"
+        - combobox [disabled] [ref=f3e13]:
+          - option "Selecione um produto primeiro" [selected]
+      - generic [ref=f3e14]:
+        - generic [ref=f3e15] [cursor=pointer]:
+          - checkbox "Marcar como Urgente" [ref=f3e16]
+          - text: Marcar como Urgente
+        - generic [ref=f3e17] [cursor=pointer]:
+          - checkbox "Troca" [ref=f3e18]
+          - text: Troca
+      - button "📤 Enviar para Cozinha" [ref=f3e19] [cursor=pointer]
+  - generic [ref=f3e20]:
+    - heading "⏳ Demandas Ativas" [level=3] [ref=f3e21]
+    - generic [ref=f3e22]:
+      - generic [ref=f3e292]:
+        - generic [ref=f3e293]:
+          - generic [ref=f3e294]:
+            - text: 1x ARROZ BRANCO (★ 1 GN)
+            - generic [ref=f3e295]: URGENTE
+            - generic [ref=f3e296]: PRONTA
+          - generic [ref=f3e297]: ⏱️ há 33h 11min
+          - generic [ref=f3e298]: "ETA: ATRASADO"
+          - generic [ref=f3e299]: ✅ Pronto para retirar!
+        - button "Confirmar Retirada" [ref=f3e301] [cursor=pointer]
+      - generic [ref=f3e302]:
+        - generic [ref=f3e303]:
+          - generic [ref=f3e304]:
+            - text: 1x ARROZ BRANCO (★ 1 GN)
+            - generic [ref=f3e305]: Normal
+          - generic [ref=f3e306]: ⏱️ há 33h 11min
+          - generic [ref=f3e307]: "ETA: ATRASADO"
+        - generic [ref=f3e308]:
+          - button "Cancelar" [ref=f3e309] [cursor=pointer]
+          - button "Zerou" [ref=f3e310] [cursor=pointer]
+      - generic [ref=f3e311]:
+        - generic [ref=f3e312]:
+          - generic [ref=f3e313]:
+            - text: 1x ARROZ BRANCO (★ 1 GN)
+            - generic [ref=f3e314]: Normal
+          - generic [ref=f3e315]: ⏱️ há 33h 11min
+          - generic [ref=f3e316]: "ETA: ATRASADO"
+        - generic [ref=f3e317]:
+          - button "Cancelar" [ref=f3e318] [cursor=pointer]
+          - button "Zerou" [ref=f3e319] [cursor=pointer]

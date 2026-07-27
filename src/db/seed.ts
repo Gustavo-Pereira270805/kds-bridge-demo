@@ -1,48 +1,30 @@
-import db from './client';
+import pool from './client';
 
-export function seedDatabase() {
+export async function seedDatabase() {
+  const { rows } = await pool.query('SELECT COUNT(*) as count FROM products');
+  const count = parseInt(rows[0].count, 10);
 
-  const checkProducts = db.prepare('SELECT COUNT(*) as count FROM products').get() as { count: number };
-
-  if (checkProducts.count === 0) {
-    const insertProduct = db.prepare(`
-      INSERT INTO products (name, category, unit, active)
-      VALUES (?, ?, ?, ?)
-    `);
-
+  if (count === 0) {
     const mockProducts = [
-      ['Arroz Branco', 'Guarnição', 'Bandeja', 1],
-      ['Feijão Carioca', 'Guarnição', 'Cuba', 1],
-      ['Frango Grelhado', 'Proteína', 'Bandeja', 1],
-      ['Bife Acebolado', 'Proteína', 'Bandeja', 1],
-      ['Batata Frita', 'Acompanhamento', 'Cuba', 1],
-      ['Salada de Alface', 'Salada', 'Tigela', 1],
-      ['Tomate Picado', 'Salada', 'Cuba', 1],
-      ['Farofa', 'Acompanhamento', 'Cuba', 1],
-      ['Macarrão ao Sugo', 'Massa', 'Bandeja', 1],
-      ['Peixe Frito', 'Proteína', 'Bandeja', 1],
+      ['Arroz Branco', 'Guarnição', 'Bandeja'],
+      ['Feijão Carioca', 'Guarnição', 'Cuba'],
+      ['Frango Grelhado', 'Proteína', 'Bandeja'],
+      ['Bife Acebolado', 'Proteína', 'Bandeja'],
+      ['Batata Frita', 'Acompanhamento', 'Cuba'],
+      ['Salada de Alface', 'Salada', 'Tigela'],
+      ['Tomate Picado', 'Salada', 'Cuba'],
+      ['Farofa', 'Acompanhamento', 'Cuba'],
+      ['Macarrão ao Sugo', 'Massa', 'Bandeja'],
+      ['Peixe Frito', 'Proteína', 'Bandeja'],
     ];
 
-  
-    const insertManyProducts = db.transaction((products) => {
-      for (const product of products) {
-        insertProduct.run(...product);
-      }
-    });
-    
+    for (const [name, category, unit] of mockProducts) {
+      await pool.query(
+        'INSERT INTO products (name, category) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING',
+        [name, category]
+      );
+    }
 
-    insertManyProducts(mockProducts);
-
-    const insertDailyMenus = db.prepare(`
-      INSERT INTO daily_menus (date, menu_name)
-      VALUES (date('now'), 'Cardápio Base 1')
-      `);
-
-    try {
-      insertDailyMenus.run();
-    } catch (error) {
-      console.log('[Seed] Cardápio do dia já existe, pulando...');
+    console.log('[Seed] Banco populado com 10 produtos de teste');
   }
-  console.log('[Seed] Banco Populado com 10 produtos de teste');
-}
 }
