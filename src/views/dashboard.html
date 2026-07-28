@@ -439,6 +439,10 @@ function createChartWithZoom(canvas, config) {
     config.options.plugins = config.options.plugins || {};
     config.options.plugins.zoom = ZOOM_CONFIG;
     var chart = new Chart(canvas, config);
+    canvas.setAttribute('tabindex', '0');
+    canvas.setAttribute('role', 'img');
+    var datasetCount = (config.data && config.data.datasets) ? config.data.datasets.length : 0;
+    canvas.setAttribute('aria-label', config.type + ' chart with ' + datasetCount + ' datasets');
     var container = canvas.parentElement;
     container.style.position = 'relative';
     var resetBtn = document.createElement('button');
@@ -1711,6 +1715,72 @@ if (document.readyState === 'loading') {
         if (banner) banner.hidden = true;
         showToast('Conexão restabelecida', 'info');
     });
+
+    // === Keyboard shortcuts ===
+    var pendingG = null;
+    document.addEventListener('keydown', function(e) {
+        var tag = (e.target.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+        if (pendingG && Date.now() - pendingG < 1500) {
+            var map = { o: 'overview', d: 'demand', s: 'sla', n: 'diagnosis', p: 'performance', t: 'top' };
+            var target = map[e.key.toLowerCase()];
+            if (target) {
+                e.preventDefault();
+                var el = document.getElementById(target);
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+            }
+            pendingG = null;
+            return;
+        }
+        if (e.key.toLowerCase() === 'g') {
+            pendingG = Date.now();
+            return;
+        }
+        if (e.key.toLowerCase() === 'r') {
+            e.preventDefault();
+            loadDashboard();
+        }
+        if (e.key.toLowerCase() === 'e') {
+            e.preventDefault();
+            var btnExp = document.getElementById('btnExport');
+            if (btnExp) btnExp.click();
+        }
+        if (e.key === '?') {
+            e.preventDefault();
+            showShortcutsHelp();
+        }
+    });
+
+    function showShortcutsHelp() {
+        var existing = document.getElementById('modalAjuda');
+        if (existing) { openModal('modalAjuda'); return; }
+        var modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.id = 'modalAjuda';
+        modal.innerHTML = '<div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-ajuda-title">' +
+            '<header class="modal-header">' +
+            '<h2 id="modal-ajuda-title" class="modal-title">Atalhos de teclado</h2>' +
+            '<button class="modal-close" aria-label="Fechar" data-modal-close>&times;</button>' +
+            '</header>' +
+            '<div class="modal-body">' +
+            '<table style="width:100%;font-size:13px;border-collapse:collapse;">' +
+            '<tr><td style="padding:6px;font-family:var(--font-mono);"><kbd>g</kbd> + <kbd>o</kbd></td><td>Ir para Vis\u00e3o Geral</td></tr>' +
+            '<tr><td style="padding:6px;font-family:var(--font-mono);"><kbd>g</kbd> + <kbd>d</kbd></td><td>Ir para Demanda</td></tr>' +
+            '<tr><td style="padding:6px;font-family:var(--font-mono);"><kbd>g</kbd> + <kbd>s</kbd></td><td>Ir para SLA</td></tr>' +
+            '<tr><td style="padding:6px;font-family:var(--font-mono);"><kbd>g</kbd> + <kbd>n</kbd></td><td>Ir para Diagn\u00f3stico</td></tr>' +
+            '<tr><td style="padding:6px;font-family:var(--font-mono);"><kbd>g</kbd> + <kbd>p</kbd></td><td>Ir para Performance</td></tr>' +
+            '<tr><td style="padding:6px;font-family:var(--font-mono);"><kbd>g</kbd> + <kbd>t</kbd></td><td>Voltar ao topo</td></tr>' +
+            '<tr><td style="padding:6px;font-family:var(--font-mono);"><kbd>r</kbd></td><td>Atualizar manualmente</td></tr>' +
+            '<tr><td style="padding:6px;font-family:var(--font-mono);"><kbd>e</kbd></td><td>Abrir export</td></tr>' +
+            '<tr><td style="padding:6px;font-family:var(--font-mono);"><kbd>?</kbd></td><td>Esta ajuda</td></tr>' +
+            '<tr><td style="padding:6px;font-family:var(--font-mono);"><kbd>Esc</kbd></td><td>Fechar modal</td></tr>' +
+            '</table></div></div>';
+        document.body.appendChild(modal);
+        modal.querySelector('[data-modal-close]').addEventListener('click', function() { closeModal('modalAjuda'); });
+        openModal('modalAjuda');
+    }
 
     loadStations();
     loadDashboard({ range: 'today' });
