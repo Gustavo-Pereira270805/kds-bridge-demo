@@ -228,10 +228,10 @@
         <h1 class="header-title">Dashboard</h1>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
             <div class="period-selector" id="periodSelector">
-                <button class="period-btn btn btn-ghost active" data-range="today" aria-pressed="true">Hoje</button>
-                <button class="period-btn btn btn-ghost" data-range="yesterday" aria-pressed="false">Ontem</button>
-                <button class="period-btn btn btn-ghost" data-range="week" aria-pressed="false">Últimos 7 dias</button>
-                <button class="period-btn btn btn-ghost" data-range="month" aria-pressed="false">Últimos 30 dias</button>
+                <button class="period-btn active" data-range="today" aria-pressed="true">Hoje</button>
+                <button class="period-btn" data-range="yesterday" aria-pressed="false">Ontem</button>
+                <button class="period-btn" data-range="week" aria-pressed="false">Últimos 7 dias</button>
+                <button class="period-btn" data-range="month" aria-pressed="false">Últimos 30 dias</button>
             </div>
             <div class="date-controls">
                 <label for="dateFrom">De</label>
@@ -249,13 +249,6 @@
     </div>
 </header>
 
-<div id="loading" class="loading">
-  <div class="kpi-grid">
-    <div class="kpi-card"><div class="skeleton-block" style="height:14px;width:60%;margin-bottom:8px;"></div><div class="skeleton-block" style="height:26px;width:80%;"></div></div>
-    <div class="kpi-card"><div class="skeleton-block" style="height:14px;width:50%;margin-bottom:8px;"></div><div class="skeleton-block" style="height:26px;width:70%;"></div></div>
-    <div class="kpi-card"><div class="skeleton-block" style="height:14px;width:55%;margin-bottom:8px;"></div><div class="skeleton-block" style="height:26px;width:65%;"></div></div>
-  </div>
-</div>
 <div class="layout">
     <aside class="side-nav" id="sideNav">
         <nav aria-label="Seções do dashboard">
@@ -592,8 +585,8 @@ if (document.readyState === 'loading') {
             '</div>';
     }
 
-    function renderKpis(kpis, trend) {
-        var k = kpis || {};
+    function renderKpis(data, trend) {
+        var k = (data && data.kpis) || {};
         var totalPedidos = k.total_pedidos || 0;
         var atrasosCozinha = k.atrasos_cozinha || 0;
         var atrasosSalao = k.atrasos_salao || 0;
@@ -606,23 +599,23 @@ if (document.readyState === 'loading') {
         };
 
         var heroCards = [
-            { key: 'pedidos', eyebrow: 'VOLUME TOTAL', value: totalPedidos.toLocaleString('pt-BR'), delta: k.comparison ? k.comparison.pedidos ? k.comparison.pedidos.delta_pct : null : null, status: 'neutral', target: '#overview' },
-            { key: 'sla', eyebrow: 'QUALIDADE', value: (k.pct_dentro_sla || 0).toFixed(1) + '%', delta: k.comparison ? k.comparison.sla ? k.comparison.sla.delta_pct : null : null, status: 'neutral', target: '#sla' },
-            { key: 'atrasos-cozinha', eyebrow: 'PROBLEMA COZINHA', value: atrasosCozinha.toLocaleString('pt-BR'), delta: k.comparison ? k.comparison.atrasos_cozinha ? k.comparison.atrasos_cozinha.delta_pct : null : null, status: statusForAtrasos(atrasosCozinha), target: '#sla' },
-            { key: 'atrasos-salao', eyebrow: 'PROBLEMA SAL\u00c3O', value: atrasosSalao.toLocaleString('pt-BR'), delta: k.comparison ? k.comparison.atrasos_salao ? k.comparison.atrasos_salao.delta_pct : null : null, status: statusForAtrasos(atrasosSalao), target: '#sla' },
+            { key: 'pedidos', eyebrow: 'TOTAL DE PEDIDOS', value: totalPedidos.toLocaleString('pt-BR'), delta: k.comparison ? k.comparison.pedidos ? k.comparison.pedidos.delta_pct : null : null, status: 'neutral', target: '#overview' },
+            { key: 'sla', eyebrow: '% DENTRO DO SLA', value: (k.pct_dentro_sla || 0).toFixed(1) + '%', delta: k.comparison ? k.comparison.sla ? k.comparison.sla.delta_pct : null : null, status: 'neutral', target: '#sla' },
+            { key: 'atrasos-cozinha', eyebrow: 'ATRASOS COZINHA', value: atrasosCozinha.toLocaleString('pt-BR'), delta: k.comparison ? k.comparison.atrasos_cozinha ? k.comparison.atrasos_cozinha.delta_pct : null : null, status: statusForAtrasos(atrasosCozinha), target: '#sla' },
+            { key: 'atrasos-salao', eyebrow: 'ATRASOS SAL\u00c3O', value: atrasosSalao.toLocaleString('pt-BR'), delta: k.comparison ? k.comparison.atrasos_salao ? k.comparison.atrasos_salao.delta_pct : null : null, status: statusForAtrasos(atrasosSalao), target: '#sla' },
         ];
 
-        var occMedia = (k.occupancy_by_shift || []).length > 0
-            ? k.occupancy_by_shift.reduce(function(acc, s) { return acc + (s.pct_ociosa || 0); }, 0) / k.occupancy_by_shift.length
+        var occMedia = (data.occupancy_by_shift || []).length > 0
+            ? data.occupancy_by_shift.reduce(function(acc, s) { return acc + (s.pct_ociosa || 0); }, 0) / data.occupancy_by_shift.length
             : 0;
         var secondaryCards = [
-            { key: 'zerados', label: 'ROTURAS', value: (k.total_roturas || 0).toLocaleString('pt-BR') },
+            { key: 'zerados', label: 'PRODUTOS ZERADOS', value: (k.total_roturas || 0).toLocaleString('pt-BR') },
             { key: 'cancelados', label: 'CANCELADOS', value: (k.total_cancelados || 0).toLocaleString('pt-BR') },
-            { key: 'pct-urgentes', label: 'PRESS\u00c3O', value: (k.pct_urgentes || 0).toFixed(1) + '%' },
+            { key: 'pct-urgentes', label: '% URGENTES', value: (k.pct_urgentes || 0).toFixed(1) + '%' },
             { key: 'urgentes', label: 'URGENTES', value: (k.urgentes_puros || 0).toLocaleString('pt-BR') },
-            { key: 'tempo-cozinha', label: 'COZINHA (MIN)', value: (k.tempo_medio_cozinha_min || 0).toFixed(1) },
-            { key: 'tempo-retirada', label: 'RETIRADA (MIN)', value: (k.tempo_medio_retirada_min || 0).toFixed(1) },
-            { key: 'ocupacao', label: 'OCUPA\u00c7\u00c3O', value: occMedia.toFixed(1) + '%' },
+            { key: 'tempo-cozinha', label: 'TEMPO PREPARO', value: (k.tempo_medio_cozinha_min || 0).toFixed(1) },
+            { key: 'tempo-retirada', label: 'TEMPO RETIRADA', value: (k.tempo_medio_retirada_min || 0).toFixed(1) },
+            { key: 'ocupacao', label: 'CAPACIDADE OCIOSA', value: occMedia.toFixed(1) + '%' },
         ];
 
         var renderDelta = function(delta) {
@@ -1028,7 +1021,7 @@ if (document.readyState === 'loading') {
         for (var i = 0; i < 24; i++) labels.push(i + 'h');
         var stationNames = [];
         qh.forEach(function(d) {
-            var name = d.station_name;
+            var name = d.estacao;
             if (stationNames.indexOf(name) === -1) stationNames.push(name);
         });
         var datasets = stationNames.map(function(name, i) {
@@ -1037,12 +1030,12 @@ if (document.readyState === 'loading') {
                 data: labels.map(function(_, h) {
                     var found = null;
                     for (var j = 0; j < qh.length; j++) {
-                        if (qh[j].station_name === name && qh[j].hour === h) {
+                        if (qh[j].estacao === name && qh[j].hora === h) {
                             found = qh[j];
                             break;
                         }
                     }
-                    return found ? (found.avg_queue_min || 0) : 0;
+                    return found ? (found.tempo_medio_min || 0) : 0;
                 }),
                 borderColor: SERIES_COLORS[i % SERIES_COLORS.length],
                 backgroundColor: 'transparent',
@@ -1080,7 +1073,7 @@ if (document.readyState === 'loading') {
     function createRetiradaChart(canvas, data) {
         var ph = data.pickup_by_hour || [];
         var labels = ph.map(function(d) { return d.hora + 'h'; });
-        var values = ph.map(function(d) { return d.avg_pickup_min || 0; });
+        var values = ph.map(function(d) { return d.avg_min || 0; });
         return createChartWithZoom(canvas, {
             type: 'line',
             data: {
@@ -1101,16 +1094,12 @@ if (document.readyState === 'loading') {
     function createPerfTrendChart(canvas, data) {
         var history = data.history || [];
         var labels = history.map(function(d) { return d.date; });
-        var entitySet = {};
-        history.forEach(function(d) {
-            var scores = d.scores || {};
-            Object.keys(scores).forEach(function(k) { entitySet[k] = true; });
-        });
-        var entities = Object.keys(entitySet);
+        var entities = ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'salao'];
+        var entityLabels = { cozinha_geral: 'Cozinha Geral', cozinha_quente_a: 'Quente A', cozinha_quente_b: 'Quente B', cozinha_fria: 'Fria', salao: 'Sal\u00e3o' };
         var datasets = entities.map(function(entity, i) {
             return {
-                label: entity,
-                data: history.map(function(d) { return (d.scores || {})[entity] || null; }),
+                label: entityLabels[entity] || entity,
+                data: history.map(function(d) { return typeof d[entity] === 'number' ? d[entity] : null; }),
                 borderColor: SERIES_COLORS[i % SERIES_COLORS.length],
                 backgroundColor: 'transparent',
                 borderWidth: 2,
@@ -1161,13 +1150,14 @@ if (document.readyState === 'loading') {
         return h + '</div>';
     }
 
-    function renderPerfDetractors(perf, detractorDates) {
-        if(!perf || !perf.current) return '';
+    function renderPerfDetractors(perf, detractorDates, sourceOverride) {
+        var source = sourceOverride || perf.current;
+        if(!perf || !source) return '';
         var order = ['cozinha_geral','salao','cozinha_quente_a','cozinha_quente_b','cozinha_fria'];
         var labels = { cozinha_geral:'Cozinha Geral', cozinha_quente_a:'Quente A', cozinha_quente_b:'Quente B', cozinha_fria:'Fria', salao:'Sal\u00E3o' };
         var h = '<div class="panels" style="grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));">';
         for(var i=0; i<order.length; i++) {
-            var s = perf.current[order[i]];
+            var s = source[order[i]];
             if(!s) continue;
             var det = s.detractors || [];
             if(!det.length) continue;
@@ -1210,7 +1200,28 @@ if (document.readyState === 'loading') {
                     '<header class="panel-header"><div style="display:flex;justify-content:space-between;align-items:center;width:100%;"><h3 class="panel-title">Desempenho da Equipe</h3>' +
                     '<button id="btnCriteria" class="btn-criteria" type="button">Como são calculadas as notas?</button></div></header>' +
                     '<div class="panel-body">' + renderScoreCards(perf) + '</div></article>';
-                html += renderPerfDetractors(perf, perf.detractor_dates);
+                var detractorSource = perf.current;
+                if (perf.averages) {
+                    detractorSource = {};
+                    var entities = ['cozinha_geral','cozinha_quente_a','cozinha_quente_b','cozinha_fria','salao'];
+                    for (var i = 0; i < entities.length; i++) {
+                        var e = entities[i];
+                        var avg = perf.averages[e];
+                        if (!avg) continue;
+                        var det = [];
+                        if (avg.sla_breaches > 0) det.push({ label: 'Estouros de SLA', deduction: Math.min(2.5, avg.sla_breaches * 0.5), count: avg.sla_breaches });
+                        if (avg.cancellations > 0) det.push({ label: 'Cancelamentos', deduction: Math.min(2.5, avg.cancellations * 0.5), count: avg.cancellations });
+                        if (avg.stockouts > 0) det.push({ label: 'Roturas de stock', deduction: Math.min(2.5, avg.stockouts * 0.5), count: avg.stockouts });
+                        if (avg.slow_items > 0) det.push({ label: 'Itens lentos', deduction: Math.min(2.5, avg.slow_items * 0.5), count: avg.slow_items });
+                        detractorSource[e] = {
+                            entity: e,
+                            final_score: avg.final_score,
+                            detractors: det,
+                            total_demands: avg.total_demands
+                        };
+                    }
+                }
+                html += renderPerfDetractors(perf, perf.detractor_dates, detractorSource);
                 if(perf.history && perf.history.length > 1) {
                     var label = pr === 'week' ? 'Últimos 7 dias' : 'Últimos 30 dias';
                     html += '<article class="panel panel-chart" data-cols="12" id="perfTrendPanel"><header class="panel-header"><h3 class="panel-title">Evolução das Notas — ' + label + '</h3></header><div class="panel-body"><canvas id="perfTrendCanvas"></canvas></div></article>';
@@ -1294,8 +1305,6 @@ if (document.readyState === 'loading') {
 
     function loadDashboard(filter) {
         state.filter = filter || state.filter;
-        document.getElementById('loading').style.display = 'block';
-        document.getElementById('content').style.display = 'none';
 
         var params = filterToParams();
         if (state.stationId) params += '&station_id=' + encodeURIComponent(state.stationId);
@@ -1311,7 +1320,7 @@ if (document.readyState === 'loading') {
             // Step A: KPI strip (from Task 5.3)
             var kpiEl = document.getElementById('kpiStrip');
             if (kpiEl) {
-                kpiEl.innerHTML = renderKpis(data.kpis, data.trend);
+                kpiEl.innerHTML = renderKpis(data, data.trend);
                 // Render sparklines
                 document.querySelectorAll('.kpi-sparkline[data-sparkline-key]').forEach(function(el) {
                     var trendData = (data.trend || []).slice(-14).map(function(t) { return t.total || 0; });
@@ -1360,8 +1369,6 @@ if (document.readyState === 'loading') {
                 console.error('Erro ao construir dashboard:', e);
                 showToast('Erro ao renderizar dashboard: ' + (e.message || 'Dados inesperados'), 'error');
             }
-            document.getElementById('loading').style.display = 'none';
-
             // Step C: Enable export
             var btnExp = document.getElementById('btnExport');
             if (btnExp) { btnExp.disabled = false; btnExp.title = ''; }
@@ -1396,7 +1403,6 @@ if (document.readyState === 'loading') {
                 });
             });
         }).catch(function(err) {
-            document.getElementById('loading').style.display = 'none';
             // Show error in overview section
             var overviewGrid = document.querySelector('#overview .bento-grid');
             if (overviewGrid) {

@@ -366,7 +366,7 @@ body { background: var(--c-bg-light); }
 /* === Chart containers & zoom reset === */
 .chart-container {
     position: relative;
-    min-height: 280px;
+    min-height: 220px;
 }
 .chart-container canvas {
     position: absolute; inset: 0;
@@ -389,7 +389,7 @@ body { background: var(--c-bg-light); }
 .chart-reset-zoom:hover { background: var(--c-bg-light); }
 
 /* === Skeleton blocks for chart containers === */
-.chart-container { position: relative; min-height: 280px; }
+.chart-container { position: relative; min-height: 220px; }
 .chart-container .skeleton-block {
   position: absolute; inset: 0;
   border-radius: var(--radius-md);
