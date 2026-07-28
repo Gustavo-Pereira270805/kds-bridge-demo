@@ -75,6 +75,34 @@
   /* === Z-index scale === */
   --z-base: 0; --z-content: 10; --z-sticky: 100;
   --z-toast: 200; --z-modal: 300;
+
+  /* === Chart.js palette mirror === */
+  --c-chart-1: #457b9d;  /* primary-tint */
+  --c-chart-2: #2a9d8f;  /* accent-warm */
+  --c-chart-3: #f4a261;  /* warn */
+  --c-chart-4: #8e7cc3;  /* replacement */
+  --c-chart-5: #00a8c8;  /* accent-cold */
+  --c-chart-6: #e63946;  /* danger */
+  --c-chart-7: #1d3557;  /* primary */
+
+  /* === KPI status borders === */
+  --kpi-status-ok: var(--c-accent-warm);
+  --kpi-status-warn: var(--c-warn);
+  --kpi-status-danger: var(--c-danger);
+  --kpi-status-neutral: var(--c-primary-tint);
+
+  /* === Layout tokens === */
+  --header-height: 56px;
+  --side-nav-collapsed: 64px;
+  --side-nav-expanded: 240px;
+  --grid-max-width: 1440px;
+  --grid-gutter: 24px;
+  --section-spacing: 40px;
+  --bento-gap: 20px;
+  --bento-row-height: 180px;
+  --bento-row-height-chart: 280px;
+  --kpi-hero-height: 140px;
+  --kpi-secondary-height: 96px;
 }
 
 /* === Base classes === */
