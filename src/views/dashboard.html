@@ -6,6 +6,7 @@
     <title>Dashboards - KDS Bridge</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/styles/theme.css">
+    <link rel="stylesheet" href="/styles/dashboard.css">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0" defer></script>
@@ -222,29 +223,31 @@
     </style>
 </head>
 <body>
-<div class="header">
-    <h1>Dashboard Analítico</h1>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-        <div class="period-selector" id="periodSelector">
-            <button class="period-btn btn btn-ghost active" data-range="today">Hoje</button>
-            <button class="period-btn btn btn-ghost" data-range="yesterday">Ontem</button>
-            <button class="period-btn btn btn-ghost" data-range="week">Últimos 7 dias</button>
-            <button class="period-btn btn btn-ghost" data-range="month">Últimos 30 dias</button>
+<header class="sticky-top">
+    <div class="header-inner">
+        <h1 class="header-title">Dashboard</h1>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <div class="period-selector" id="periodSelector">
+                <button class="period-btn btn btn-ghost active" data-range="today">Hoje</button>
+                <button class="period-btn btn btn-ghost" data-range="yesterday">Ontem</button>
+                <button class="period-btn btn btn-ghost" data-range="week">Últimos 7 dias</button>
+                <button class="period-btn btn btn-ghost" data-range="month">Últimos 30 dias</button>
+            </div>
+            <div class="date-controls">
+                <label for="dateFrom">De</label>
+                <input type="date" id="dateFrom">
+                <label for="dateTo">Até</label>
+                <input type="date" id="dateTo">
+                <button id="btnApplyDates" class="btn-apply" type="button">Aplicar</button>
+            </div>
+            <select id="stationSelect" class="station-select">
+                <option value="">Todas as cozinhas</option>
+            </select>
+            <button id="btnExport" class="btn-export" type="button" disabled title="Carregue os dados primeiro">Exportar</button>
+            <a href="/gerente" class="btn-back">Voltar</a>
         </div>
-        <div class="date-controls">
-            <label for="dateFrom">De</label>
-            <input type="date" id="dateFrom">
-            <label for="dateTo">Até</label>
-            <input type="date" id="dateTo">
-            <button id="btnApplyDates" class="btn-apply" type="button">Aplicar</button>
-        </div>
-        <select id="stationSelect" class="station-select">
-            <option value="">Todas as cozinhas</option>
-        </select>
-        <button id="btnExport" class="btn-export" type="button" disabled title="Carregue os dados primeiro">Exportar</button>
-        <a href="/gerente" class="btn-back">Voltar</a>
     </div>
-</div>
+</header>
 
 <div id="loading" class="loading">
   <div class="kpi-grid">
@@ -253,7 +256,60 @@
     <div class="kpi-card"><div class="skeleton-block" style="height:14px;width:55%;margin-bottom:8px;"></div><div class="skeleton-block" style="height:26px;width:65%;"></div></div>
   </div>
 </div>
-<div id="content" style="display:none;"></div>
+<div class="layout">
+    <aside class="side-nav" id="sideNav">
+        <!-- populated in Phase 3 -->
+    </aside>
+    <main class="dashboard-main">
+        <a id="top"></a>
+        <section class="kpi-strip" id="kpiStrip">
+            <!-- populated in Phase 5 -->
+        </section>
+        <section id="overview" class="dashboard-section" aria-labelledby="section-title-overview">
+            <header class="section-header">
+                <span class="section-eyebrow">VISÃO GERAL</span>
+                <h2 id="section-title-overview" class="section-title">Estado do restaurante</h2>
+                <p class="section-description">Volume, fluxo e urgências em tempo real.</p>
+            </header>
+            <div class="bento-grid"><!-- populated in Phase 6 --></div>
+        </section>
+        <section id="demand" class="dashboard-section" aria-labelledby="section-title-demand">
+            <header class="section-header">
+                <span class="section-eyebrow">DEMANDA</span>
+                <h2 id="section-title-demand" class="section-title">Quando e o que sai</h2>
+                <p class="section-description">Heatmap de operação, volume e mix de produtos.</p>
+            </header>
+            <div class="bento-grid"><!-- populated in Phase 6 --></div>
+        </section>
+        <section id="sla" class="dashboard-section" aria-labelledby="section-title-sla">
+            <header class="section-header">
+                <span class="section-eyebrow">SLA E TEMPOS</span>
+                <h2 id="section-title-sla" class="section-title">Eficiência operacional</h2>
+                <p class="section-description">Cumprimento de SLA, velocidade e filas.</p>
+            </header>
+            <div class="bento-grid"><!-- populated in Phase 6 --></div>
+        </section>
+        <section id="diagnosis" class="dashboard-section" aria-labelledby="section-title-diagnosis">
+            <header class="section-header">
+                <span class="section-eyebrow">DIAGNÓSTICO</span>
+                <h2 id="section-title-diagnosis" class="section-title">Problemas e exceções</h2>
+                <p class="section-description">Cancelamentos, roturas e trocas.</p>
+            </header>
+            <div class="bento-grid"><!-- populated in Phase 6 --></div>
+        </section>
+        <section id="performance" class="dashboard-section" aria-labelledby="section-title-performance">
+            <header class="section-header">
+                <span class="section-eyebrow">PERFORMANCE</span>
+                <h2 id="section-title-performance" class="section-title">Notas e detratores</h2>
+                <p class="section-description">Avaliação 0-5 por entidade.</p>
+            </header>
+            <div class="bento-grid"><!-- populated in Phase 6 --></div>
+        </section>
+        <div id="legacyContent" hidden>
+            <div id="content" style="display:none;"></div>
+        </div>
+    </main>
+</div>
 
 <div id="exportModal" class="modal-overlay" style="display:none;">
     <div class="modal-card">
