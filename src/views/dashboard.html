@@ -973,22 +973,24 @@ if (document.readyState === 'loading') {
     function createComparativoChart(canvas, data) {
         var wc = data.week_comparison || [];
         if (wc.length === 0) return null;
-        var labels = wc.map(function(d) { return d.day; });
+        var labels = wc.map(function(d) {
+            var parts = String(d.day).split('-');
+            return parts.length === 3 ? parts[2] + '/' + parts[1] : d.day;
+        });
         return createChartWithZoom(canvas, {
             type: 'bar',
             data: {
                 labels: labels,
                 datasets: [
-                    { type: 'bar', label: 'Entregues', data: wc.map(function(d) { return d.entregues || 0; }), backgroundColor: PALETTE.accentWarm, stack: 'a' },
-                    { type: 'bar', label: 'Cancelados', data: wc.map(function(d) { return d.cancelados || 0; }), backgroundColor: PALETTE.danger, stack: 'a' },
-                    { type: 'bar', label: 'Atrasos', data: wc.map(function(d) { return d.atrasos || 0; }), backgroundColor: PALETTE.warn, stack: 'a' },
-                    { type: 'line', label: 'Volume total', data: wc.map(function(d) { return d.total || 0; }), borderColor: PALETTE.primary, backgroundColor: 'transparent', yAxisID: 'y1' }
+                    { type: 'bar', label: 'Per\u00edodo atual', data: wc.map(function(d) { return d.this_week || 0; }), backgroundColor: PALETTE.accentWarm },
+                    { type: 'bar', label: 'Per\u00edodo anterior', data: wc.map(function(d) { return d.last_week || 0; }), backgroundColor: PALETTE.border },
+                    { type: 'line', label: 'Estouro SLA %', data: wc.map(function(d) { return d.indicators ? d.indicators.sla_pct : null; }), borderColor: PALETTE.danger, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'y1' }
                 ]
             },
             options: {
                 scales: {
-                    y: { stacked: true, beginAtZero: true, title: { display: true, text: 'demandas' } },
-                    y1: { position: 'right', beginAtZero: true, grid: { display: false } }
+                    y: { beginAtZero: true, title: { display: true, text: 'demandas' } },
+                    y1: { position: 'right', beginAtZero: true, max: 100, title: { display: true, text: '%' }, grid: { display: false } }
                 }
             }
         });
