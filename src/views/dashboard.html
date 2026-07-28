@@ -491,27 +491,63 @@ if (document.readyState === 'loading') {
 
     function api(u) { return fetch(u).then(function(r) { if(!r.ok) return r.json().then(function(e){throw new Error(e.error)}); return r.json(); }); }
 
-    function renderKpis(kpis) {
-        var items = [
-            ['Pedidos', kpis.total_pedidos, 'c-blue'],
-            ['Entregues', kpis.pct_entregues + '%', 'c-green', kpis.total_pedidos ? (kpis.total_pedidos - kpis.total_cancelados) + '' : ''],
-            ['Zerados', kpis.total_roturas, 'c-orange'],
-            ['Cancelados', kpis.total_cancelados + ' (' + kpis.pct_cancelados + '%)', 'c-red'],
-            ['Dentro do SLA', kpis.pct_dentro_sla + '%', 'c-green', kpis.dentro_sla + ' entregas'],
-            ['Atrasos Cozinha', kpis.atrasos_cozinha, 'c-orange'],
-            ['Atrasos Salão', kpis.atrasos_salao, 'c-orange'],
-            ['Urgentes', kpis.urgentes_puros, 'c-red', '+' + kpis.urgentes_rotura + ' zerou'],
-            ['% Urgentes', kpis.pct_urgentes + '%', 'c-red'],
-            ['Tempo Médio Coz.', kpis.tempo_medio_cozinha_min + ' min', 'c-cyan'],
-            ['Tempo Retirada', kpis.tempo_medio_retirada_min + ' min', 'c-cyan'],
+    function renderKpis(kpis, trend) {
+        var k = kpis || {};
+        var totalPedidos = k.total_pedidos || 0;
+        var atrasosCozinha = k.atrasos_cozinha || 0;
+        var atrasosSalao = k.atrasos_salao || 0;
+
+        var statusForAtrasos = function(count) {
+            var pct = totalPedidos > 0 ? (count / totalPedidos) * 100 : 0;
+            if (pct > 5) return 'danger';
+            if (count > 0) return 'warn';
+            return 'ok';
+        };
+
+        var heroCards = [
+            { key: 'pedidos', eyebrow: 'VOLUME TOTAL', value: totalPedidos.toLocaleString('pt-BR'), delta: k.comparison ? k.comparison.pedidos ? k.comparison.pedidos.delta_pct : null : null, status: 'neutral', target: '#overview' },
+            { key: 'sla', eyebrow: 'QUALIDADE', value: (k.pct_dentro_sla || 0).toFixed(1) + '%', delta: k.comparison ? k.comparison.sla ? k.comparison.sla.delta_pct : null : null, status: 'neutral', target: '#sla' },
+            { key: 'atrasos-cozinha', eyebrow: 'PROBLEMA COZINHA', value: atrasosCozinha.toLocaleString('pt-BR'), delta: k.comparison ? k.comparison.atrasos_cozinha ? k.comparison.atrasos_cozinha.delta_pct : null : null, status: statusForAtrasos(atrasosCozinha), target: '#sla' },
+            { key: 'atrasos-salao', eyebrow: 'PROBLEMA SAL\u00c3O', value: atrasosSalao.toLocaleString('pt-BR'), delta: k.comparison ? k.comparison.atrasos_salao ? k.comparison.atrasos_salao.delta_pct : null : null, status: statusForAtrasos(atrasosSalao), target: '#sla' },
         ];
-        var h = '';
-        items.forEach(function(a) {
-            h += '<div class="kpi-card"><div class="kpi-label">' + a[0] + '</div><div class="kpi-value ' + a[2] + '">' + a[1] + '</div>';
-            if(a[3]) h += '<div class="kpi-sub">' + a[3] + '</div>';
-            h += '</div>';
-        });
-        return '<div class="kpi-grid">' + h + '</div>';
+
+        var occMedia = (k.occupancy_by_shift || []).length > 0
+            ? k.occupancy_by_shift.reduce(function(acc, s) { return acc + (s.pct_ociosa || 0); }, 0) / k.occupancy_by_shift.length
+            : 0;
+        var secondaryCards = [
+            { key: 'zerados', label: 'ROTURAS', value: (k.total_roturas || 0).toLocaleString('pt-BR') },
+            { key: 'cancelados', label: 'CANCELADOS', value: (k.total_cancelados || 0).toLocaleString('pt-BR') },
+            { key: 'pct-urgentes', label: 'PRESS\u00c3O', value: (k.pct_urgentes || 0).toFixed(1) + '%' },
+            { key: 'urgentes', label: 'URGENTES', value: (k.urgentes_puros || 0).toLocaleString('pt-BR') },
+            { key: 'tempo-cozinha', label: 'COZINHA (MIN)', value: (k.tempo_medio_cozinha_min || 0).toFixed(1) },
+            { key: 'tempo-retirada', label: 'RETIRADA (MIN)', value: (k.tempo_medio_retirada_min || 0).toFixed(1) },
+            { key: 'ocupacao', label: 'OCUPA\u00c7\u00c3O', value: occMedia.toFixed(1) + '%' },
+        ];
+
+        var renderDelta = function(delta) {
+            if (delta == null) return '';
+            var up = delta >= 0;
+            var arrow = up ? '\u2191' : '\u2193';
+            return '<span class="kpi-delta ' + (up ? 'up' : 'down') + '">' + arrow + ' ' + Math.abs(delta).toFixed(1) + '%</span>';
+        };
+
+        var heroHTML = heroCards.map(function(c) {
+            return '<button class="kpi-card-hero status-' + c.status + '" data-target="' + c.target + '" aria-label="' + c.eyebrow + ': ' + c.value + '">' +
+                '<div class="kpi-eyebrow"><span>' + c.eyebrow + '</span>' + renderDelta(c.delta) + '</div>' +
+                '<div class="kpi-value">' + c.value + '</div>' +
+                '<div class="kpi-sparkline" data-sparkline-key="' + c.key + '"></div>' +
+            '</button>';
+        }).join('');
+
+        var secondaryHTML = secondaryCards.map(function(c) {
+            return '<div class="kpi-card-secondary" aria-label="' + c.label + ': ' + c.value + '">' +
+                '<div class="kpi-eyebrow">' + c.label + '</div>' +
+                '<div class="kpi-value">' + c.value + '</div>' +
+            '</div>';
+        }).join('');
+
+        return '<div class="kpi-hero-grid">' + heroHTML + '</div>' +
+               '<div class="kpi-secondary-grid">' + secondaryHTML + '</div>';
     }
 
     function renderBars(title, data, keyLabel, keyValue, color, maxOverride) {
@@ -656,7 +692,8 @@ if (document.readyState === 'loading') {
 
     function buildContent(data) {
         var html = '';
-        html += renderKpis(data.kpis);
+        // KPI strip now rendered separately in loadDashboard() (Phase 5). Skip here to avoid duplicate.
+        // html += renderKpis(data.kpis);
 
         html += '<div class="panels">';
 
@@ -1392,6 +1429,51 @@ if (document.readyState === 'loading') {
 
         api('/api/v1/analytics/dashboard?' + params).then(function(data) {
             state.lastData = data;
+            // Populate KPI strip with new hero + secondary layout
+            var kpiEl = document.getElementById('kpiStrip');
+            if (kpiEl) {
+                kpiEl.innerHTML = renderKpis(data.kpis, data.trend);
+                // Render sparklines after DOM is populated
+                document.querySelectorAll('.kpi-sparkline[data-sparkline-key]').forEach(function(el) {
+                    var key = el.getAttribute('data-sparkline-key');
+                    var trendData = (data.trend || []).slice(-14).map(function(t) { return t.total || 0; });
+                    if (trendData.length < 2) return;
+                    var labels = trendData.map(function(_, i) { return i; });
+                    var ma7 = trendData.map(function(_, i) {
+                        var start = Math.max(0, i - 6);
+                        var slice = trendData.slice(start, i + 1);
+                        return slice.reduce(function(a, b) { return a + b; }, 0) / slice.length;
+                    });
+                    var canvas = document.createElement('canvas');
+                    el.appendChild(canvas);
+                    if (typeof Chart === 'undefined') return;
+                    new Chart(canvas, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                { type: 'bar', data: trendData, backgroundColor: 'rgba(69,123,157,.5)', borderWidth: 0 },
+                                { type: 'line', data: ma7, borderColor: PALETTE.primary, borderWidth: 2, pointRadius: 0, fill: false }
+                            ]
+                        },
+                        options: {
+                            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                            scales: { x: { display: false }, y: { display: false } }
+                        }
+                    });
+                });
+                // Wire drill-down for hero KPI buttons
+                document.querySelectorAll('.kpi-card-hero').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        var target = btn.getAttribute('data-target');
+                        if (!target) return;
+                        var el = document.querySelector(target);
+                        if (el) {
+                            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                    });
+                });
+            }
             try {
                 document.getElementById('content').innerHTML = buildContent(data);
             } catch (e) {
