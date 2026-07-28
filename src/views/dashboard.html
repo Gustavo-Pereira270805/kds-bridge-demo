@@ -983,13 +983,13 @@ if (document.readyState === 'loading') {
             return parts.length === 3 ? parts[2] + '/' + parts[1] : d.day;
         });
         return createChartWithZoom(canvas, {
-            type: 'bar',
+            type: 'line',
             data: {
                 labels: labels,
                 datasets: [
-                    { type: 'bar', label: 'Per\u00edodo atual', data: wc.map(function(d) { return d.this_week || 0; }), backgroundColor: PALETTE.accentWarm, order: 0 },
-                    { type: 'bar', label: 'Per\u00edodo anterior', data: wc.map(function(d) { return d.last_week || 0; }), backgroundColor: PALETTE.border, order: 0 },
-                    { type: 'line', label: indicatorLabel, data: wc.map(function(d) { return d.indicators ? d.indicators[indicator] : null; }), borderColor: indicatorColor, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'y1', order: 10 }
+                    { type: 'bar', label: 'Per\u00edodo atual', data: wc.map(function(d) { return d.this_week || 0; }), backgroundColor: PALETTE.accentWarm },
+                    { type: 'bar', label: 'Per\u00edodo anterior', data: wc.map(function(d) { return d.last_week || 0; }), backgroundColor: PALETTE.border },
+                    { type: 'line', label: indicatorLabel, data: wc.map(function(d) { return d.indicators ? d.indicators[indicator] : null; }), borderColor: indicatorColor, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'y1' }
                 ]
             },
             options: {
@@ -1016,12 +1016,12 @@ if (document.readyState === 'loading') {
             return slice.reduce(function(a, b) { return a + b; }, 0) / slice.length;
         });
         return createChartWithZoom(canvas, {
-            type: 'bar',
+            type: 'line',
             data: {
                 labels: labels,
                 datasets: [
-                    { type: 'bar', label: 'Volume di\u00e1rio', data: values, backgroundColor: 'rgba(69,123,157,.5)', borderWidth: 0, order: 1 },
-                    { type: 'line', label: 'MA 7d', data: ma7, borderColor: PALETTE.primary, borderWidth: 2, pointRadius: 0, fill: false, order: 2 }
+                    { type: 'bar', label: 'Volume di\u00e1rio', data: values, backgroundColor: 'rgba(69,123,157,.5)', borderWidth: 0 },
+                    { type: 'line', label: 'MA 7d', data: ma7, borderColor: PALETTE.primary, borderWidth: 2, pointRadius: 0, fill: false }
                 ]
             },
             options: { scales: { y: { beginAtZero: true } } }
