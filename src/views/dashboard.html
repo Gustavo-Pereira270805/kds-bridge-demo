@@ -428,6 +428,28 @@ const PALETTE = {
 };
 const SERIES_COLORS = [PALETTE.primaryTint, PALETTE.accentWarm, PALETTE.warn, PALETTE.replacement, PALETTE.accentCold, PALETTE.danger, PALETTE.primary];
 
+const ZOOM_CONFIG = {
+    pan: { enabled: true, mode: 'x' },
+    zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' },
+    limits: { x: { minRange: 4 } },
+};
+
+function createChartWithZoom(canvas, config) {
+    config.options = config.options || {};
+    config.options.plugins = config.options.plugins || {};
+    config.options.plugins.zoom = ZOOM_CONFIG;
+    var chart = new Chart(canvas, config);
+    var container = canvas.parentElement;
+    container.style.position = 'relative';
+    var resetBtn = document.createElement('button');
+    resetBtn.className = 'chart-reset-zoom';
+    resetBtn.textContent = '\u21ba Reset';
+    resetBtn.hidden = true;
+    container.appendChild(resetBtn);
+    resetBtn.addEventListener('click', function() { chart.resetZoom(); });
+    return chart;
+}
+
 function applyChartDefaults() {
   if (typeof Chart === 'undefined') return;
   Chart.defaults.font.family = "'Inter', -apple-system, sans-serif";
@@ -721,10 +743,9 @@ if (document.readyState === 'loading') {
                 '<div class="panel-body">' + origemDonutHtml + '</div></article>';
         }
 
-        var compHtml = renderComparisonPanel(data.week_comparison);
         overviewGrid.innerHTML += '<article class="panel panel-chart" data-cols="6">' +
             '<header class="panel-header"><h3 class="panel-title">Comparativo Atual vs Período Anterior</h3></header>' +
-            '<div class="panel-body" id="chart-comparativo-panel">' + compHtml + '</div></article>';
+            '<div class="panel-body chart-container" id="chart-comparativo"></div></article>';
 
         // Section 2: Demanda (#demand)
         var demandGrid = document.querySelector('#demand .bento-grid');
@@ -737,7 +758,7 @@ if (document.readyState === 'loading') {
         if (data.volume_ma && data.volume_ma.length > 1) {
             demandGrid.innerHTML += '<article class="panel panel-chart" data-cols="7">' +
                 '<header class="panel-header"><h3 class="panel-title">Volume MA 7 dias</h3></header>' +
-                '<div class="panel-body"><canvas id="maCanvas"></canvas></div></article>';
+                '<div class="panel-body chart-container" id="chart-volume-ma"></div></article>';
         }
 
         if (data.weekday_seasonality && data.weekday_seasonality.length) {
@@ -754,35 +775,13 @@ if (document.readyState === 'loading') {
         var slaGrid = document.querySelector('#sla .bento-grid');
         slaGrid.innerHTML = '';
 
-        if (data.speed_by_hour && data.speed_by_hour.length) {
-            var speedBars = '';
-            var speedMax = 1;
-            data.speed_by_hour.forEach(function(d) { var v = parseFloat(d.avg_min); if(v > speedMax) speedMax = v; });
-            data.speed_by_hour.forEach(function(d) {
-                var v = parseFloat(d.avg_min);
-                var pct = speedMax > 0 ? (v / speedMax) * 100 : 0;
-                var color = v <= 10 ? '#2a9d8f' : v <= 20 ? '#f4a261' : '#e63946';
-                speedBars += '<div class="bar-row"><div class="bar-label" style="width:60px;">' + d.hora + 'h</div><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:' + color + ';">' + (pct > 20 ? '<span>' + Math.round(v) + ' min</span>' : '') + '</div></div><div class="bar-value">' + Math.round(v) + 'm</div></div>';
-            });
-            slaGrid.innerHTML += '<article class="panel" data-cols="6">' +
-                '<header class="panel-header"><h3 class="panel-title">Velocidade da Cozinha por Hora</h3></header>' +
-                '<div class="panel-body"><div style="max-height:300px;overflow-y:auto;">' + speedBars + '</div><div style="margin-top:4px;font-size:10px;color:var(--c-text-muted);">Verde = &le;10min | Laranja = 10-20min | Vermelho = &gt;20min</div></div></article>';
-        }
+        slaGrid.innerHTML += '<article class="panel panel-chart" data-cols="6">' +
+            '<header class="panel-header"><h3 class="panel-title">Velocidade da Cozinha por Hora</h3></header>' +
+            '<div class="panel-body chart-container" id="chart-velocidade"></div></article>';
 
-        if (data.pickup_by_hour && data.pickup_by_hour.length) {
-            var pickupBars = '';
-            var pickupMax = 1;
-            data.pickup_by_hour.forEach(function(d) { var v = parseFloat(d.avg_min); if(v > pickupMax) pickupMax = v; });
-            data.pickup_by_hour.forEach(function(d) {
-                var v = parseFloat(d.avg_min);
-                var pct = pickupMax > 0 ? (v / pickupMax) * 100 : 0;
-                var color = v <= 3 ? '#2a9d8f' : v <= 6 ? '#f4a261' : '#e63946';
-                pickupBars += '<div class="bar-row"><div class="bar-label" style="width:60px;">' + d.hora + 'h</div><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:' + color + ';">' + (pct > 20 ? '<span>' + Math.round(v) + ' min</span>' : '') + '</div></div><div class="bar-value">' + Math.round(v) + 'm</div></div>';
-            });
-            slaGrid.innerHTML += '<article class="panel" data-cols="6">' +
-                '<header class="panel-header"><h3 class="panel-title">Tempo de Retirada por Hora</h3></header>' +
-                '<div class="panel-body"><div style="max-height:300px;overflow-y:auto;">' + pickupBars + '</div><div style="margin-top:4px;font-size:10px;color:var(--c-text-muted);">Verde = &le;3min | Laranja = 3-6min | Vermelho = &gt;6min</div></div></article>';
-        }
+        slaGrid.innerHTML += '<article class="panel panel-chart" data-cols="6">' +
+            '<header class="panel-header"><h3 class="panel-title">Tempo de Retirada por Hora</h3></header>' +
+            '<div class="panel-body chart-container" id="chart-retirada"></div></article>';
 
         if (data.sla_by_product && data.sla_by_product.length) {
             var slaBar = '';
@@ -848,7 +847,7 @@ if (document.readyState === 'loading') {
         if (data.queue_time_by_hour && data.queue_time_by_hour.length) {
             slaGrid.innerHTML += '<article class="panel panel-chart" data-cols="4">' +
                 '<header class="panel-header"><h3 class="panel-title">Fila por Estação × Hora</h3></header>' +
-                '<div class="panel-body"><canvas id="queueHourCanvas"></canvas></div></article>';
+                '<div class="panel-body chart-container" id="chart-fila-hora"></div></article>';
         }
 
         if (data.occupancy_by_shift && data.occupancy_by_shift.length) {
@@ -898,302 +897,151 @@ if (document.readyState === 'loading') {
             '<div class="panel-body" style="display:flex;align-items:center;justify-content:center;color:var(--c-text-muted);padding:var(--sp-5);">Carregando notas...</div></article>';
     }
 
-    function drawAllCharts(data) {
-        drawMaChart(data);
-        drawQueueHourChart(data ? data.queue_time_by_hour : null);
-        drawComparisonChart(data ? data.week_comparison : null);
-    }
-
-    function drawMaChart(data) {
-        var ma = document.getElementById('maCanvas');
-        if(!ma || !data.volume_ma || data.volume_ma.length < 2) return;
-
-        try {
-            var dpr = window.devicePixelRatio || 1;
-            var pwma = ma.parentElement.clientWidth || ma.parentElement.getBoundingClientRect().width;
-            var maw = pwma > 0 ? (pwma - 30) : 700;
-            var mah = 360;
-            ma.width = maw * dpr; ma.height = mah * dpr;
-            ma.style.width = maw + 'px'; ma.style.height = mah + 'px';
-            var ctx = ma.getContext('2d');
-            ctx.scale(dpr, dpr);
-            ctx.clearRect(0, 0, maw, mah);
-
-            var pad = { top: 20, right: 25, bottom: 45, left: 50 };
-            var pw = maw - pad.left - pad.right, ph = mah - pad.top - pad.bottom;
-            var maxY = 1;
-            data.volume_ma.forEach(function(d) { if(d.total > maxY) maxY = d.total; if(d.ma7 > maxY) maxY = d.ma7; });
-
-            // Grid horizontal
-            ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 0.5;
-            for(var i = 0; i <= 4; i++) {
-                var gy = pad.top + (ph / 4) * i;
-                ctx.beginPath(); ctx.moveTo(pad.left, gy); ctx.lineTo(maw - pad.right, gy); ctx.stroke();
-            }
-
-            // Bars (diario)
-            var bw = Math.max(4, pw / data.volume_ma.length * 0.55);
-            data.volume_ma.forEach(function(d, i) {
-                var x = pad.left + (i / Math.max(data.volume_ma.length - 1, 1)) * pw - bw/2;
-                var hh = (d.total / maxY) * ph;
-                ctx.fillStyle = '#d1d5db';
-                ctx.fillRect(x, pad.top + ph - hh, bw, hh);
-            });
-
-            // Linha media movel
-            ctx.strokeStyle = '#e63946'; ctx.lineWidth = 3; ctx.beginPath();
-            data.volume_ma.forEach(function(d, i) {
-                var x = pad.left + (i / Math.max(data.volume_ma.length - 1, 1)) * pw;
-                var y = pad.top + ph - (d.ma7 / maxY) * ph;
-                if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-            });
-            ctx.stroke();
-
-            // Pontos na linha da media
-            data.volume_ma.forEach(function(d, i) {
-                var x = pad.left + (i / Math.max(data.volume_ma.length - 1, 1)) * pw;
-                var y = pad.top + ph - (d.ma7 / maxY) * ph;
-                ctx.fillStyle = '#e63946'; ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI*2); ctx.fill();
-            });
-
-            // Labels do eixo X (dias)
-            ctx.fillStyle = '#6b7280'; ctx.font = '9px Inter'; ctx.textAlign = 'center';
-            var step = Math.max(1, Math.floor(data.volume_ma.length / 12));
-            data.volume_ma.forEach(function(d, i) {
-                if(i % step !== 0 && i !== data.volume_ma.length - 1) return;
-                var x = pad.left + (i / Math.max(data.volume_ma.length - 1, 1)) * pw;
-                var dayLabel = String(d.day || '').substring(5);
-                if(dayLabel.length > 5) dayLabel = String(d.day || '').split('T')[0].substring(5);
-                ctx.fillText(dayLabel, x, mah - pad.bottom + 14);
-            });
-
-            // Valores de Y no eixo
-            ctx.fillStyle = '#9ca3af'; ctx.font = '9px Inter'; ctx.textAlign = 'right';
-            for(var i = 0; i <= 4; i++) {
-                var val = Math.round((maxY / 4) * (4 - i));
-                var gy = pad.top + (ph / 4) * i;
-                ctx.fillText(val, pad.left - 6, gy + 3);
-            }
-
-            // Legenda
-            ctx.fillStyle = '#d1d5db'; ctx.fillRect(pad.left, 4, 12, 12);
-            ctx.fillStyle = '#374151'; ctx.font = '10px Inter'; ctx.textAlign = 'left'; ctx.fillText('Diário', pad.left + 16, 14);
-            ctx.strokeStyle = '#e63946'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(pad.left + 60, 10); ctx.lineTo(pad.left + 95, 10); ctx.stroke();
-            ctx.fillStyle = '#e63946'; ctx.beginPath(); ctx.arc(pad.left + 78, 10, 3, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = '#374151'; ctx.fillText('Média 7d', pad.left + 102, 14);
-        } catch(e) {
-            console.error('MA chart error:', e);
-        }
-    }
-
-    function drawQueueHourChart(rows) {
-        var cv = document.getElementById('queueHourCanvas');
-        if(!cv || !rows || !rows.length) return;
-
-        try {
-            var dpr = window.devicePixelRatio || 1;
-            var pwv = cv.parentElement.clientWidth || cv.parentElement.getBoundingClientRect().width;
-            var w = pwv > 0 ? (pwv - 30) : 700, h = 320;
-            cv.width = w * dpr; cv.height = h * dpr;
-            cv.style.width = w + 'px'; cv.style.height = h + 'px';
-            var ctx = cv.getContext('2d');
-            ctx.scale(dpr, dpr);
-            ctx.clearRect(0, 0, w, h);
-
-            var pad = { top: 30, right: 25, bottom: 40, left: 50 };
-            var pw = w - pad.left - pad.right, ph = h - pad.top - pad.bottom;
-
-            var colors = ['#e63946', '#f4a261', '#00d4ff', '#2a9d8f', '#457b9d', '#1d3557'];
-            var stations = [], byStation = {}, hourSet = {};
-            rows.forEach(function(r) {
-                var est = String(r.estacao);
-                if(!byStation[est]) { byStation[est] = {}; stations.push(est); }
-                var hora = parseInt(r.hora, 10);
-                byStation[est][hora] = parseFloat(r.tempo_medio_min);
-                hourSet[hora] = true;
-            });
-            var hours = Object.keys(hourSet).map(function(k) { return parseInt(k, 10); }).sort(function(a, b) { return a - b; });
-            if(!hours.length) return;
-
-            var maxY = 1;
-            rows.forEach(function(r) { var v = parseFloat(r.tempo_medio_min); if(v > maxY) maxY = v; });
-            maxY = Math.ceil(maxY * 1.15);
-
-            function xPos(hora) {
-                var idx = hours.indexOf(hora);
-                return pad.left + (idx / Math.max(hours.length - 1, 1)) * pw;
-            }
-
-            // Grid horizontal + valores do eixo Y (min)
-            ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 0.5;
-            for(var i = 0; i <= 4; i++) {
-                var gy = pad.top + (ph / 4) * i;
-                ctx.beginPath(); ctx.moveTo(pad.left, gy); ctx.lineTo(w - pad.right, gy); ctx.stroke();
-            }
-            ctx.fillStyle = '#9ca3af'; ctx.font = '9px Inter'; ctx.textAlign = 'right';
-            for(var i = 0; i <= 4; i++) {
-                var val = Math.round((maxY / 4) * (4 - i));
-                ctx.fillText(val, pad.left - 6, pad.top + (ph / 4) * i + 3);
-            }
-
-            // Eixo X (somente horas com dados)
-            ctx.fillStyle = '#6b7280'; ctx.font = '9px Inter'; ctx.textAlign = 'center';
-            var step = Math.max(1, Math.floor(hours.length / 12));
-            hours.forEach(function(hora, i) {
-                if(i % step !== 0 && i !== hours.length - 1) return;
-                ctx.fillText(hora + 'h', xPos(hora), h - pad.bottom + 14);
-            });
-
-            // Séries por estação
-            stations.forEach(function(est, si) {
-                var color = colors[si % colors.length];
-                ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.beginPath();
-                var started = false;
-                hours.forEach(function(hora) {
-                    var v = byStation[est][hora];
-                    if(typeof v !== 'number' || isNaN(v)) return;
-                    var x = xPos(hora), y = pad.top + ph - (v / maxY) * ph;
-                    if(!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
-                });
-                ctx.stroke();
-                hours.forEach(function(hora) {
-                    var v = byStation[est][hora];
-                    if(typeof v !== 'number' || isNaN(v)) return;
-                    var x = xPos(hora), y = pad.top + ph - (v / maxY) * ph;
-                    ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
-                });
-            });
-
-            // Legenda
-            var lx = pad.left;
-            ctx.font = '10px Inter'; ctx.textAlign = 'left';
-            stations.forEach(function(est, si) {
-                var color = colors[si % colors.length];
-                ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(lx, 10); ctx.lineTo(lx + 22, 10); ctx.stroke();
-                ctx.fillStyle = color; ctx.beginPath(); ctx.arc(lx + 11, 10, 3, 0, Math.PI * 2); ctx.fill();
-                ctx.fillStyle = '#374151';
-                ctx.fillText(est, lx + 27, 14);
-                lx += 27 + ctx.measureText(est).width + 18;
-            });
-        } catch(e) {
-            console.error('Queue hour chart error:', e);
-        }
-    }
-
-    function drawComparisonChart(data, key) {
-        var cv = document.getElementById('cmpCanvas');
-        if(!cv || !data || !data.length) return;
-        key = key || cmpIndicatorKey;
-        var lineLabel = cmpIndicatorLabel(key);
-
-        try {
-            var dpr = window.devicePixelRatio || 1;
-            var pwv = cv.parentElement.clientWidth || cv.parentElement.getBoundingClientRect().width;
-            var w = pwv > 0 ? (pwv - 30) : 700, h = 340;
-            cv.width = w * dpr; cv.height = h * dpr;
-            cv.style.width = w + 'px'; cv.style.height = h + 'px';
-            var ctx = cv.getContext('2d');
-            ctx.scale(dpr, dpr);
-            ctx.clearRect(0, 0, w, h);
-
-            var pad = { top: 30, right: 55, bottom: 45, left: 45 };
-            var pw = w - pad.left - pad.right, ph = h - pad.top - pad.bottom;
-            var n = data.length;
-
-            var barMax = 1;
-            data.forEach(function(d) {
-                if(d.this_week > barMax) barMax = d.this_week;
-                if(d.last_week > barMax) barMax = d.last_week;
-            });
-            barMax = Math.ceil(barMax * 1.15);
-
-            var lineMax = 0;
-            data.forEach(function(d) {
-                var v = d.indicators ? d.indicators[key] : null;
-                if(typeof v === 'number' && !isNaN(v) && v > lineMax) lineMax = v;
-            });
-            lineMax = lineMax > 0 ? lineMax * 1.25 : 1;
-
-            // Grid horizontal + eixo Y esquerdo (barras)
-            ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 0.5;
-            for(var i = 0; i <= 4; i++) {
-                var gy = pad.top + (ph / 4) * i;
-                ctx.beginPath(); ctx.moveTo(pad.left, gy); ctx.lineTo(w - pad.right, gy); ctx.stroke();
-            }
-            ctx.fillStyle = '#9ca3af'; ctx.font = '9px Inter'; ctx.textAlign = 'right';
-            for(var i = 0; i <= 4; i++) {
-                var val = Math.round((barMax / 4) * (4 - i));
-                ctx.fillText(val, pad.left - 6, pad.top + (ph / 4) * i + 3);
-            }
-
-            // Eixo Y direito (indicador)
-            ctx.fillStyle = '#f4a261'; ctx.font = '9px Inter'; ctx.textAlign = 'left';
-            for(var i = 0; i <= 4; i++) {
-                var val2 = Math.round(((lineMax / 4) * (4 - i)) * 10) / 10;
-                ctx.fillText(val2, w - pad.right + 6, pad.top + (ph / 4) * i + 3);
-            }
-
-            // Barras agrupadas (atual vs anterior)
-            var groupW = pw / n;
-            var bw = Math.min(26, groupW * 0.28);
-            data.forEach(function(d, i) {
-                var cx = pad.left + groupW * i + groupW / 2;
-                var tH = (d.this_week / barMax) * ph;
-                var lH = (d.last_week / barMax) * ph;
-                ctx.fillStyle = '#1d3557';
-                ctx.fillRect(cx - bw - 2, pad.top + ph - tH, bw, tH);
-                ctx.fillStyle = '#d1d5db';
-                ctx.fillRect(cx + 2, pad.top + ph - lH, bw, lH);
-                if(groupW > 20) {
-                    ctx.fillStyle = '#1d3557'; ctx.font = 'bold 8px Inter'; ctx.textAlign = 'center';
-                    ctx.fillText(d.this_week, cx - bw / 2 - 2, pad.top + ph - tH - 4);
+    function createComparativoChart(canvas, data) {
+        var wc = data.week_comparison || [];
+        var labels = wc.map(function(d) { return d.day; });
+        return createChartWithZoom(canvas, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    { type: 'bar', label: 'Entregues', data: wc.map(function(d) { return d.entregues || 0; }), backgroundColor: PALETTE.accentWarm, stack: 'a' },
+                    { type: 'bar', label: 'Cancelados', data: wc.map(function(d) { return d.cancelados || 0; }), backgroundColor: PALETTE.danger, stack: 'a' },
+                    { type: 'bar', label: 'Atrasos', data: wc.map(function(d) { return d.atrasos || 0; }), backgroundColor: PALETTE.warn, stack: 'a' },
+                    { type: 'line', label: 'Volume total', data: wc.map(function(d) { return d.total || 0; }), borderColor: PALETTE.primary, backgroundColor: 'transparent', yAxisID: 'y1' }
+                ]
+            },
+            options: {
+                scales: {
+                    y: { stacked: true, beginAtZero: true, title: { display: true, text: 'demandas' } },
+                    y1: { position: 'right', beginAtZero: true, grid: { display: false } }
                 }
-            });
+            }
+        });
+    }
 
-            // Eixo X (dias)
-            ctx.fillStyle = '#6b7280'; ctx.font = '9px Inter'; ctx.textAlign = 'center';
-            var step = Math.max(1, Math.ceil(n / 10));
-            data.forEach(function(d, i) {
-                if(i % step !== 0 && i !== n - 1) return;
-                var ds = String(d.day || ''); if(ds.indexOf('T') > -1) ds = ds.split('T')[0];
-                ctx.fillText(ds.substring(5), pad.left + groupW * i + groupW / 2, h - pad.bottom + 14);
-            });
+    function createVolumeMAChart(canvas, data) {
+        var trend = (data.volume_ma || []).slice(-30);
+        var labels = trend.map(function(t) { return t.day; });
+        var values = trend.map(function(t) { return t.total || 0; });
+        var ma7 = values.map(function(_, i) {
+            var start = Math.max(0, i - 6);
+            var slice = values.slice(start, i + 1);
+            return slice.reduce(function(a, b) { return a + b; }, 0) / slice.length;
+        });
+        return createChartWithZoom(canvas, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    { type: 'bar', label: 'Volume di\u00e1rio', data: values, backgroundColor: 'rgba(69,123,157,.5)', borderWidth: 0 },
+                    { type: 'line', label: 'MA 7d', data: ma7, borderColor: PALETTE.primary, borderWidth: 2, pointRadius: 0, fill: false }
+                ]
+            },
+            options: { scales: { y: { beginAtZero: true } } }
+        });
+    }
 
-            // Linha do indicador (escala do eixo direito)
-            ctx.strokeStyle = '#f4a261'; ctx.lineWidth = 2.5; ctx.beginPath();
-            var started = false;
-            data.forEach(function(d, i) {
-                var v = d.indicators ? d.indicators[key] : null;
-                if(typeof v !== 'number' || isNaN(v)) return;
-                var x = pad.left + groupW * i + groupW / 2;
-                var y = pad.top + ph - (v / lineMax) * ph;
-                if(!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
-            });
-            ctx.stroke();
-            data.forEach(function(d, i) {
-                var v = d.indicators ? d.indicators[key] : null;
-                if(typeof v !== 'number' || isNaN(v)) return;
-                var x = pad.left + groupW * i + groupW / 2;
-                var y = pad.top + ph - (v / lineMax) * ph;
-                ctx.fillStyle = '#f4a261'; ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2); ctx.fill();
-                ctx.strokeStyle = 'white'; ctx.lineWidth = 1; ctx.stroke();
-            });
+    function createFilaHoraChart(canvas, data) {
+        var qh = data.queue_time_by_hour || [];
+        if (qh.length === 0) return null;
+        var labels = [];
+        for (var i = 0; i < 24; i++) labels.push(i + 'h');
+        var stationNames = [];
+        qh.forEach(function(d) {
+            var name = d.station_name;
+            if (stationNames.indexOf(name) === -1) stationNames.push(name);
+        });
+        var datasets = stationNames.map(function(name, i) {
+            return {
+                label: name,
+                data: labels.map(function(_, h) {
+                    var found = null;
+                    for (var j = 0; j < qh.length; j++) {
+                        if (qh[j].station_name === name && qh[j].hour === h) {
+                            found = qh[j];
+                            break;
+                        }
+                    }
+                    return found ? (found.avg_queue_min || 0) : 0;
+                }),
+                borderColor: SERIES_COLORS[i % SERIES_COLORS.length],
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+            };
+        });
+        return createChartWithZoom(canvas, {
+            type: 'line',
+            data: { labels: labels, datasets: datasets },
+            options: { scales: { y: { beginAtZero: true, title: { display: true, text: 'min fila' } } } }
+        });
+    }
 
-            // Legenda
-            var lx = pad.left;
-            ctx.font = '10px Inter'; ctx.textAlign = 'left';
-            ctx.fillStyle = '#1d3557'; ctx.fillRect(lx, 4, 12, 12);
-            ctx.fillStyle = '#374151'; ctx.fillText('Período atual', lx + 16, 14);
-            lx += 16 + ctx.measureText('Período atual').width + 14;
-            ctx.fillStyle = '#d1d5db'; ctx.fillRect(lx, 4, 12, 12);
-            ctx.fillStyle = '#374151'; ctx.fillText('Período anterior', lx + 16, 14);
-            lx += 16 + ctx.measureText('Período anterior').width + 14;
-            ctx.strokeStyle = '#f4a261'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(lx, 10); ctx.lineTo(lx + 22, 10); ctx.stroke();
-            ctx.fillStyle = '#f4a261'; ctx.beginPath(); ctx.arc(lx + 11, 10, 3, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = '#374151'; ctx.fillText(lineLabel, lx + 27, 14);
-        } catch(e) {
-            console.error('Comparison chart error:', e);
-        }
+    function createVelocidadeChart(canvas, data) {
+        var sh = data.speed_by_hour || [];
+        var labels = sh.map(function(d) { return d.hora + 'h'; });
+        var values = sh.map(function(d) { return d.avg_min || 0; });
+        return createChartWithZoom(canvas, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Tempo m\u00e9dio (min)',
+                    data: values,
+                    borderColor: PALETTE.accentWarm,
+                    backgroundColor: 'rgba(42,157,143,.3)',
+                    fill: { target: 'origin', above: 'rgba(42,157,143,.3)' },
+                    borderWidth: 2,
+                }]
+            },
+            options: { scales: { y: { beginAtZero: true } } }
+        });
+    }
+
+    function createRetiradaChart(canvas, data) {
+        var ph = data.pickup_by_hour || [];
+        var labels = ph.map(function(d) { return d.hora + 'h'; });
+        var values = ph.map(function(d) { return d.avg_pickup_min || 0; });
+        return createChartWithZoom(canvas, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Tempo m\u00e9dio (min)',
+                    data: values,
+                    borderColor: PALETTE.primaryTint,
+                    backgroundColor: 'rgba(69,123,157,.3)',
+                    fill: { target: 'origin', above: 'rgba(69,123,157,.3)' },
+                    borderWidth: 2,
+                }]
+            },
+            options: { scales: { y: { beginAtZero: true } } }
+        });
+    }
+
+    function createPerfTrendChart(canvas, data) {
+        var history = data.history || [];
+        var labels = history.map(function(d) { return d.date; });
+        var entitySet = {};
+        history.forEach(function(d) {
+            var scores = d.scores || {};
+            Object.keys(scores).forEach(function(k) { entitySet[k] = true; });
+        });
+        var entities = Object.keys(entitySet);
+        var datasets = entities.map(function(entity, i) {
+            return {
+                label: entity,
+                data: history.map(function(d) { return (d.scores || {})[entity] || null; }),
+                borderColor: SERIES_COLORS[i % SERIES_COLORS.length],
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+            };
+        });
+        return createChartWithZoom(canvas, {
+            type: 'line',
+            data: { labels: labels, datasets: datasets },
+            options: { scales: { y: { min: 0, max: 5 } } }
+        });
     }
 
     function scoreClass(v) {
@@ -1271,103 +1119,6 @@ if (document.readyState === 'loading') {
         return h + '</div>';
     }
 
-    function drawPerfTrendChart(perf) {
-        var pc = document.getElementById('perfTrendCanvas');
-        if(!pc || !perf || !perf.history || perf.history.length < 2) {
-            var pp = pc ? pc.parentElement : null;
-            if(pp && pp.classList.contains('panel')) pp.style.display = 'none';
-            return;
-        }
-        var pp = pc.parentElement;
-        if(pp) pp.style.display = '';
-
-        try {
-            var dpr = window.devicePixelRatio || 1;
-            var pwv = pc.parentElement.clientWidth || pc.parentElement.getBoundingClientRect().width;
-            var w = pwv > 0 ? (pwv - 30) : 700, h = 320;
-            pc.width = w * dpr; pc.height = h * dpr;
-            pc.style.width = w + 'px'; pc.style.height = h + 'px';
-            var ctx = pc.getContext('2d');
-            ctx.scale(dpr, dpr);
-            ctx.clearRect(0, 0, w, h);
-
-            var pad = { top: 20, right: 30, bottom: 45, left: 50 };
-            var pw2 = w - pad.left - pad.right, ph2 = h - pad.top - pad.bottom;
-
-        var series = [
-            { key: 'cozinha_quente_a', label: 'Quente A', color: '#e63946' },
-            { key: 'cozinha_quente_b', label: 'Quente B', color: '#f4a261' },
-            { key: 'cozinha_fria', label: 'Fria', color: '#00d4ff' },
-            { key: 'salao', label: 'Sal\u00E3o', color: '#457b9d' }
-        ];
-
-            var minY = 5, maxY = 0;
-            perf.history.forEach(function(d) {
-                series.forEach(function(s) {
-                    var v = d[s.key];
-                    if(typeof v === 'number') { if(v < minY) minY = v; if(v > maxY) maxY = v; }
-                });
-            });
-            if(minY > 4) minY = 3.5;
-            if(maxY < 5) maxY = 5;
-            minY = Math.floor(minY * 2) / 2;
-            maxY = Math.ceil(maxY * 2) / 2;
-            var yRange = maxY - minY || 1;
-
-            var gridLines = Math.round(yRange / 0.5);
-            ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 0.5;
-            for(var i = 0; i <= gridLines; i++) {
-                var gy = pad.top + (ph2 / gridLines) * i;
-                ctx.beginPath(); ctx.moveTo(pad.left, gy); ctx.lineTo(w - pad.right, gy); ctx.stroke();
-            }
-
-            ctx.fillStyle = '#9ca3af'; ctx.font = '10px Inter'; ctx.textAlign = 'right';
-            for(var i = 0; i <= gridLines; i++) {
-                var val = Math.round((maxY - (yRange / gridLines) * i) * 10) / 10;
-                ctx.fillText(val.toFixed(1), pad.left - 6, pad.top + (ph2 / gridLines) * i + 4);
-            }
-
-            ctx.fillStyle = '#6b7280'; ctx.font = '9px Inter'; ctx.textAlign = 'center';
-            var step = Math.max(1, Math.floor(perf.history.length / 10));
-            perf.history.forEach(function(d, i) {
-                if(i % step !== 0 && i !== perf.history.length - 1) return;
-                var x = pad.left + (i / Math.max(perf.history.length - 1, 1)) * pw2;
-                ctx.fillText(String(d.date||'').substring(5), x, h - pad.bottom + 14);
-            });
-
-            series.forEach(function(s) {
-                ctx.strokeStyle = s.color; ctx.lineWidth = 2.5; ctx.beginPath();
-                var started = false;
-                perf.history.forEach(function(d, i) {
-                    var v = d[s.key];
-                    if(typeof v !== 'number') return;
-                    var x = pad.left + (i / Math.max(perf.history.length - 1, 1)) * pw2;
-                    var y = pad.top + ph2 - ((v - minY) / yRange) * ph2;
-                    if(!started) { ctx.moveTo(x, y); started = true; }
-                    else ctx.lineTo(x, y);
-                });
-                ctx.stroke();
-                perf.history.forEach(function(d, i) {
-                    var v = d[s.key];
-                    if(typeof v !== 'number') return;
-                    var x = pad.left + (i / Math.max(perf.history.length - 1, 1)) * pw2;
-                    var y = pad.top + ph2 - ((v - minY) / yRange) * ph2;
-                    ctx.fillStyle = s.color; ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI*2); ctx.fill();
-                });
-            });
-
-            var lx = pad.left;
-            series.forEach(function(s) {
-                ctx.fillStyle = s.color; ctx.fillRect(lx, 5, 14, 14);
-                ctx.fillStyle = '#374151'; ctx.font = '11px Inter'; ctx.textAlign = 'left';
-                ctx.fillText(s.label, lx + 18, 16);
-                lx += 90;
-            });
-        } catch(e) {
-            console.error('Perf chart error:', e);
-        }
-    }
-
     function loadPerformance(filter) {
         try {
             var pr = filter === 'today' ? 'week' : (filter === 'month' ? 'month' : 'week');
@@ -1386,6 +1137,17 @@ if (document.readyState === 'loading') {
                     html += '<article class="panel panel-chart" data-cols="12" id="perfTrendPanel"><header class="panel-header"><h3 class="panel-title">Evolução das Notas — ' + label + '</h3></header><div class="panel-body"><canvas id="perfTrendCanvas"></canvas></div></article>';
                 }
                 perfGrid.innerHTML = html;
+
+                if (typeof Chart !== 'undefined' && perf.history && perf.history.length > 1) {
+                    var trendCanvasEl = document.getElementById('perfTrendCanvas');
+                    if (trendCanvasEl) {
+                        var parent = trendCanvasEl.parentElement;
+                        parent.innerHTML = '';
+                        var canvas = document.createElement('canvas');
+                        parent.appendChild(canvas);
+                        createPerfTrendChart(canvas, perf);
+                    }
+                }
 
                 if(!perfGrid._perfClickSet) {
                     perfGrid._perfClickSet = true;
@@ -1407,10 +1169,6 @@ if (document.readyState === 'loading') {
                         }
                     });
                 }
-
-                requestAnimationFrame(function() {
-                    requestAnimationFrame(function() { drawPerfTrendChart(perf); });
-                });
             }).catch(function(err) {
                 console.warn('Performance:', err && err.message ? err.message : err);
             });
@@ -1523,20 +1281,32 @@ if (document.readyState === 'loading') {
             var btnExp = document.getElementById('btnExport');
             if (btnExp) { btnExp.disabled = false; btnExp.title = ''; }
 
-            // Step D: Wire comparison chart indicator
-            var cmpSel = document.getElementById('cmpIndicatorSelect');
-            if (cmpSel) {
-                if (cmpSel._ch) cmpSel.removeEventListener('change', cmpSel._ch);
-                var handler = function() { cmpIndicatorKey = cmpSel.value; drawComparisonChart(data.week_comparison, cmpIndicatorKey); };
-                cmpSel.addEventListener('change', handler);
-                cmpSel._ch = handler;
-                drawComparisonChart(data.week_comparison, cmpIndicatorKey);
+            // Step D: Wire all 6 Chart.js charts + zoom
+            if (typeof Chart !== 'undefined') {
+                var chartIds = ['chart-comparativo', 'chart-volume-ma', 'chart-fila-hora', 'chart-velocidade', 'chart-retirada'];
+                chartIds.forEach(function(id) {
+                    var el = document.getElementById(id);
+                    if (!el) return;
+                    el.innerHTML = '';
+                    var canvas = document.createElement('canvas');
+                    el.appendChild(canvas);
+                });
+
+                var c1El = document.getElementById('chart-comparativo');
+                if (c1El) createComparativoChart(c1El.querySelector('canvas'), data);
+                var c2El = document.getElementById('chart-volume-ma');
+                if (c2El) createVolumeMAChart(c2El.querySelector('canvas'), data);
+                var c3El = document.getElementById('chart-fila-hora');
+                if (c3El) createFilaHoraChart(c3El.querySelector('canvas'), data);
+                var c4El = document.getElementById('chart-velocidade');
+                if (c4El) createVelocidadeChart(c4El.querySelector('canvas'), data);
+                var c5El = document.getElementById('chart-retirada');
+                if (c5El) createRetiradaChart(c5El.querySelector('canvas'), data);
             }
 
-            // Step E: Draw canvas charts (existing drawAllCharts + loadPerformance)
+            // Step E: Load performance section (perf trend chart handled inside loadPerformance)
             requestAnimationFrame(function() {
                 requestAnimationFrame(function() {
-                    drawAllCharts(data);
                     loadPerformance(filterForPerf());
                 });
             });
