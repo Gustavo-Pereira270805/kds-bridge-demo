@@ -11,17 +11,17 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            padding: 20px; background-color: #f4f4f5; color: #1e1e1e; min-height: 100vh;
+            padding: 20px; background-color: var(--c-bg-light); color: var(--c-text); min-height: 100vh;
         }
         .header {
             display: flex; justify-content: space-between; align-items: center;
             flex-wrap: wrap; gap: 12px; margin: -20px -20px 30px -20px;
-            background: #1d3557; color: white; padding: 20px 30px;
+            background: var(--c-primary); color: white; padding: 20px 30px;
             border-radius: 0 0 16px 16px;
         }
         .header h1 { margin: 0; font-size: 24px; font-weight: 700; }
         .btn-admin {
-            padding: 12px 24px; background: #e63946; color: white;
+            padding: 12px 24px; background: var(--c-danger); color: white;
             border: none; border-radius: 10px; font-size: 15px; font-weight: 700;
             cursor: pointer; text-decoration: none; display: inline-block;
             letter-spacing: 0.5px; text-transform: uppercase;
@@ -30,7 +30,7 @@
         }
         .btn-admin:hover { filter: brightness(1.1); transform: translateY(-1px); }
         .btn-dashboard {
-            padding: 12px 24px; background: #2a9d8f; color: white;
+            padding: 12px 24px; background: var(--c-accent-warm); color: white;
             border: none; border-radius: 10px; font-size: 15px; font-weight: 700;
             cursor: pointer; text-decoration: none; display: inline-block;
             letter-spacing: 0.5px; text-transform: uppercase;
@@ -44,29 +44,30 @@
         }
         .metric-card {
             background: white; padding: 24px; border-radius: 16px;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.06); flex: 1; min-width: 180px; text-align: center;
+            box-shadow: var(--shadow-card); flex: 1; min-width: 180px; text-align: center;
             transition: transform 0.2s ease;
         }
         .metric-card:hover { transform: translateY(-2px); }
         .metric-card h3 {
-            margin: 0 0 10px 0; font-size: 13px; color: #6b7280;
+            margin: 0 0 10px 0; font-size: 13px; color: var(--c-text-muted);
             font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
         }
         .metric-card p {
-            margin: 0; font-size: 36px; font-weight: 800; color: #2a9d8f;
+            margin: 0; font-size: 36px; font-weight: var(--fw-heavy);
+            font-variant-numeric: tabular-nums; font-family: var(--font-mono); color: var(--c-accent-warm);
         }
 
         table {
             width: 100%; border-collapse: collapse; background: white;
-            border-radius: 14px; overflow: hidden;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            border-radius: var(--radius-xl); overflow: hidden;
+            box-shadow: var(--shadow-card);
         }
         th, td {
             padding: 14px 16px; text-align: left; border-bottom: 1px solid #e5e7eb;
             font-size: 14px;
         }
         th {
-            background-color: #1d3557; color: white;
+            background-color: var(--c-primary); color: white;
             font-weight: 600; font-size: 13px; text-transform: uppercase;
             letter-spacing: 0.5px;
         }
@@ -75,22 +76,22 @@
 
         .section { margin-bottom: 32px; }
         .section h2 {
-            font-size: 20px; font-weight: 700; color: #1d3557;
+            font-size: 20px; font-weight: 700; color: var(--c-primary);
             margin-bottom: 14px;
         }
 
         .btn-toggle {
-            padding: 8px 18px; border: 2px solid #e63946; border-radius: 10px;
+            padding: 8px 18px; border: 2px solid var(--c-danger); border-radius: 10px;
             cursor: pointer; font-size: 14px; font-weight: 700; min-height: 36px;
-            background: transparent; color: #e63946;
+            background: transparent; color: var(--c-danger);
             transition: all 0.2s ease;
         }
-        .btn-toggle:hover { background: #e63946; color: white; }
+        .btn-toggle:hover { background: var(--c-danger); color: white; }
         .btn-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .btn-toggle.in-menu { background: #28a745; color: white; border-color: #28a745; }
-        .btn-toggle.out-menu { background: transparent; color: #e63946; border-color: #e63946; }
-        .btn-toggle.out-menu:hover { background: #e63946; color: white; }
+        .btn-toggle.out-menu { background: transparent; color: var(--c-danger); border-color: var(--c-danger); }
+        .btn-toggle.out-menu:hover { background: var(--c-danger); color: white; }
 
         .product-row {
             display: flex; justify-content: space-between; align-items: center;
@@ -98,34 +99,34 @@
         }
         .product-row:last-child { border-bottom: none; }
         .product-list {
-            background: white; border-radius: 14px; padding: 18px;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.06); max-height: 500px; overflow-y: auto;
+            background: white; border-radius: var(--radius-xl); padding: 18px;
+            box-shadow: var(--shadow-card); max-height: 500px; overflow-y: auto;
         }
 
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #e5e7eb; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: var(--c-text-muted); border-radius: 3px; }
 
-        .menu-info { margin: -6px 0 12px 0; font-size: 14px; color: #6b7280; font-weight: 500; }
+        .menu-info { margin: -6px 0 12px 0; font-size: 14px; color: var(--c-text-muted); font-weight: 500; }
 
         /* Calendário de Cardápios */
         .calendar-card {
             background: white; border-radius: 16px; padding: 20px;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            box-shadow: var(--shadow-card);
         }
         .calendar-nav {
             display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;
         }
-        .calendar-nav h3 { font-size: 17px; font-weight: 700; color: #1d3557; }
+        .calendar-nav h3 { font-size: 17px; font-weight: 700; color: var(--c-primary); }
         .cal-nav-btn {
-            width: 38px; height: 38px; border: 2px solid #1d3557; border-radius: 10px;
-            background: transparent; color: #1d3557; font-size: 20px; font-weight: 700;
+            width: 38px; height: 38px; border: 2px solid var(--c-primary); border-radius: 10px;
+            background: transparent; color: var(--c-primary); font-size: 20px; font-weight: 700;
             cursor: pointer; line-height: 1; transition: all 0.2s ease;
         }
-        .cal-nav-btn:hover { background: #1d3557; color: white; }
+        .cal-nav-btn:hover { background: var(--c-primary); color: white; }
         .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
         .cal-weekday {
-            text-align: center; font-size: 11px; font-weight: 700; color: #6b7280;
+            text-align: center; font-size: 11px; font-weight: 700; color: var(--c-text-muted);
             text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 0;
         }
         .cal-cell {
@@ -135,25 +136,25 @@
         }
         .cal-empty { background: transparent; }
         .cal-day { cursor: pointer; transition: all 0.15s ease; }
-        .cal-day:hover { border-color: #1d3557; }
-        .cal-day-num { font-size: 13px; font-weight: 600; color: #374151; }
+        .cal-day:hover { border-color: var(--c-primary); }
+        .cal-day-num { font-size: 13px; font-weight: 600; color: #374151; font-variant-numeric: tabular-nums; }
         .cal-menu-badge {
-            font-size: 11px; font-weight: 700; color: white; background: #1d3557;
-            padding: 2px 8px; border-radius: 999px;
+            font-size: 11px; font-weight: 700; color: white; background: var(--c-primary);
+            padding: 2px 8px; border-radius: var(--radius-pill);
         }
-        .cal-override { border-color: #f4a261; background: #fff7ed; }
-        .cal-override .cal-menu-badge { background: #f4a261; }
-        .cal-today { box-shadow: 0 0 0 2px #2a9d8f; }
-        .cal-today .cal-day-num { color: #2a9d8f; font-weight: 800; }
+        .cal-override { border-color: var(--c-warn); background: #fff7ed; }
+        .cal-override .cal-menu-badge { background: var(--c-warn); }
+        .cal-today { box-shadow: 0 0 0 2px var(--c-accent-warm); }
+        .cal-today .cal-day-num { color: var(--c-accent-warm); font-weight: 800; }
         .calendar-legend {
-            display: flex; gap: 18px; margin-top: 14px; font-size: 12px; color: #6b7280;
+            display: flex; gap: 18px; margin-top: 14px; font-size: 12px; color: var(--c-text-muted);
         }
         .legend-box {
             display: inline-block; width: 12px; height: 12px; border-radius: 4px;
             margin-right: 5px; vertical-align: -1px;
         }
-        .legend-override { background: #fff7ed; border: 2px solid #f4a261; }
-        .legend-today { background: white; box-shadow: 0 0 0 2px #2a9d8f; }
+        .legend-override { background: #fff7ed; border: 2px solid var(--c-warn); }
+        .legend-today { background: white; box-shadow: 0 0 0 2px var(--c-accent-warm); }
 
         /* Modais */
         .modal-overlay {
@@ -164,14 +165,14 @@
             background: white; border-radius: 16px; padding: 24px;
             width: 100%; max-width: 420px; box-shadow: 0 12px 40px rgba(0,0,0,0.25);
         }
-        .modal-card h3 { font-size: 18px; font-weight: 700; color: #1d3557; margin-bottom: 8px; }
-        .modal-hint { font-size: 13px; color: #6b7280; margin-bottom: 14px; line-height: 1.4; }
+        .modal-card h3 { font-size: 18px; font-weight: 700; color: var(--c-primary); margin-bottom: 8px; }
+        .modal-hint { font-size: 13px; color: var(--c-text-muted); margin-bottom: 14px; line-height: 1.4; }
         .modal-card label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
         .modal-card select, .modal-card textarea {
             width: 100%; padding: 10px 12px; border: 2px solid #e5e7eb; border-radius: 10px;
-            font-family: inherit; font-size: 14px; margin-bottom: 14px; background: white; color: #1e1e1e;
+            font-family: inherit; font-size: 14px; margin-bottom: 14px; background: white; color: var(--c-text);
         }
-        .modal-card select:focus, .modal-card textarea:focus { outline: none; border-color: #1d3557; }
+        .modal-card select:focus, .modal-card textarea:focus { border-color: var(--c-primary); }
         .modal-card textarea { resize: vertical; min-height: 80px; }
         .modal-error {
             background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c;
@@ -187,21 +188,22 @@
             padding: 10px 20px; border: none; border-radius: 10px; color: white;
             font-size: 14px; font-weight: 700; cursor: pointer;
         }
-        .btn-modal-confirm { background: #2a9d8f; }
-        .btn-modal-danger { background: #e63946; }
+        .btn-modal-confirm { background: var(--c-accent-warm); }
+        .btn-modal-danger { background: var(--c-danger); }
         .btn-modal-confirm:hover, .btn-modal-danger:hover { filter: brightness(1.1); }
         .btn-modal-confirm:disabled, .btn-modal-danger:disabled { opacity: 0.5; cursor: not-allowed; }
 
         /* Anulação de demandas */
         .btn-annul {
-            padding: 6px 14px; border: 2px solid #e63946; border-radius: 8px;
-            background: transparent; color: #e63946; font-size: 12px; font-weight: 700;
+            padding: 6px 14px; border: 2px solid var(--c-danger); border-radius: 8px;
+            background: transparent; color: var(--c-danger); font-size: 12px; font-weight: 700;
             cursor: pointer; transition: all 0.2s ease;
         }
-        .btn-annul:hover { background: #e63946; color: white; }
+        .btn-annul:hover { background: var(--c-danger); color: white; }
         .badge-annulled {
-            display: inline-block; background: #e63946; color: white; font-size: 11px;
-            font-weight: 700; padding: 3px 10px; border-radius: 999px; letter-spacing: 0.5px;
+            display: inline-block; background: transparent; color: var(--c-text-muted); font-size: 11px;
+            font-weight: var(--fw-bold); padding: 3px 10px; border: 1.5px solid var(--c-text-muted);
+            border-radius: var(--radius-pill); letter-spacing: 0.5px;
         }
         tr.row-annulled { opacity: 0.55; }
         tr.row-annulled td { text-decoration: line-through; }
@@ -209,7 +211,7 @@
 
         @media (max-width: 768px) {
             body { padding: 12px; }
-            .header { margin: -12px -12px 20px -12px; padding: 16px; border-radius: 0 0 12px 12px; }
+            .header { margin: -12px -12px 20px -12px; padding: 16px; border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
             .header h1 { font-size: 18px; }
             .metrics-container { flex-direction: column; gap: 12px; }
             .metric-card p { font-size: 28px; }
@@ -371,7 +373,7 @@
                     : '<td><button type="button" class="btn-annul" data-id="' + d.id + '">Anular</button></td>';
                 return '<tr' + rowAttrs + '><td><strong>' + d.product_name + '</strong></td><td>' + d.quantity + '</td><td>' + (d.unit_label || '') + '</td>' +
                     '<td>' + (d.priority === 'urgent' ? 'Urgente' : 'Normal') + '</td>' + statusCell +
-                    '<td>' + formatTime(d.created_at) + '</td>' + actionCell + '</tr>';
+                    '<td class="mono">' + formatTime(d.created_at) + '</td>' + actionCell + '</tr>';
             }).join('');
         }).catch(console.error);
     }
