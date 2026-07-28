@@ -228,10 +228,10 @@
         <h1 class="header-title">Dashboard</h1>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
             <div class="period-selector" id="periodSelector">
-                <button class="period-btn btn btn-ghost active" data-range="today">Hoje</button>
-                <button class="period-btn btn btn-ghost" data-range="yesterday">Ontem</button>
-                <button class="period-btn btn btn-ghost" data-range="week">Últimos 7 dias</button>
-                <button class="period-btn btn btn-ghost" data-range="month">Últimos 30 dias</button>
+                <button class="period-btn btn btn-ghost active" data-range="today" aria-pressed="true">Hoje</button>
+                <button class="period-btn btn btn-ghost" data-range="yesterday" aria-pressed="false">Ontem</button>
+                <button class="period-btn btn btn-ghost" data-range="week" aria-pressed="false">Últimos 7 dias</button>
+                <button class="period-btn btn btn-ghost" data-range="month" aria-pressed="false">Últimos 30 dias</button>
             </div>
             <div class="date-controls">
                 <label for="dateFrom">De</label>
@@ -1375,8 +1375,9 @@
             var btn = e.target.closest('.period-btn');
             if (!btn) return;
             var range = btn.dataset.range;
-            document.querySelectorAll('.period-btn').forEach(function(b) { b.classList.remove('active'); });
+            document.querySelectorAll('.period-btn').forEach(function(b) { b.classList.remove('active'); b.setAttribute('aria-pressed', 'false'); });
             btn.classList.add('active');
+            btn.setAttribute('aria-pressed', 'true');
             document.getElementById('dateFrom').value = '';
             document.getElementById('dateTo').value = '';
             if (range === 'yesterday') {
@@ -1400,7 +1401,7 @@
             if (d1 > d2) { showToast('A data de in\u00EDcio deve ser anterior \u00E0 data final.', 'warn'); return; }
             var diff = Math.round((d2 - d1) / 86400000);
             if (diff > 31) { showToast('O per\u00EDodo m\u00E1ximo \u00E9 de 31 dias.', 'warn'); return; }
-            document.querySelectorAll('.period-btn').forEach(function(b) { b.classList.remove('active'); });
+            document.querySelectorAll('.period-btn').forEach(function(b) { b.classList.remove('active'); b.setAttribute('aria-pressed', 'false'); });
             loadDashboard({ from: from, to: to });
         });
     }
