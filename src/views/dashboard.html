@@ -671,7 +671,7 @@ if (document.readyState === 'loading') {
     function renderReplacements(rows) {
         var title = '<div class="section-title">Trocas de itens do cardápio</div>';
         if(!rows || !rows.length) {
-            return '<div class="empty-state"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M10 24h28M14 14l-4 10 4 10M34 14l4 10-4 10"></path></svg><h4>Sem dados para o período selecionado</h4><p>Tente outro intervalo de datas.</p><button type="button" class="btn btn-ghost" onclick="document.getElementById(\'periodToday\').click()">Voltar para hoje</button></div>';
+            return '<div class="empty-state"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M10 24h28M14 14l-4 10 4 10M34 14l4 10-4 10"></path></svg><h4>Sem dados para o período selecionado</h4><p>Tente outro intervalo de datas.</p><button type="button" class="btn btn-ghost" onclick="var b=document.querySelector(\'#periodSelector .period-btn[data-range=today]\');if(b)b.click()">Voltar para hoje</button></div>';
         }
         var max = 0;
         rows.forEach(function(r) { var v = parseFloat(r.replacement_pct) || 0; if(v > max) max = v; });
@@ -691,59 +691,70 @@ if (document.readyState === 'loading') {
     }
 
     function buildContent(data) {
-        var html = '';
-        // KPI strip now rendered separately in loadDashboard() (Phase 5). Skip here to avoid duplicate.
-        // html += renderKpis(data.kpis);
+        // Section 1: Visão Geral (#overview)
+        var overviewGrid = document.querySelector('#overview .bento-grid');
+        overviewGrid.innerHTML = '';
 
-        html += '<div class="panels">';
+        var funnelHtml = renderFunnel(data.funnel);
+        overviewGrid.innerHTML += '<article class="panel panel-tall" data-cols="12">' +
+            '<header class="panel-header"><h3 class="panel-title">Funil de Demandas</h3></header>' +
+            '<div class="panel-body">' + funnelHtml + '</div></article>';
 
-        // 1. FUNNEL — Visão geral do fluxo de demandas
-        html += renderFunnel(data.funnel);
+        if (data.funnel && parseInt(data.funnel.created)) {
+            var f = data.funnel;
+            var statusDonutHtml = renderDonut('Status das Demandas', [
+                { label: 'Pendentes', value: parseInt(f.pending_now || 0) },
+                { label: 'Prontas', value: Math.max(0, parseInt(f.ready || 0) - parseInt(f.retrieved || 0)) },
+                { label: 'Retiradas', value: parseInt(f.retrieved || 0) },
+                { label: 'Canceladas', value: parseInt(f.cancelled || 0) },
+            ], ['#457b9d', '#2a9d8f', '#27ae60', '#e63946']);
+            overviewGrid.innerHTML += '<article class="panel" data-cols="3">' +
+                '<header class="panel-header"><h3 class="panel-title">Status das Demandas</h3></header>' +
+                '<div class="panel-body">' + statusDonutHtml + '</div></article>';
 
-        // 2. PRODUTOS + MOTIVOS DE CANCELAMENTO
-        html += renderBars('Produtos Mais Demandados', data.produtos.slice(0, 12), 'product_name', function(d) { return parseFloat(d.total_qty); }, 'linear-gradient(90deg, #2a9d8f, #1d3557)');
-        html += renderBars('Motivos de Cancelamento', (data.cancel_reasons || []).slice(0, 10), 'label', 'total', '#e63946');
-        html += renderReplacements(data.replacements);
-
-        // 3. TEMPO DE FILA POR ESTAÇÃO + SLA POR PRODUTO
-        if(data.queue_time_by_station && data.queue_time_by_station.length) {
-            var qhtml = '';
-            var qmax = 1;
-            data.queue_time_by_station.forEach(function(d) {
-                var w = parseFloat(d.avg_wait_min), c = parseFloat(d.avg_cooking_min);
-                if(w + c > qmax) qmax = w + c;
-            });
-            data.queue_time_by_station.forEach(function(d) {
-                var w = parseFloat(d.avg_wait_min), c = parseFloat(d.avg_cooking_min);
-                var wp = qmax > 0 ? (w / qmax) * 100 : 0;
-                var cp = qmax > 0 ? (c / qmax) * 100 : 0;
-                qhtml += '<div class="bar-row"><div class="bar-label">' + d.estacao + '</div><div class="bar-track" style="display:flex;"><div class="bar-fill" style="width:' + cp + '%;background:#2a9d8f;height:100%;"><span>' + c + 'm</span></div><div class="bar-fill" style="width:' + wp + '%;background:#f4a261;height:100%;"><span>' + w + 'm</span></div></div><div class="bar-value">' + d.count + '</div></div>';
-            });
-            qhtml += '<div style="margin-top:6px;font-size:10px;color:#9ca3af;"><span style="color:#2a9d8f;">Verde = preparo</span> | <span style="color:#f4a261;">Laranja = espera fila</span></div>';
-            html += '<div class="panel"><div class="section-title">Tempo de Fila por Estação</div>' + qhtml + '</div>';
+            var origemDonutHtml = renderDonut('Origem das Urgências', [
+                { label: 'Urgentes puros', value: data.kpis.urgentes_puros },
+                { label: 'Por zerou', value: data.kpis.urgentes_rotura },
+            ], ['#e63946', '#f4a261']);
+            overviewGrid.innerHTML += '<article class="panel" data-cols="3">' +
+                '<header class="panel-header"><h3 class="panel-title">Origem das Urgências</h3></header>' +
+                '<div class="panel-body">' + origemDonutHtml + '</div></article>';
         }
 
-        // 3b. TEMPO DE FILA POR ESTAÇÃO × HORA (§5.5, canvas full-width)
-        if(data.queue_time_by_hour && data.queue_time_by_hour.length) {
-            html += '<div class="panel panel-full"><div class="section-title">Tempo de Fila por Estação por Hora (min)</div><canvas id="queueHourCanvas"></canvas></div>';
-        } else {
-            html += '<div class="panel panel-full"><div class="section-title">Tempo de Fila por Estação por Hora (min)</div><div style="color:#9ca3af;text-align:center;padding:20px;">Dados insuficientes no período</div></div>';
+        var compHtml = renderComparisonPanel(data.week_comparison);
+        overviewGrid.innerHTML += '<article class="panel panel-chart" data-cols="6">' +
+            '<header class="panel-header"><h3 class="panel-title">Comparativo Atual vs Período Anterior</h3></header>' +
+            '<div class="panel-body" id="chart-comparativo-panel">' + compHtml + '</div></article>';
+
+        // Section 2: Demanda (#demand)
+        var demandGrid = document.querySelector('#demand .bento-grid');
+        demandGrid.innerHTML = '';
+
+        demandGrid.innerHTML += '<article class="panel panel-tall" data-cols="12">' +
+            '<header class="panel-header"><h3 class="panel-title">Heatmap Hora x Dia da Semana</h3><p class="panel-subtitle">Passe o mouse para ver o volume</p></header>' +
+            '<div class="panel-body">' + renderHeatmap(data.heatmap) + '</div></article>';
+
+        if (data.volume_ma && data.volume_ma.length > 1) {
+            demandGrid.innerHTML += '<article class="panel panel-chart" data-cols="7">' +
+                '<header class="panel-header"><h3 class="panel-title">Volume MA 7 dias</h3></header>' +
+                '<div class="panel-body"><canvas id="maCanvas"></canvas></div></article>';
         }
 
-        if(data.sla_by_product && data.sla_by_product.length) {
-            var slaBar = '';
-            var slaMax = 1;
-            data.sla_by_product.forEach(function(d) { if(d.breached > slaMax) slaMax = d.breached; });
-            data.sla_by_product.slice(0, 10).forEach(function(d) {
-                var pct = slaMax > 0 ? (d.breached / slaMax) * 100 : 0;
-                var color = d.pct_ok >= 90 ? '#2a9d8f' : d.pct_ok >= 70 ? '#f4a261' : '#e63946';
-                slaBar += '<div class="bar-row"><div class="bar-label" title="' + d.product_name + '">' + d.product_name + '</div><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:' + color + ';">' + (pct > 20 ? '<span>' + d.breached + ' estouros</span>' : '') + '</div></div><div class="bar-value">' + d.pct_ok + '%</div></div>';
-            });
-            html += '<div class="panel"><div class="section-title">SLA por Produto (Pareto de Estouros)</div><div style="max-height:260px;overflow-y:auto;">' + slaBar + '</div></div>';
+        if (data.weekday_seasonality && data.weekday_seasonality.length) {
+            demandGrid.innerHTML += '<article class="panel" data-cols="5">' +
+                '<header class="panel-header"><h3 class="panel-title">Sazonalidade por Dia</h3></header>' +
+                '<div class="panel-body">' + renderBars('', data.weekday_seasonality, 'dia', 'total', '#457b9d') + '</div></article>';
         }
 
-        // 4. VELOCIDADE COZINHA + TEMPO DE RETIRADA
-        if(data.speed_by_hour && data.speed_by_hour.length) {
+        demandGrid.innerHTML += '<article class="panel" data-cols="12">' +
+            '<header class="panel-header"><h3 class="panel-title">Produtos Mais Demandados</h3><p class="panel-subtitle">Top 12</p></header>' +
+            '<div class="panel-body">' + renderBars('', data.produtos.slice(0, 12), 'product_name', function(d) { return parseFloat(d.total_qty); }, '#2a9d8f') + '</div></article>';
+
+        // Section 3: SLA e Tempos (#sla)
+        var slaGrid = document.querySelector('#sla .bento-grid');
+        slaGrid.innerHTML = '';
+
+        if (data.speed_by_hour && data.speed_by_hour.length) {
             var speedBars = '';
             var speedMax = 1;
             data.speed_by_hour.forEach(function(d) { var v = parseFloat(d.avg_min); if(v > speedMax) speedMax = v; });
@@ -753,12 +764,12 @@ if (document.readyState === 'loading') {
                 var color = v <= 10 ? '#2a9d8f' : v <= 20 ? '#f4a261' : '#e63946';
                 speedBars += '<div class="bar-row"><div class="bar-label" style="width:60px;">' + d.hora + 'h</div><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:' + color + ';">' + (pct > 20 ? '<span>' + Math.round(v) + ' min</span>' : '') + '</div></div><div class="bar-value">' + Math.round(v) + 'm</div></div>';
             });
-            html += '<div class="panel"><div class="section-title">Velocidade da Cozinha por Hora (min)</div><div style="max-height:300px;overflow-y:auto;">' + speedBars + '</div><div style="margin-top:4px;font-size:10px;color:#9ca3af;"><span style="color:#2a9d8f;">Verde = &le;10min</span> | <span style="color:#f4a261;">Laranja = 10-20min</span> | <span style="color:#e63946;">Vermelho = &gt;20min</span></div></div>';
-        } else {
-            html += '<div class="panel"><div class="section-title">Velocidade da Cozinha por Hora (min)</div><div style="color:#9ca3af;text-align:center;padding:20px;">Dados insuficientes no período</div></div>';
+            slaGrid.innerHTML += '<article class="panel" data-cols="6">' +
+                '<header class="panel-header"><h3 class="panel-title">Velocidade da Cozinha por Hora</h3></header>' +
+                '<div class="panel-body"><div style="max-height:300px;overflow-y:auto;">' + speedBars + '</div><div style="margin-top:4px;font-size:10px;color:var(--c-text-muted);">Verde = &le;10min | Laranja = 10-20min | Vermelho = &gt;20min</div></div></article>';
         }
 
-        if(data.pickup_by_hour && data.pickup_by_hour.length) {
+        if (data.pickup_by_hour && data.pickup_by_hour.length) {
             var pickupBars = '';
             var pickupMax = 1;
             data.pickup_by_hour.forEach(function(d) { var v = parseFloat(d.avg_min); if(v > pickupMax) pickupMax = v; });
@@ -768,42 +779,26 @@ if (document.readyState === 'loading') {
                 var color = v <= 3 ? '#2a9d8f' : v <= 6 ? '#f4a261' : '#e63946';
                 pickupBars += '<div class="bar-row"><div class="bar-label" style="width:60px;">' + d.hora + 'h</div><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:' + color + ';">' + (pct > 20 ? '<span>' + Math.round(v) + ' min</span>' : '') + '</div></div><div class="bar-value">' + Math.round(v) + 'm</div></div>';
             });
-            html += '<div class="panel"><div class="section-title">Tempo de Retirada por Hora (min)</div><div style="max-height:300px;overflow-y:auto;">' + pickupBars + '</div><div style="margin-top:4px;font-size:10px;color:#9ca3af;"><span style="color:#2a9d8f;">Verde = &le;3min</span> | <span style="color:#f4a261;">Laranja = 3-6min</span> | <span style="color:#e63946;">Vermelho = &gt;6min</span></div></div>';
-        } else {
-            html += '<div class="panel"><div class="section-title">Tempo de Retirada por Hora (min)</div><div style="color:#9ca3af;text-align:center;padding:20px;">Dados insuficientes no período</div></div>';
+            slaGrid.innerHTML += '<article class="panel" data-cols="6">' +
+                '<header class="panel-header"><h3 class="panel-title">Tempo de Retirada por Hora</h3></header>' +
+                '<div class="panel-body"><div style="max-height:300px;overflow-y:auto;">' + pickupBars + '</div><div style="margin-top:4px;font-size:10px;color:var(--c-text-muted);">Verde = &le;3min | Laranja = 3-6min | Vermelho = &gt;6min</div></div></article>';
         }
 
-        // 5. SAZONALIDADE + COMPARATIVO SEMANAL
-        if(data.weekday_seasonality && data.weekday_seasonality.length) {
-            html += renderBars('Sazonalidade por Dia da Semana', data.weekday_seasonality, 'dia', 'total', '#457b9d');
-        }
-        html += renderComparisonPanel(data.week_comparison);
-
-        // 6. HEATMAP — Matriz hora x dia (full width)
-        html += renderHeatmap(data.heatmap);
-
-        // 7. DONUTS — Status das demandas + Origem das Urgências
-        if(data.funnel && parseInt(data.funnel.created)) {
-            var f = data.funnel;
-            html += renderDonut('Status das Demandas', [
-                { label: 'Pendentes', value: parseInt(f.pending_now || 0) },
-                { label: 'Prontas', value: Math.max(0, parseInt(f.ready || 0) - parseInt(f.retrieved || 0)) },
-                { label: 'Retiradas', value: parseInt(f.retrieved || 0) },
-                { label: 'Canceladas', value: parseInt(f.cancelled || 0) },
-            ], ['#457b9d', '#2a9d8f', '#27ae60', '#e63946']);
-            html += renderDonut('Origem das Urgências', [
-                { label: 'Urgentes puros', value: data.kpis.urgentes_puros },
-                { label: 'Por zerou', value: data.kpis.urgentes_rotura },
-            ], ['#e63946', '#f4a261']);
+        if (data.sla_by_product && data.sla_by_product.length) {
+            var slaBar = '';
+            var slaMax = 1;
+            data.sla_by_product.forEach(function(d) { if(d.breached > slaMax) slaMax = d.breached; });
+            data.sla_by_product.slice(0, 10).forEach(function(d) {
+                var pct = slaMax > 0 ? (d.breached / slaMax) * 100 : 0;
+                var color = d.pct_ok >= 90 ? '#2a9d8f' : d.pct_ok >= 70 ? '#f4a261' : '#e63946';
+                slaBar += '<div class="bar-row"><div class="bar-label" title="' + d.product_name + '">' + d.product_name + '</div><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:' + color + ';">' + (pct > 20 ? '<span>' + d.breached + ' estouros</span>' : '') + '</div></div><div class="bar-value">' + d.pct_ok + '%</div></div>';
+            });
+            slaGrid.innerHTML += '<article class="panel" data-cols="6">' +
+                '<header class="panel-header"><h3 class="panel-title">SLA por Produto (Pareto de Estouros)</h3></header>' +
+                '<div class="panel-body"><div style="max-height:260px;overflow-y:auto;">' + slaBar + '</div></div></article>';
         }
 
-        // 8. VOLUME + MÉDIA MÓVEL (canvas, full-width)
-        if(data.volume_ma && data.volume_ma.length > 1) {
-            html += '<div class="panel panel-full"><div class="section-title">Volume de Demandas — Média Móvel 7 dias</div><canvas id="maCanvas"></canvas></div>';
-        }
-
-        // 9. TEMPO MÉDIO DE PREPARO POR PRODUTO
-        if(data.qty_vs_time && data.qty_vs_time.length > 2) {
+        if (data.qty_vs_time && data.qty_vs_time.length > 2) {
             var productMap = {};
             data.qty_vs_time.forEach(function(d) {
                 var p = d.product_name;
@@ -816,7 +811,6 @@ if (document.readyState === 'loading') {
                 return { product_name: d.name, avg_min: d.totalMin / d.count, sla_min: d.sla, total_qty: d.totalQty, pedidos: d.count };
             });
             aggregated.sort(function(a,b) { return b.avg_min - a.avg_min; });
-
             var qtyBars = '';
             var qtyMax = 1;
             aggregated.forEach(function(d) { if(d.avg_min > qtyMax) qtyMax = d.avg_min; });
@@ -825,13 +819,39 @@ if (document.readyState === 'loading') {
                 var sla = d.sla_min;
                 var pct = qtyMax > 0 ? (v / qtyMax) * 100 : 0;
                 var color = v <= sla ? '#2a9d8f' : v <= sla * 1.5 ? '#f4a261' : '#e63946';
-                qtyBars += '<div class="bar-row"><div class="bar-label" style="width:130px;" title="' + d.product_name + ' | média de ' + d.pedidos + ' pedidos">' + d.product_name.substring(0,16) + '</div><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:' + color + ';">' + (pct > 20 ? '<span>' + v + ' min</span>' : '') + '</div></div><div class="bar-value" style="width:100px;">' + v + 'm / SLA ' + sla + '</div></div>';
+                qtyBars += '<div class="bar-row"><div class="bar-label" style="width:130px;" title="' + d.product_name + '">' + d.product_name.substring(0,16) + '</div><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:' + color + ';">' + (pct > 20 ? '<span>' + v + ' min</span>' : '') + '</div></div><div class="bar-value" style="width:100px;">' + v + 'm / SLA ' + sla + '</div></div>';
             });
-            html += '<div class="panel"><div class="section-title">Tempo Médio de Preparo por Produto</div><div style="max-height:300px;overflow-y:auto;">' + qtyBars + '</div><div style="margin-top:4px;font-size:10px;color:#9ca3af;">Média por produto | <span style="color:#2a9d8f;">Verde = dentro do SLA</span> | <span style="color:#f4a261;">Laranja = até 50% acima</span> | <span style="color:#e63946;">Vermelho = estouro grave</span></div></div>';
+            slaGrid.innerHTML += '<article class="panel" data-cols="6">' +
+                '<header class="panel-header"><h3 class="panel-title">Tempo Médio de Preparo por Produto</h3><p class="panel-subtitle">vs SLA esperado</p></header>' +
+                '<div class="panel-body"><div style="max-height:300px;overflow-y:auto;">' + qtyBars + '</div><div style="margin-top:4px;font-size:10px;color:var(--c-text-muted);">Verde = dentro do SLA | Laranja = até 50% acima | Vermelho = estouro grave</div></div></article>';
         }
 
-        // 10. OCUPAÇÃO POR TURNO + ROTURAS POR PRODUTO
-        if(data.occupancy_by_shift && data.occupancy_by_shift.length) {
+        if (data.queue_time_by_station && data.queue_time_by_station.length) {
+            var qhtml = '';
+            var qmax = 1;
+            data.queue_time_by_station.forEach(function(d) {
+                var w = parseFloat(d.avg_wait_min), c = parseFloat(d.avg_cooking_min);
+                if(w + c > qmax) qmax = w + c;
+            });
+            data.queue_time_by_station.forEach(function(d) {
+                var w = parseFloat(d.avg_wait_min), c = parseFloat(d.avg_cooking_min);
+                var wp = qmax > 0 ? (w / qmax) * 100 : 0;
+                var cp = qmax > 0 ? (c / qmax) * 100 : 0;
+                qhtml += '<div class="bar-row"><div class="bar-label">' + d.estacao + '</div><div class="bar-track" style="display:flex;"><div class="bar-fill" style="width:' + cp + '%;background:#2a9d8f;height:100%;"><span>' + c + 'm</span></div><div class="bar-fill" style="width:' + wp + '%;background:#f4a261;height:100%;"><span>' + w + 'm</span></div></div><div class="bar-value">' + d.count + '</div></div>';
+            });
+            qhtml += '<div style="margin-top:6px;font-size:10px;color:var(--c-text-muted);">Verde = preparo | Laranja = espera fila</div>';
+            slaGrid.innerHTML += '<article class="panel" data-cols="4">' +
+                '<header class="panel-header"><h3 class="panel-title">Tempo de Fila por Estação</h3></header>' +
+                '<div class="panel-body">' + qhtml + '</div></article>';
+        }
+
+        if (data.queue_time_by_hour && data.queue_time_by_hour.length) {
+            slaGrid.innerHTML += '<article class="panel panel-chart" data-cols="4">' +
+                '<header class="panel-header"><h3 class="panel-title">Fila por Estação × Hora</h3></header>' +
+                '<div class="panel-body"><canvas id="queueHourCanvas"></canvas></div></article>';
+        }
+
+        if (data.occupancy_by_shift && data.occupancy_by_shift.length) {
             var occBars = '';
             data.occupancy_by_shift.forEach(function(d) {
                 var ocupPct = Math.round((100 - parseFloat(d.pct_ociosa || 0)) * 10) / 10;
@@ -839,10 +859,20 @@ if (document.readyState === 'loading') {
                 var color = ocupPct < 40 ? '#2a9d8f' : ocupPct < 70 ? '#f4a261' : '#e63946';
                 occBars += '<div class="bar-row"><div class="bar-label">' + d.turno + '</div><div class="bar-track" style="display:flex;"><div class="bar-fill" style="width:' + ocupPct + '%;background:' + color + ';height:100%;">' + (ocupPct > 15 ? '<span>' + ocupPct + '% ocupado</span>' : '') + '</div><div class="bar-fill" style="width:' + ociosaPct + '%;background:#e5e7eb;height:100%;">' + (ociosaPct > 15 ? '<span style="color:#6b7280;">' + ociosaPct + '% ociosa</span>' : '') + '</div></div><div class="bar-value" style="width:80px;">' + ocupPct + '%</div></div>';
             });
-            html += '<div class="panel"><div class="section-title">Ocupação por Turno (%)</div><div style="max-height:200px;overflow-y:auto;">' + occBars + '</div><div style="margin-top:4px;font-size:10px;color:#9ca3af;">Barra colorida = % ocupado | Cinza = % ocioso</div></div>';
+            slaGrid.innerHTML += '<article class="panel" data-cols="4">' +
+                '<header class="panel-header"><h3 class="panel-title">Ocupação por Turno</h3></header>' +
+                '<div class="panel-body"><div style="max-height:200px;overflow-y:auto;">' + occBars + '</div><div style="margin-top:4px;font-size:10px;color:var(--c-text-muted);">Barra colorida = % ocupado | Cinza = % ocioso</div></div></article>';
         }
 
-        if(data.scatter_roturas && data.scatter_roturas.length > 0) {
+        // Section 4: Diagnóstico (#diagnosis)
+        var diagnosisGrid = document.querySelector('#diagnosis .bento-grid');
+        diagnosisGrid.innerHTML = '';
+
+        diagnosisGrid.innerHTML += '<article class="panel" data-cols="4">' +
+            '<header class="panel-header"><h3 class="panel-title">Motivos de Cancelamento</h3><p class="panel-subtitle">Top 10</p></header>' +
+            '<div class="panel-body">' + renderBars('', (data.cancel_reasons || []).slice(0, 10), 'label', 'total', '#e63946') + '</div></article>';
+
+        if (data.scatter_roturas && data.scatter_roturas.length > 0) {
             var rotBars = '';
             var rotMax = 1;
             data.scatter_roturas.forEach(function(d) { var v = parseInt(d.total_roturas); if(v > rotMax) rotMax = v; });
@@ -851,14 +881,21 @@ if (document.readyState === 'loading') {
                 var pct = rotMax > 0 ? (v / rotMax) * 100 : 0;
                 rotBars += '<div class="bar-row"><div class="bar-label" title="' + d.product_name + '">' + d.product_name.substring(0,14) + '</div><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:#e63946;">' + (pct > 20 ? '<span>' + v + ' zerou</span>' : '') + '</div></div><div class="bar-value">' + v + ' / ' + d.total_demandas + ' ped.</div></div>';
             });
-            if(rotBars) {
-                html += '<div class="panel"><div class="section-title">Zerados por Produto</div><div style="max-height:220px;overflow-y:auto;">' + rotBars + '</div></div>';
+            if (rotBars) {
+                diagnosisGrid.innerHTML += '<article class="panel" data-cols="4">' +
+                    '<header class="panel-header"><h3 class="panel-title">Zerados por Produto</h3><p class="panel-subtitle">Top 10</p></header>' +
+                    '<div class="panel-body"><div style="max-height:220px;overflow-y:auto;">' + rotBars + '</div></div></article>';
             }
         }
 
-        html += '</div>'; // fim do grid unificado
+        diagnosisGrid.innerHTML += '<article class="panel" data-cols="4">' +
+            '<header class="panel-header"><h3 class="panel-title">Trocas de Itens do Cardápio</h3></header>' +
+            '<div class="panel-body">' + renderReplacements(data.replacements) + '</div></article>';
 
-        return html;
+        // Section 5: Performance (#performance)
+        var perfGrid = document.querySelector('#performance .bento-grid');
+        perfGrid.innerHTML = '<article class="panel" data-cols="12" id="performance-scores">' +
+            '<div class="panel-body" style="display:flex;align-items:center;justify-content:center;color:var(--c-text-muted);padding:var(--sp-5);">Carregando notas...</div></article>';
     }
 
     function drawAllCharts(data) {
@@ -1336,24 +1373,23 @@ if (document.readyState === 'loading') {
             var pr = filter === 'today' ? 'week' : (filter === 'month' ? 'month' : 'week');
             var perfUrl = '/api/v1/analytics/performance?range=' + pr;
             api(perfUrl).then(function(perf) {
-                var content = document.getElementById('content');
-                if(!content) return;
-                var oldPerf = content.querySelectorAll('.score-grid, .score-detail-panel, #perfTrendPanel, #perfHeader');
-                for(var i=0; i<oldPerf.length; i++) oldPerf[i].remove();
+                var perfGrid = document.querySelector('#performance .bento-grid');
+                if(!perfGrid) return;
 
-                var html = '<div id="perfHeader" class="perf-header"><div class="section-title">Desempenho da Equipe</div>' +
-                    '<button id="btnCriteria" class="btn-criteria" type="button">Como são calculadas as notas?</button></div>';
-            html += '<div style="margin-top:4px;">' + renderScoreCards(perf) + '</div>';
-            html += renderPerfDetractors(perf, perf.detractor_dates);
-            if(perf.history && perf.history.length > 1) {
-                var label = pr === 'week' ? 'Últimos 7 dias' : 'Últimos 30 dias';
-                html += '<div class="panels" id="perfTrendPanel"><div class="panel panel-full"><div class="section-title">Evolução das Notas — ' + label + '</div><canvas id="perfTrendCanvas"></canvas></div></div>';
-            }
-                content.insertAdjacentHTML('beforeend', html);
+                var html = '<article class="panel" data-cols="12">' +
+                    '<header class="panel-header"><div style="display:flex;justify-content:space-between;align-items:center;width:100%;"><h3 class="panel-title">Desempenho da Equipe</h3>' +
+                    '<button id="btnCriteria" class="btn-criteria" type="button">Como são calculadas as notas?</button></div></header>' +
+                    '<div class="panel-body">' + renderScoreCards(perf) + '</div></article>';
+                html += renderPerfDetractors(perf, perf.detractor_dates);
+                if(perf.history && perf.history.length > 1) {
+                    var label = pr === 'week' ? 'Últimos 7 dias' : 'Últimos 30 dias';
+                    html += '<article class="panel panel-chart" data-cols="12" id="perfTrendPanel"><header class="panel-header"><h3 class="panel-title">Evolução das Notas — ' + label + '</h3></header><div class="panel-body"><canvas id="perfTrendCanvas"></canvas></div></article>';
+                }
+                perfGrid.innerHTML = html;
 
-                if(!content._perfClickSet) {
-                    content._perfClickSet = true;
-                    content.addEventListener('click', function(e) {
+                if(!perfGrid._perfClickSet) {
+                    perfGrid._perfClickSet = true;
+                    perfGrid.addEventListener('click', function(e) {
                         if(e.target && e.target.id === 'btnCriteria') {
                             var cm = document.getElementById('criteriaModal');
                             if(cm) cm.style.display = 'flex';
@@ -1361,11 +1397,11 @@ if (document.readyState === 'loading') {
                         }
                         var card = e.target.closest('.score-card');
                         if(!card) return;
-                        var all = content.querySelectorAll('.score-card');
+                        var all = perfGrid.querySelectorAll('.score-card');
                         for(var i=0; i<all.length; i++) all[i].classList.remove('selected');
                         card.classList.add('selected');
                         var entity = card.dataset.entity;
-                        var panels = content.querySelectorAll('.score-detail-panel');
+                        var panels = document.querySelectorAll('.score-detail-panel');
                         for(var i=0; i<panels.length; i++) {
                             panels[i].style.display = panels[i].dataset.entity === entity ? '' : 'none';
                         }
@@ -1429,13 +1465,12 @@ if (document.readyState === 'loading') {
 
         api('/api/v1/analytics/dashboard?' + params).then(function(data) {
             state.lastData = data;
-            // Populate KPI strip with new hero + secondary layout
+            // Step A: KPI strip (from Task 5.3)
             var kpiEl = document.getElementById('kpiStrip');
             if (kpiEl) {
                 kpiEl.innerHTML = renderKpis(data.kpis, data.trend);
-                // Render sparklines after DOM is populated
+                // Render sparklines
                 document.querySelectorAll('.kpi-sparkline[data-sparkline-key]').forEach(function(el) {
-                    var key = el.getAttribute('data-sparkline-key');
                     var trendData = (data.trend || []).slice(-14).map(function(t) { return t.total || 0; });
                     if (trendData.length < 2) return;
                     var labels = trendData.map(function(_, i) { return i; });
@@ -1474,18 +1509,21 @@ if (document.readyState === 'loading') {
                     });
                 });
             }
+
+            // Step B: Build 5 sections (new Phase 6)
             try {
-                document.getElementById('content').innerHTML = buildContent(data);
+                buildContent(data);
             } catch (e) {
                 console.error('Erro ao construir dashboard:', e);
-                document.getElementById('content').innerHTML = '<div style="text-align:center;padding:60px;color:#e63946;">Erro ao renderizar: ' + (e.message || 'Dados inesperados') + '</div>';
+                showToast('Erro ao renderizar dashboard: ' + (e.message || 'Dados inesperados'), 'error');
             }
             document.getElementById('loading').style.display = 'none';
-            document.getElementById('content').style.display = 'block';
 
+            // Step C: Enable export
             var btnExp = document.getElementById('btnExport');
             if (btnExp) { btnExp.disabled = false; btnExp.title = ''; }
 
+            // Step D: Wire comparison chart indicator
             var cmpSel = document.getElementById('cmpIndicatorSelect');
             if (cmpSel) {
                 if (cmpSel._ch) cmpSel.removeEventListener('change', cmpSel._ch);
@@ -1495,6 +1533,7 @@ if (document.readyState === 'loading') {
                 drawComparisonChart(data.week_comparison, cmpIndicatorKey);
             }
 
+            // Step E: Draw canvas charts (existing drawAllCharts + loadPerformance)
             requestAnimationFrame(function() {
                 requestAnimationFrame(function() {
                     drawAllCharts(data);
@@ -1503,8 +1542,11 @@ if (document.readyState === 'loading') {
             });
         }).catch(function(err) {
             document.getElementById('loading').style.display = 'none';
-            document.getElementById('content').style.display = 'block';
-            document.getElementById('content').innerHTML = '<div style="text-align:center;padding:60px;color:#e63946;">Erro ao carregar: ' + (err.message || 'Tente novamente') + '</div>';
+            // Show error in overview section
+            var overviewGrid = document.querySelector('#overview .bento-grid');
+            if (overviewGrid) {
+                overviewGrid.innerHTML = '<article class="panel" data-cols="12" style="text-align:center;padding:var(--sp-8);color:var(--c-danger);">Erro ao carregar: ' + (err.message || 'Tente novamente') + '</article>';
+            }
             console.error(err);
         });
     }
