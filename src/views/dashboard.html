@@ -258,7 +258,46 @@
 </div>
 <div class="layout">
     <aside class="side-nav" id="sideNav">
-        <!-- populated in Phase 3 -->
+        <nav aria-label="Seções do dashboard">
+            <ul role="list">
+                <li>
+                    <a href="#top" data-section="top" aria-current="false">
+                        <svg class="icon" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1h3a1 1 0 001-1V10"/></svg>
+                        <span class="label">Topo</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#overview" data-section="overview" aria-current="false">
+                        <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                        <span class="label">Visão Geral</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#demand" data-section="demand" aria-current="false">
+                        <svg class="icon" viewBox="0 0 24 24"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg>
+                        <span class="label">Demanda</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#sla" data-section="sla" aria-current="false">
+                        <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        <span class="label">SLA e Tempos</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#diagnosis" data-section="diagnosis" aria-current="false">
+                        <svg class="icon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        <span class="label">Diagnóstico</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#performance" data-section="performance" aria-current="false">
+                        <svg class="icon" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        <span class="label">Performance</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
     </aside>
     <main class="dashboard-main">
         <a id="top"></a>
