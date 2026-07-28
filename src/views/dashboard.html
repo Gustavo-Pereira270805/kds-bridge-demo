@@ -478,7 +478,7 @@
     function renderReplacements(rows) {
         var title = '<div class="section-title">Trocas de itens do cardápio</div>';
         if(!rows || !rows.length) {
-            return '<div class="panel">' + title + '<div style="color:#9ca3af;text-align:center;padding:20px;font-size:13px;">Nenhuma troca registrada no período</div></div>';
+            return '<div class="empty-state"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M10 24h28M14 14l-4 10 4 10M34 14l4 10-4 10"></path></svg><h4>Sem dados para o período selecionado</h4><p>Tente outro intervalo de datas.</p><button type="button" class="btn btn-ghost" onclick="document.getElementById(\'periodToday\').click()">Voltar para hoje</button></div>';
         }
         var max = 0;
         rows.forEach(function(r) { var v = parseFloat(r.replacement_pct) || 0; if(v > max) max = v; });

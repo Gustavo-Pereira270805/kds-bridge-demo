@@ -314,7 +314,11 @@
     <div class="section">
         <h3>⏳ Demandas Ativas</h3>
         <div id="demandList" class="demand-list">
-            <div class="empty-state">Nenhuma demanda ativa no momento.</div>
+            <div class="empty-state">
+              <svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20"></circle><path d="M16 24l6 6 12-14"></path></svg>
+              <h4>Nenhuma demanda ativa no momento</h4>
+              <p>Use o formulário acima para registrar uma nova demanda.</p>
+            </div>
         </div>
     </div>
 
@@ -419,7 +423,7 @@
         if (!container) return;
         var active = demands.filter(function(d) { return d.status === 'pending' || d.status === 'ready'; });
         if (active.length === 0) {
-            container.innerHTML = '<div class="empty-state">Nenhuma demanda ativa no momento.</div>';
+            container.innerHTML = '<div class="empty-state"><svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20"></circle><path d="M16 24l6 6 12-14"></path></svg><h4>Nenhuma demanda ativa no momento</h4><p>Use o formulário acima para registrar uma nova demanda.</p></div>';
             return;
         }
         active.sort(function(a, b) {

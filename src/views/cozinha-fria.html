@@ -443,7 +443,7 @@
             });
 
             if (sortedPending.length === 0 && ready.length === 0) {
-                grid.innerHTML = '<div class="empty-state">Nenhuma demanda ativa</div>';
+                grid.innerHTML = '<div class="empty-state"><svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20"></circle><path d="M16 24l6 6 12-14"></path></svg><h4>Nenhuma demanda ativa</h4><p>Sistema operando nominalmente.</p></div>';
                 readyStrip.innerHTML = '';
                 flashIds.clear();
                 return;

@@ -363,7 +363,7 @@
             lastDemands = demands || [];
             var tbody = document.getElementById('historyTableBody');
             if (!lastDemands.length) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Nenhuma demanda registrada ainda.</td></tr>';
+                tbody.innerHTML = '<div class="empty-state"><svg viewBox="0 0 48 48" aria-hidden="true"><rect x="10" y="14" width="28" height="22" rx="2"></rect><path d="M16 20h16M16 26h12"></path></svg><h4>Nenhuma demanda registrada ainda</h4><p>Demandas aparecem aqui assim que forem criadas na cozinha ou no salão.</p></div>';
                 return;
             }
             tbody.innerHTML = lastDemands.map(function(d) {
