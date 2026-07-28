@@ -116,6 +116,17 @@
             .panel { padding: 16px; }
             .row { flex-direction: column; align-items: stretch; }
         }
+
+        .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+                          backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+                          z-index: var(--z-modal); display: flex;
+                          align-items: center; justify-content: center; }
+        .modal-confirm { background: var(--c-surface); padding: var(--sp-5);
+                          border-radius: var(--radius-xl); max-width: 420px;
+                          box-shadow: var(--shadow-elevated); }
+        .modal-confirm h3 { margin: 0 0 var(--sp-3); color: var(--c-text); }
+        .modal-confirm p { color: var(--c-text-muted); margin: 0 0 var(--sp-5); }
+        .modal-actions { display: flex; gap: var(--sp-3); justify-content: flex-end; }
     </style>
 </head>
 <body>
@@ -249,6 +260,34 @@ function api(url, opts) {
     });
 }
 
+function confirmDialog(message) {
+  return new Promise(function(resolve) {
+    var backdrop = document.getElementById('confirmBackdrop');
+    var msg = document.getElementById('confirmMessage');
+    var ok = document.getElementById('confirmOk');
+    var cancel = document.getElementById('confirmCancel');
+    msg.textContent = message;
+    backdrop.style.display = 'flex';
+    ok.focus();
+    function cleanup() {
+      backdrop.style.display = 'none';
+      ok.removeEventListener('click', onOk);
+      cancel.removeEventListener('click', onCancel);
+      backdrop.removeEventListener('click', onBackdrop);
+      document.removeEventListener('keydown', onKey);
+    }
+    function onOk()    { cleanup(); resolve(true); }
+    function onCancel(){ cleanup(); resolve(false); }
+    function onBackdrop(e) { if (e.target === backdrop) { cleanup(); resolve(false); } }
+    function onKey(e) { if (e.key === 'Escape') { cleanup(); resolve(false); }
+                       if (e.key === 'Enter')  { cleanup(); resolve(true); } }
+    ok.addEventListener('click', onOk);
+    cancel.addEventListener('click', onCancel);
+    backdrop.addEventListener('click', onBackdrop);
+    document.addEventListener('keydown', onKey);
+  });
+}
+
 var tokens = localStorage.getItem('admin_token') || '';
 if (tokens) {
     api('/api/v1/auth/me', { headers: { Authorization: 'Bearer ' + tokens } }).catch(function() {
@@ -331,8 +370,8 @@ function toggleProduct(id) {
     api('/api/v1/products/' + id, { method: 'PATCH' }).then(function() { loadProducts(); }).catch(function() {});
 }
 
-function deleteProduct(id, name) {
-    if (!confirm('Excluir "' + name + '"?')) return;
+async function deleteProduct(id, name) {
+    if (!await confirmDialog('Excluir "' + name + '"?')) return;
     api('/api/v1/admin/products/' + id, { method: 'DELETE' }).then(function() { loadProducts(); toast('Produto excluído', true); }).catch(function(e) { toast(e.message, false); });
 }
 
@@ -519,8 +558,8 @@ function saveUnit(id) {
       .catch(function(e) { toast(e.message, false); });
 }
 
-function deleteUnit(id, label) {
-    if (!confirm('Excluir unidade "' + label + '"?')) return;
+async function deleteUnit(id, label) {
+    if (!await confirmDialog('Excluir unidade "' + label + '"?')) return;
     api('/api/v1/admin/units/' + id, { method: 'DELETE' })
         .then(function() { loadUnitsPanel(); toast('Unidade excluída', true); })
         .catch(function(e) { toast(e.message, false); });
@@ -567,8 +606,8 @@ function toggleReason(id) {
     api('/api/v1/admin/cancel-reasons/' + id, { method: 'PATCH' }).then(function() { loadReasons(); }).catch(function(e) { toast(e.message, false); });
 }
 
-function deleteReason(id) {
-    if (!confirm('Excluir este motivo?')) return;
+async function deleteReason(id) {
+    if (!await confirmDialog('Excluir este motivo?')) return;
     api('/api/v1/admin/cancel-reasons/' + id, { method: 'DELETE' }).then(function() { loadReasons(); toast('Motivo excluído', true); }).catch(function(e) { toast(e.message, false); });
 }
 
@@ -587,5 +626,16 @@ document.getElementById('reasonsTableBody').addEventListener('click', function(e
 loadStations();
 loadProducts();
 </script>
+
+<div class="modal-backdrop" id="confirmBackdrop" style="display:none;">
+  <div class="modal-confirm" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <h3 id="confirmTitle">Confirmar exclusão</h3>
+    <p id="confirmMessage"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-secondary" id="confirmCancel">Cancelar</button>
+      <button type="button" class="btn btn-danger" id="confirmOk">Excluir</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
