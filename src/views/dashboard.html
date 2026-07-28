@@ -997,7 +997,19 @@ if (document.readyState === 'loading') {
                     y: { beginAtZero: true, title: { display: true, text: 'demandas' } },
                     y1: { position: 'right', beginAtZero: true, max: (indicator === 'avg_time_min' ? undefined : 100), title: { display: true, text: indicator === 'avg_time_min' ? 'min' : '%' }, grid: { display: false } }
                 }
-            }
+            },
+            plugins: [{
+                id: 'lineOnTop',
+                afterDatasetsDraw: function(chart) {
+                    var meta = chart.getDatasetMeta(2);
+                    if (meta && meta.type === 'line') {
+                        var ctx = chart.ctx;
+                        ctx.save();
+                        meta.controller.draw();
+                        ctx.restore();
+                    }
+                }
+            }]
         });
     }
 
