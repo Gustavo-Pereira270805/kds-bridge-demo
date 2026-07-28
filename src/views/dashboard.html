@@ -313,6 +313,19 @@
     var socket = io();
     socket.emit('identify', 'gerente');
 
+    function showToast(msg, kind /* 'error' | 'warn' | 'info' */) {
+        var t = document.createElement('div');
+        t.className = 'toast toast-' + (kind || 'info');
+        t.setAttribute('role', 'alert');
+        t.textContent = msg;
+        document.body.appendChild(t);
+        var duration = (kind === 'error') ? 12000 : 4000;
+        setTimeout(function() {
+            t.style.opacity = '0';
+            setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 250);
+        }, duration);
+    }
+
     function api(u) { return fetch(u).then(function(r) { if(!r.ok) return r.json().then(function(e){throw new Error(e.error)}); return r.json(); }); }
 
     function renderKpis(kpis) {
@@ -1277,12 +1290,12 @@
         btnApply.addEventListener('click', function() {
             var from = document.getElementById('dateFrom').value;
             var to = document.getElementById('dateTo').value || from;
-            if (!from) { alert('Selecione a data de in\u00EDcio.'); return; }
+            if (!from) { showToast('Selecione a data de in\u00EDcio.', 'warn'); return; }
             var d1 = new Date(from + 'T00:00:00'), d2 = new Date(to + 'T00:00:00');
-            if (isNaN(d1.getTime()) || isNaN(d2.getTime())) { alert('Datas inv\u00E1lidas.'); return; }
-            if (d1 > d2) { alert('A data de in\u00EDcio deve ser anterior \u00E0 data final.'); return; }
+            if (isNaN(d1.getTime()) || isNaN(d2.getTime())) { showToast('Datas inv\u00E1lidas.', 'warn'); return; }
+            if (d1 > d2) { showToast('A data de in\u00EDcio deve ser anterior \u00E0 data final.', 'warn'); return; }
             var diff = Math.round((d2 - d1) / 86400000);
-            if (diff > 31) { alert('O per\u00EDodo m\u00E1ximo \u00E9 de 31 dias.'); return; }
+            if (diff > 31) { showToast('O per\u00EDodo m\u00E1ximo \u00E9 de 31 dias.', 'warn'); return; }
             document.querySelectorAll('.period-btn').forEach(function(b) { b.classList.remove('active'); });
             loadDashboard({ from: from, to: to });
         });
@@ -1320,7 +1333,7 @@
 
     if (btnExport && exportModal) {
         btnExport.addEventListener('click', function() {
-            if (!state.lastData) { alert('Carregue os dados primeiro.'); return; }
+            if (!state.lastData) { showToast('Carregue os dados primeiro.', 'warn'); return; }
             updateExportWarn();
             if (exportProgress) exportProgress.style.display = 'none';
             exportModal.style.display = 'flex';
@@ -1429,13 +1442,13 @@
                 addCanvasToPdf(canvas, true);
             }
             pdf.save('dashboard_' + from + '_' + to + '.pdf');
-        } catch (e) { alert('Erro ao gerar PDF: ' + e.message); console.error(e); }
+        } catch (e) { showToast('Erro ao gerar PDF: ' + e.message, 'error'); console.error(e); }
         finally { state.exporting = false; if (exportModal) exportModal.style.display = 'none'; if (exportProgress) exportProgress.style.display = 'none'; }
     }
 
     async function exportExcel(from, to, byDay) {
         try {
-            if (!window.XLSX) { alert('Biblioteca XLSX n\u00E3o carregada.'); state.exporting = false; return; }
+            if (!window.XLSX) { showToast('Biblioteca XLSX n\u00E3o carregada.', 'error'); state.exporting = false; return; }
             var wb = XLSX.utils.book_new();
             var data = state.lastData;
             if (!data) { throw new Error('Sem dados carregados'); }
@@ -1445,7 +1458,7 @@
                 var toD = new Date(to + 'T00:00:00');
                 var days = [];
                 for (var d = new Date(fromD); d <= toD; d.setDate(d.getDate() + 1)) { days.push(new Date(d)); }
-                if (days.length > 31) { alert('Por dia limitado a 31 dias.'); state.exporting = false; if (exportProgress) exportProgress.style.display = 'none'; return; }
+                if (days.length > 31) { showToast('Por dia limitado a 31 dias.', 'warn'); state.exporting = false; if (exportProgress) exportProgress.style.display = 'none'; return; }
                 var sheetsAdded = 0;
                 for (var i = 0; i < days.length; i++) {
                     var ds = days[i].toISOString().split('T')[0];
@@ -1472,7 +1485,7 @@
                     }
                 }
                 if (exportProgress) exportProgress.textContent = 'Finalizando Excel...';
-                if (sheetsAdded === 0) { alert('Nenhum dado encontrado para exporta\u00E7\u00E3o.'); state.exporting = false; if (exportProgress) exportProgress.style.display = 'none'; return; }
+                if (sheetsAdded === 0) { showToast('Nenhum dado encontrado para exporta\u00E7\u00E3o.', 'warn'); state.exporting = false; if (exportProgress) exportProgress.style.display = 'none'; return; }
             } else {
                 // Consolidated
                 var kpiArr = [['M\u00E9trica', 'Valor']];
@@ -1498,7 +1511,7 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-        } catch (e) { alert('Erro ao gerar Excel: ' + e.message); console.error(e); }
+        } catch (e) { showToast('Erro ao gerar Excel: ' + e.message, 'error'); console.error(e); }
         finally { state.exporting = false; if (exportModal) exportModal.style.display = 'none'; if (exportProgress) exportProgress.style.display = 'none'; }
     }
 
