@@ -139,3 +139,80 @@ body { background: var(--c-bg-light); }
   margin: 0; margin-right: var(--sp-4);
   white-space: nowrap;
 }
+
+/* === Period pill group === */
+.period-pill-group {
+  display: inline-flex;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-light);
+  border-radius: var(--radius-pill);
+  padding: 3px;
+  gap: 2px;
+}
+.period-btn {
+  background: transparent;
+  border: 0;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: var(--fw-medium);
+  color: var(--c-text-muted);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease-out),
+              color var(--t-fast) var(--ease-out);
+}
+.period-btn:hover { background: rgba(29,53,87,.06); color: var(--c-text); }
+.period-btn[aria-pressed="true"] {
+  background: var(--c-primary);
+  color: var(--c-text-invert);
+}
+
+/* === Date range === */
+.date-range {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  font-size: 13px;
+}
+.date-range input[type="date"],
+.station-select {
+  height: 36px;
+  padding: 0 var(--sp-3);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  color: var(--c-text);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-light);
+  border-radius: var(--radius-md);
+  transition: border-color var(--t-fast) var(--ease-out);
+}
+.date-range input[type="date"]:focus,
+.station-select:focus {
+  border-color: var(--c-primary-tint);
+  outline: 0;
+}
+.date-range > span { color: var(--c-text-muted); }
+.btn-apply {
+  height: 36px;
+  padding: 0 var(--sp-4);
+  font-size: 13px;
+  font-weight: var(--fw-semi);
+  background: var(--c-primary);
+  color: var(--c-text-invert);
+  border: 0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: filter var(--t-fast) var(--ease-out);
+}
+.btn-apply:hover { filter: brightness(1.1); }
+
+/* === Last updated badge === */
+.last-updated {
+  font-size: 12px;
+  color: var(--c-text-muted);
+  display: inline-flex; align-items: center; gap: var(--sp-1);
+}
+.last-updated .dot {
+  width: 8px; height: 8px;
+  background: var(--c-accent-warm);
+  border-radius: 50%;
+  display: inline-block;
+}
