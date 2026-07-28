@@ -19,7 +19,7 @@
         .header {
             display: flex; justify-content: space-between; align-items: center;
             flex-wrap: wrap; gap: 12px; margin: -20px -20px 24px -20px;
-            background: #1d3557; color: white; padding: 16px 24px;
+            background: var(--c-primary); color: white; padding: 16px 24px;
             border-radius: 0 0 16px 16px;
         }
         .header h1 { font-size: 22px; font-weight: 700; }
@@ -29,7 +29,7 @@
             font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
             background: transparent; color: rgba(255,255,255,0.75); transition: all 0.2s;
         }
-        .period-btn.active { background: white; color: #1d3557; }
+        .period-btn.active { background: white; color: var(--c-primary); }
         .btn-back {
             padding: 10px 20px; background: #e63946; color: white; border: none; border-radius: 10px;
             font-size: 14px; font-weight: 700; cursor: pointer; text-decoration: none;
@@ -47,9 +47,9 @@
             animation: fadeIn 0.4s ease;
         }
         .kpi-label { font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
-        .kpi-value { font-size: 26px; font-weight: 800; margin: 4px 0; }
+        .kpi-value { font-size: 26px; font-weight: 800; margin: 4px 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
         .kpi-sub { font-size: 11px; color: #9ca3af; }
-        .c-green { color: #2a9d8f; } .c-red { color: #e63946; } .c-orange { color: #f4a261; } .c-blue { color: #1d3557; } .c-cyan { color: #457b9d; }
+        .c-green { color: var(--c-accent-warm); } .c-red { color: var(--c-danger); } .c-orange { color: var(--c-warn); } .c-blue { color: var(--c-primary); } .c-cyan { color: var(--c-primary-tint); }
 
         .section-title {
             font-size: 16px; font-weight: 700; color: #1d3557;
@@ -111,13 +111,13 @@
         .score-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
         .score-card.selected { box-shadow: 0 0 0 2px #1d3557, 0 4px 16px rgba(29,53,87,0.2); }
         .score-entity { font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
-        .score-value { font-size: 38px; font-weight: 800; line-height: 1; margin: 4px 0; }
+        .score-value { font-size: 38px; font-weight: 800; line-height: 1; margin: 4px 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
         .score-stars { font-size: 13px; letter-spacing: 2px; }
         .score-sub { font-size: 10px; color: #9ca3af; margin-top: 2px; }
-        .score-great { color: #2a9d8f; }
-        .score-good  { color: #457b9d; }
-        .score-warn  { color: #f4a261; }
-        .score-bad   { color: #e63946; }
+        .score-great { color: var(--c-accent-warm); }
+        .score-good  { color: var(--c-primary-tint); }
+        .score-warn  { color: var(--c-warn); }
+        .score-bad   { color: var(--c-danger); }
         .score-detail-toggle {
             display: block; margin: 0 auto; margin-top: 10px;
             font-size: 11px; font-weight: 600; color: #457b9d;
@@ -223,10 +223,10 @@
     <h1>Dashboard Analítico</h1>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
         <div class="period-selector" id="periodSelector">
-            <button class="period-btn active" data-range="today">Hoje</button>
-            <button class="period-btn" data-range="yesterday">Ontem</button>
-            <button class="period-btn" data-range="week">Últimos 7 dias</button>
-            <button class="period-btn" data-range="month">Últimos 30 dias</button>
+            <button class="period-btn btn btn-ghost active" data-range="today">Hoje</button>
+            <button class="period-btn btn btn-ghost" data-range="yesterday">Ontem</button>
+            <button class="period-btn btn btn-ghost" data-range="week">Últimos 7 dias</button>
+            <button class="period-btn btn btn-ghost" data-range="month">Últimos 30 dias</button>
         </div>
         <div class="date-controls">
             <label for="dateFrom">De</label>
