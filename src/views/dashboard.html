@@ -412,6 +412,65 @@
 </div>
 
 <script>
+// === Chart.js setup (used by KPI sparklines and Phase 7 charts) ===
+const PALETTE = {
+  primary: getComputedStyle(document.documentElement).getPropertyValue('--c-primary').trim(),
+  primaryTint: getComputedStyle(document.documentElement).getPropertyValue('--c-primary-tint').trim(),
+  accentWarm: getComputedStyle(document.documentElement).getPropertyValue('--c-accent-warm').trim(),
+  accentCold: getComputedStyle(document.documentElement).getPropertyValue('--c-accent-cold').trim(),
+  warn: getComputedStyle(document.documentElement).getPropertyValue('--c-warn').trim(),
+  danger: getComputedStyle(document.documentElement).getPropertyValue('--c-danger').trim(),
+  replacement: getComputedStyle(document.documentElement).getPropertyValue('--c-replacement').trim(),
+  textMuted: getComputedStyle(document.documentElement).getPropertyValue('--c-text-muted').trim(),
+  border: getComputedStyle(document.documentElement).getPropertyValue('--c-border-light').trim(),
+  text: getComputedStyle(document.documentElement).getPropertyValue('--c-text').trim(),
+  textInvert: getComputedStyle(document.documentElement).getPropertyValue('--c-text-invert').trim(),
+};
+const SERIES_COLORS = [PALETTE.primaryTint, PALETTE.accentWarm, PALETTE.warn, PALETTE.replacement, PALETTE.accentCold, PALETTE.danger, PALETTE.primary];
+
+function applyChartDefaults() {
+  if (typeof Chart === 'undefined') return;
+  Chart.defaults.font.family = "'Inter', -apple-system, sans-serif";
+  Chart.defaults.font.size = 12;
+  Chart.defaults.font.weight = 500;
+  Chart.defaults.color = PALETTE.textMuted;
+  Chart.defaults.borderColor = PALETTE.border;
+  Chart.defaults.plugins.legend.labels.usePointStyle = true;
+  Chart.defaults.plugins.legend.labels.boxWidth = 8;
+  Chart.defaults.plugins.legend.labels.boxHeight = 8;
+  Chart.defaults.plugins.legend.labels.padding = 16;
+  Chart.defaults.plugins.tooltip.backgroundColor = PALETTE.text;
+  Chart.defaults.plugins.tooltip.titleColor = PALETTE.textInvert;
+  Chart.defaults.plugins.tooltip.bodyColor = PALETTE.textInvert;
+  Chart.defaults.plugins.tooltip.padding = 12;
+  Chart.defaults.plugins.tooltip.cornerRadius = 8;
+  Chart.defaults.plugins.tooltip.displayColors = true;
+  Chart.defaults.plugins.tooltip.boxWidth = 8;
+  Chart.defaults.plugins.tooltip.boxHeight = 8;
+  Chart.defaults.plugins.tooltip.boxPadding = 6;
+  Chart.defaults.plugins.tooltip.titleFont = { weight: 700, size: 12 };
+  Chart.defaults.plugins.tooltip.bodyFont = { weight: 500, size: 12 };
+  Chart.defaults.plugins.tooltip.caretSize = 6;
+  Chart.defaults.elements.line.tension = 0.35;
+  Chart.defaults.elements.line.borderWidth = 2.5;
+  Chart.defaults.elements.point.radius = 0;
+  Chart.defaults.elements.point.hoverRadius = 5;
+  Chart.defaults.elements.point.hoverBorderWidth = 2;
+  Chart.defaults.elements.point.hoverBackgroundColor = '#ffffff';
+  Chart.defaults.elements.bar.borderRadius = 4;
+  Chart.defaults.elements.bar.borderSkipped = false;
+  Chart.defaults.responsive = true;
+  Chart.defaults.maintainAspectRatio = false;
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  Chart.defaults.animation = { duration: reducedMotion ? 0 : 600, easing: 'easeOutCubic' };
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', applyChartDefaults);
+} else {
+  applyChartDefaults();
+}
+
 (function() {
     var state = { filter: { range: 'today' }, stationId: '', lastData: null, exporting: false };
     var socket = io();
