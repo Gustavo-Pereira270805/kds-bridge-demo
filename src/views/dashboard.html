@@ -1641,6 +1641,37 @@
     loadStations();
     loadDashboard({ range: 'today' });
 })();
+
+// === Side nav: active state via IntersectionObserver ===
+(function initSideNav() {
+  const sectionIds = ['top', 'overview', 'demand', 'sla', 'diagnosis', 'performance'];
+  const sections = sectionIds
+    .map(id => document.getElementById(id))
+    .filter(Boolean);
+  const navLinks = document.querySelectorAll('.side-nav a[data-section]');
+  function setActive(activeId) {
+    navLinks.forEach(a => {
+      a.setAttribute('aria-current', a.getAttribute('data-section') === activeId ? 'true' : 'false');
+    });
+  }
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) setActive(entry.target.id);
+    });
+  }, { threshold: 0.4, rootMargin: '-56px 0px -50% 0px' });
+  sections.forEach(s => observer.observe(s));
+  navLinks.forEach(a => {
+    a.addEventListener('click', e => {
+      const id = a.getAttribute('data-section');
+      const target = document.getElementById(id);
+      if (target) {
+        e.preventDefault();
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setActive(id);
+      }
+    });
+  });
+})();
 </script>
 </body>
 </html>

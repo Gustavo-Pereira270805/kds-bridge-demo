@@ -105,6 +105,14 @@ body { background: var(--c-bg-light); }
   opacity: 0;
   transition: opacity var(--t-fast) var(--ease-out);
 }
+.side-nav:hover,
+.side-nav:focus-within {
+  width: var(--side-nav-expanded);
+}
+.side-nav:hover .label,
+.side-nav:focus-within .label {
+  opacity: 1;
+}
 @media (prefers-reduced-motion: reduce) {
   .side-nav, .side-nav .label, .side-nav a { transition: none; }
 }
