@@ -1,0 +1,133 @@
+/* KDS Bridge — dashboard-specific styles. Linked by dashboard.html after
+   theme.css. Contains: layout containers, side nav, header sticky,
+   bento grid, KPI cards, panel, chart reset zoom, print stylesheet.
+   All colors/spacing/radius reference theme.css tokens — never hardcoded. */
+
+/* === Page layout === */
+body { background: var(--c-bg-light); }
+
+.layout {
+  display: grid;
+  grid-template-columns: var(--side-nav-collapsed) 1fr;
+  min-height: calc(100vh - var(--header-height));
+}
+
+.dashboard-main {
+  max-width: var(--grid-max-width);
+  margin: 0 auto;
+  padding: 0 var(--sp-7);
+  min-width: 0;
+}
+
+/* === Bento grid (12-col) === */
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--bento-gap);
+}
+.bento-grid > [data-cols="3"] { grid-column: span 3; }
+.bento-grid > [data-cols="4"] { grid-column: span 4; }
+.bento-grid > [data-cols="5"] { grid-column: span 5; }
+.bento-grid > [data-cols="6"] { grid-column: span 6; }
+.bento-grid > [data-cols="7"] { grid-column: span 7; }
+.bento-grid > [data-cols="8"] { grid-column: span 8; }
+.bento-grid > [data-cols="12"] { grid-column: span 12; }
+
+@media (max-width: 1024px) {
+  .bento-grid > [data-cols] { grid-column: span 12; }
+}
+
+/* === Section header === */
+.dashboard-section {
+  margin-top: var(--section-spacing);
+  scroll-margin-top: calc(var(--header-height) + 16px);
+}
+.section-header { margin-bottom: var(--sp-6); }
+.section-eyebrow {
+  display: block;
+  font-size: 11px; font-weight: var(--fw-heavy);
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--c-primary-tint);
+  margin-bottom: var(--sp-2);
+}
+.section-title {
+  font-size: 24px; font-weight: var(--fw-bold);
+  color: var(--c-primary);
+  margin: 0 0 var(--sp-1);
+}
+.section-description {
+  font-size: 13px; color: var(--c-text-muted);
+  margin: 0;
+}
+
+/* === Side nav (collapsed state) === */
+.side-nav {
+  position: sticky;
+  top: var(--header-height);
+  width: var(--side-nav-collapsed);
+  height: calc(100vh - var(--header-height));
+  background: var(--c-surface);
+  border-right: 1px solid var(--c-border-light);
+  overflow-x: hidden;
+  overflow-y: auto;
+  z-index: var(--z-sticky);
+  transition: width var(--t-base) var(--ease-out);
+}
+.side-nav ul { list-style: none; padding: var(--sp-3) 0; margin: 0; }
+.side-nav a {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  color: var(--c-text-muted);
+  text-decoration: none;
+  border-left: 3px solid transparent;
+  transition: background var(--t-fast) var(--ease-out),
+              color var(--t-fast) var(--ease-out),
+              border-left-color var(--t-fast) var(--ease-out);
+  white-space: nowrap;
+}
+.side-nav a:hover {
+  background: rgba(29,53,87,.04);
+  color: var(--c-text);
+}
+.side-nav a[aria-current="true"] {
+  color: var(--c-primary);
+  border-left-color: var(--c-accent-warm);
+  background: rgba(42,157,143,.04);
+}
+.side-nav .icon {
+  width: 24px; height: 24px;
+  flex-shrink: 0;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+}
+.side-nav .label {
+  font-size: 13px; font-weight: var(--fw-medium);
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .side-nav, .side-nav .label, .side-nav a { transition: none; }
+}
+
+/* === Sticky header === */
+.sticky-top {
+  position: sticky; top: 0; z-index: var(--z-sticky);
+  height: var(--header-height);
+  background: rgba(244,244,245,.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--c-border-light);
+}
+.header-inner {
+  max-width: var(--grid-max-width);
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 var(--sp-7);
+  display: flex; align-items: center; gap: var(--sp-4);
+}
+.header-title {
+  font-size: 18px; font-weight: var(--fw-bold);
+  color: var(--c-primary);
+  margin: 0; margin-right: var(--sp-4);
+  white-space: nowrap;
+}
