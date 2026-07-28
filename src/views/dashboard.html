@@ -227,7 +227,7 @@
     <div class="header-inner">
         <h1 class="header-title">Dashboard</h1>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-            <div class="period-selector" id="periodSelector">
+            <div class="period-pill-group" id="periodSelector" role="group" aria-label="Período rápido">
                 <button class="period-btn active" data-range="today" aria-pressed="true">Hoje</button>
                 <button class="period-btn" data-range="yesterday" aria-pressed="false">Ontem</button>
                 <button class="period-btn" data-range="week" aria-pressed="false">Últimos 7 dias</button>
@@ -606,7 +606,7 @@ if (document.readyState === 'loading') {
         ];
 
         var occMedia = (data.occupancy_by_shift || []).length > 0
-            ? data.occupancy_by_shift.reduce(function(acc, s) { return acc + (s.pct_ociosa || 0); }, 0) / data.occupancy_by_shift.length
+            ? data.occupancy_by_shift.reduce(function(acc, s) { return acc + (parseFloat(s.pct_ociosa) || 0); }, 0) / data.occupancy_by_shift.length
             : 0;
         var secondaryCards = [
             { key: 'zerados', label: 'PRODUTOS ZERADOS', value: (k.total_roturas || 0).toLocaleString('pt-BR') },
@@ -1397,7 +1397,12 @@ if (document.readyState === 'loading') {
                 });
 
                 var c1El = document.getElementById('chart-comparativo');
-                if (c1El) createComparativoChart(c1El.querySelector('canvas'), data);
+                if (c1El) {
+                    var compChart = createComparativoChart(c1El.querySelector('canvas'), data);
+                    if (!compChart) {
+                        c1El.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;min-height:200px;color:var(--c-text-muted);font-size:13px;">Sem dados comparativos — selecione 7d ou 30d</div>';
+                    }
+                }
                 var c2El = document.getElementById('chart-volume-ma');
                 if (c2El) createVolumeMAChart(c2El.querySelector('canvas'), data);
                 var c3El = document.getElementById('chart-fila-hora');
