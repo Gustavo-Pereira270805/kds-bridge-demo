@@ -245,6 +245,7 @@ body { background: var(--c-bg-light); }
   padding: var(--sp-5) var(--sp-6);
   box-shadow: var(--shadow-card);
   border-left: 4px solid var(--kpi-status-neutral);
+  overflow: hidden;
   height: var(--kpi-hero-height);
   display: flex; flex-direction: column; gap: var(--sp-2);
   transition: box-shadow var(--t-base) var(--ease-out),

@@ -829,7 +829,7 @@ if (document.readyState === 'loading') {
 
         if (data.volume_ma && data.volume_ma.length > 1) {
             demandGrid.innerHTML += '<article class="panel panel-chart" data-cols="7">' +
-                '<header class="panel-header"><h3 class="panel-title">Volume MA 7 dias</h3></header>' +
+                '<header class="panel-header"><h3 class="panel-title">Volume - Média Móvel 7 dias</h3></header>' +
                 '<div class="panel-body chart-container" id="chart-volume-ma"></div></article>';
         }
 
@@ -911,13 +911,13 @@ if (document.readyState === 'loading') {
                 qhtml += '<div class="bar-row"><div class="bar-label">' + d.estacao + '</div><div class="bar-track" style="display:flex;"><div class="bar-fill" style="width:' + cp + '%;background:#2a9d8f;height:100%;"><span>' + c + 'm</span></div><div class="bar-fill" style="width:' + wp + '%;background:#f4a261;height:100%;"><span>' + w + 'm</span></div></div><div class="bar-value">' + d.count + '</div></div>';
             });
             qhtml += '<div style="margin-top:6px;font-size:10px;color:var(--c-text-muted);">Verde = preparo | Laranja = espera fila</div>';
-            slaGrid.innerHTML += '<article class="panel" data-cols="4">' +
+            slaGrid.innerHTML += '<article class="panel" data-cols="6">' +
                 '<header class="panel-header"><h3 class="panel-title">Tempo de Fila por Estação</h3></header>' +
                 '<div class="panel-body">' + qhtml + '</div></article>';
         }
 
         if (data.queue_time_by_hour && data.queue_time_by_hour.length) {
-            slaGrid.innerHTML += '<article class="panel panel-chart" data-cols="4">' +
+            slaGrid.innerHTML += '<article class="panel panel-chart" data-cols="12">' +
                 '<header class="panel-header"><h3 class="panel-title">Fila por Estação × Hora</h3></header>' +
                 '<div class="panel-body chart-container" id="chart-fila-hora"></div></article>';
         }
@@ -930,7 +930,7 @@ if (document.readyState === 'loading') {
                 var color = ocupPct < 40 ? '#2a9d8f' : ocupPct < 70 ? '#f4a261' : '#e63946';
                 occBars += '<div class="bar-row"><div class="bar-label">' + d.turno + '</div><div class="bar-track" style="display:flex;"><div class="bar-fill" style="width:' + ocupPct + '%;background:' + color + ';height:100%;">' + (ocupPct > 15 ? '<span>' + ocupPct + '% ocupado</span>' : '') + '</div><div class="bar-fill" style="width:' + ociosaPct + '%;background:#e5e7eb;height:100%;">' + (ociosaPct > 15 ? '<span style="color:#6b7280;">' + ociosaPct + '% ociosa</span>' : '') + '</div></div><div class="bar-value" style="width:80px;">' + ocupPct + '%</div></div>';
             });
-            slaGrid.innerHTML += '<article class="panel" data-cols="4">' +
+            slaGrid.innerHTML += '<article class="panel" data-cols="6">' +
                 '<header class="panel-header"><h3 class="panel-title">Ocupação por Turno</h3></header>' +
                 '<div class="panel-body"><div style="max-height:200px;overflow-y:auto;">' + occBars + '</div><div style="margin-top:4px;font-size:10px;color:var(--c-text-muted);">Barra colorida = % ocupado | Cinza = % ocioso</div></div></article>';
         }
@@ -939,27 +939,28 @@ if (document.readyState === 'loading') {
         var diagnosisGrid = document.querySelector('#diagnosis .bento-grid');
         diagnosisGrid.innerHTML = '';
 
-        diagnosisGrid.innerHTML += '<article class="panel" data-cols="4">' +
+        diagnosisGrid.innerHTML += '<article class="panel" data-cols="6">' +
             '<header class="panel-header"><h3 class="panel-title">Motivos de Cancelamento</h3><p class="panel-subtitle">Top 10</p></header>' +
             '<div class="panel-body">' + renderBars('', (data.cancel_reasons || []).slice(0, 10), 'label', 'total', '#e63946') + '</div></article>';
 
-        if (data.scatter_roturas && data.scatter_roturas.length > 0) {
+        {
             var rotBars = '';
-            var rotMax = 1;
-            data.scatter_roturas.forEach(function(d) { var v = parseInt(d.total_roturas); if(v > rotMax) rotMax = v; });
-            data.scatter_roturas.filter(function(d) { return parseInt(d.total_roturas) > 0; }).slice(0, 10).forEach(function(d) {
-                var v = parseInt(d.total_roturas);
-                var pct = rotMax > 0 ? (v / rotMax) * 100 : 0;
-                rotBars += '<div class="bar-row"><div class="bar-label" title="' + d.product_name + '">' + d.product_name.substring(0,14) + '</div><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:#e63946;">' + (pct > 20 ? '<span>' + v + ' zerou</span>' : '') + '</div></div><div class="bar-value">' + v + ' / ' + d.total_demandas + ' ped.</div></div>';
-            });
-            if (rotBars) {
-                diagnosisGrid.innerHTML += '<article class="panel" data-cols="4">' +
-                    '<header class="panel-header"><h3 class="panel-title">Zerados por Produto</h3><p class="panel-subtitle">Top 10</p></header>' +
-                    '<div class="panel-body"><div style="max-height:220px;overflow-y:auto;">' + rotBars + '</div></div></article>';
+            if (data.scatter_roturas && data.scatter_roturas.length > 0) {
+                var rotMax = 1;
+                data.scatter_roturas.forEach(function(d) { var v = parseInt(d.total_roturas); if(v > rotMax) rotMax = v; });
+                data.scatter_roturas.filter(function(d) { return parseInt(d.total_roturas) > 0; }).slice(0, 10).forEach(function(d) {
+                    var v = parseInt(d.total_roturas);
+                    var pct = rotMax > 0 ? (v / rotMax) * 100 : 0;
+                    rotBars += '<div class="bar-row"><div class="bar-label" title="' + d.product_name + '">' + d.product_name.substring(0,14) + '</div><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:#e63946;">' + (pct > 20 ? '<span>' + v + ' zerou</span>' : '') + '</div></div><div class="bar-value">' + v + ' / ' + d.total_demandas + ' ped.</div></div>';
+                });
             }
+            if (!rotBars) rotBars = '<p style="color:var(--c-text-muted);padding:20px 0;text-align:center;">Nenhum zerado no período</p>';
+            diagnosisGrid.innerHTML += '<article class="panel" data-cols="6">' +
+                '<header class="panel-header"><h3 class="panel-title">Zerados por Produto</h3><p class="panel-subtitle">Top 10</p></header>' +
+                '<div class="panel-body"><div style="max-height:220px;overflow-y:auto;">' + rotBars + '</div></div></article>';
         }
 
-        diagnosisGrid.innerHTML += '<article class="panel" data-cols="4">' +
+        diagnosisGrid.innerHTML += '<article class="panel" data-cols="12">' +
             '<header class="panel-header"><h3 class="panel-title">Trocas de Itens do Cardápio</h3></header>' +
             '<div class="panel-body">' + renderReplacements(data.replacements) + '</div></article>';
 
@@ -971,6 +972,7 @@ if (document.readyState === 'loading') {
 
     function createComparativoChart(canvas, data) {
         var wc = data.week_comparison || [];
+        if (wc.length === 0) return null;
         var labels = wc.map(function(d) { return d.day; });
         return createChartWithZoom(canvas, {
             type: 'bar',
@@ -994,7 +996,12 @@ if (document.readyState === 'loading') {
 
     function createVolumeMAChart(canvas, data) {
         var trend = (data.volume_ma || []).slice(-30);
-        var labels = trend.map(function(t) { return t.day; });
+        var labels = trend.map(function(t) {
+            var d = String(t.day || '');
+            if (d.indexOf('T') > -1) d = d.split('T')[0];
+            var parts = d.split('-');
+            return parts.length === 3 ? parts[2] + '/' + parts[1] : d;
+        });
         var values = trend.map(function(t) { return t.total || 0; });
         var ma7 = values.map(function(_, i) {
             var start = Math.max(0, i - 6);
@@ -1051,42 +1058,38 @@ if (document.readyState === 'loading') {
 
     function createVelocidadeChart(canvas, data) {
         var sh = data.speed_by_hour || [];
-        var labels = sh.map(function(d) { return d.hora + 'h'; });
-        var values = sh.map(function(d) { return d.avg_min || 0; });
+        var labels = [];
+        var values = [];
+        for (var i = 0; i < 24; i++) {
+            labels.push(i + 'h');
+            var found = null;
+            for (var j = 0; j < sh.length; j++) {
+                if (sh[j].hora === i) { found = sh[j]; break; }
+            }
+            values.push(found ? (found.avg_min || 0) : 0);
+        }
         return createChartWithZoom(canvas, {
             type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Tempo m\u00e9dio (min)',
-                    data: values,
-                    borderColor: PALETTE.accentWarm,
-                    backgroundColor: 'rgba(42,157,143,.3)',
-                    fill: { target: 'origin', above: 'rgba(42,157,143,.3)' },
-                    borderWidth: 2,
-                }]
-            },
+            data: { labels: labels, datasets: [{ label: 'Tempo m\u00e9dio (min)', data: values, borderColor: PALETTE.accentWarm, backgroundColor: 'rgba(42,157,143,.3)', fill: { target: 'origin', above: 'rgba(42,157,143,.3)' }, borderWidth: 2 }] },
             options: { scales: { y: { beginAtZero: true } } }
         });
     }
 
     function createRetiradaChart(canvas, data) {
         var ph = data.pickup_by_hour || [];
-        var labels = ph.map(function(d) { return d.hora + 'h'; });
-        var values = ph.map(function(d) { return d.avg_min || 0; });
+        var labels = [];
+        var values = [];
+        for (var i = 0; i < 24; i++) {
+            labels.push(i + 'h');
+            var found = null;
+            for (var j = 0; j < ph.length; j++) {
+                if (ph[j].hora === i) { found = ph[j]; break; }
+            }
+            values.push(found ? (found.avg_min || 0) : 0);
+        }
         return createChartWithZoom(canvas, {
             type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Tempo m\u00e9dio (min)',
-                    data: values,
-                    borderColor: PALETTE.primaryTint,
-                    backgroundColor: 'rgba(69,123,157,.3)',
-                    fill: { target: 'origin', above: 'rgba(69,123,157,.3)' },
-                    borderWidth: 2,
-                }]
-            },
+            data: { labels: labels, datasets: [{ label: 'Tempo m\u00e9dio (min)', data: values, borderColor: PALETTE.primaryTint, backgroundColor: 'rgba(69,123,157,.3)', fill: { target: 'origin', above: 'rgba(69,123,157,.3)' }, borderWidth: 2 }] },
             options: { scales: { y: { beginAtZero: true } } }
         });
     }
@@ -1170,20 +1173,27 @@ if (document.readyState === 'loading') {
                 bars += '<div class="bar-row"><div class="bar-label" style="width:150px;">'+d.label+'</div><div class="bar-track"><div class="bar-fill" style="width:'+p+'%;background:#e63946;">'+(p>25?'<span>'+d.count+' ocorr.</span>':'')+'</div></div><div class="bar-value" style="width:55px;">-'+Number(d.deduction).toFixed(2)+'</div></div>';
             }
             var sc = Number(s.final_score) || 5;
-            var dates = detractorDates && detractorDates[order[i]] ? detractorDates[order[i]] : [];
-            var dateTable = '';
-            if (dates.length > 0) {
-                dateTable = '<div style="margin-top:10px;border-top:1px solid #e5e7eb;padding-top:8px;"><div style="font-size:11px;font-weight:700;color:#6b7280;margin-bottom:6px;">Ocorrências do dia</div>';
-                dateTable += '<table style="width:100%;font-size:11px;border-collapse:collapse;">';
-                dateTable += '<thead><tr style="color:#9ca3af;text-align:left;"><th style="padding:3px 6px;">Hora</th><th style="padding:3px 6px;">Tipo</th><th style="padding:3px 6px;">Produto</th><th style="padding:3px 6px;">Detalhe</th></tr></thead><tbody>';
-                dates.forEach(function(dt) {
-                    var t = dt.date ? dt.date.split('T')[1] : '';
-                    var hora = t ? t.substring(0,5) : '--:--';
-                    dateTable += '<tr style="border-bottom:1px solid #f3f4f6;"><td style="padding:3px 6px;color:#6b7280;">'+hora+'</td><td style="padding:3px 6px;font-weight:600;color:#e63946;">'+dt.type+'</td><td style="padding:3px 6px;">'+dt.product_name+'</td><td style="padding:3px 6px;color:#6b7280;font-size:10px;">'+(dt.detail||'')+'</td></tr>';
+            var datesList = (detractorDates && detractorDates[order[i]]) ? detractorDates[order[i]] : [];
+            if (datesList.length > 0) {
+                bars += '<div style="margin-top:8px;border-top:1px solid var(--c-border-light);padding-top:8px;">' +
+                    '<div style="font-size:12px;font-weight:var(--fw-semi);color:var(--c-text);margin-bottom:4px;">Ocorrências (' + datesList.length + ')</div>' +
+                    '<div style="max-height:200px;overflow-y:auto;font-size:11px;">' +
+                    '<table style="width:100%;border-collapse:collapse;">' +
+                    '<thead><tr style="border-bottom:1px solid var(--c-border-light);text-align:left;">' +
+                    '<th style="padding:3px 4px;">Hora</th><th style="padding:3px 4px;">Tipo</th><th style="padding:3px 4px;">Produto</th><th style="padding:3px 4px;">Detalhe</th></tr></thead><tbody>';
+                datesList.forEach(function(occ) {
+                    var d = String(occ.date || '');
+                    var time = '';
+                    if (d.indexOf('T') > -1) { var tPart = d.split('T')[1]; time = tPart ? tPart.substring(0, 5) : ''; }
+                    bars += '<tr style="border-bottom:1px solid var(--c-border-light);">' +
+                        '<td style="padding:3px 4px;font-family:var(--font-mono);">' + time + '</td>' +
+                        '<td style="padding:3px 4px;">' + (occ.type || '') + '</td>' +
+                        '<td style="padding:3px 4px;">' + (occ.product_name || '-') + '</td>' +
+                        '<td style="padding:3px 4px;color:var(--c-text-muted);">' + (occ.detail || '') + '</td></tr>';
                 });
-                dateTable += '</tbody></table></div>';
+                bars += '</tbody></table></div></div>';
             }
-            h += '<div class="panel score-detail-panel" data-entity="'+order[i]+'" style="display:none;"><div class="section-title">Detratores \u2014 '+labels[order[i]]+' <span style="font-size:12px;font-weight:400;color:#9ca3af;">(Nota: '+sc.toFixed(1)+')</span></div><div style="max-height:420px;overflow-y:auto;">'+bars+dateTable+'</div></div>';
+            h += '<div class="panel score-detail-panel" data-entity="'+order[i]+'" style="display:none;"><div class="section-title">Detratores \u2014 '+labels[order[i]]+' <span style="font-size:12px;font-weight:400;color:#9ca3af;">(Nota: '+sc.toFixed(1)+')</span></div><div style="max-height:420px;overflow-y:auto;">'+bars+'</div></div>';
         }
         return h + '</div>';
     }
@@ -1323,6 +1333,8 @@ if (document.readyState === 'loading') {
                 kpiEl.innerHTML = renderKpis(data, data.trend);
                 // Render sparklines
                 document.querySelectorAll('.kpi-sparkline[data-sparkline-key]').forEach(function(el) {
+                    if (el._chart) { el._chart.destroy(); el._chart = null; }
+                    el.innerHTML = '';
                     var trendData = (data.trend || []).slice(-14).map(function(t) { return t.total || 0; });
                     if (trendData.length < 2) return;
                     var labels = trendData.map(function(_, i) { return i; });
@@ -1334,7 +1346,7 @@ if (document.readyState === 'loading') {
                     var canvas = document.createElement('canvas');
                     el.appendChild(canvas);
                     if (typeof Chart === 'undefined') return;
-                    new Chart(canvas, {
+                    el._chart = new Chart(canvas, {
                         type: 'bar',
                         data: {
                             labels: labels,
