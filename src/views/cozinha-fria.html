@@ -268,6 +268,19 @@
         const flashIds = new Set();
         let crossCancelToastTimer = null;
 
+        function showToast(msg, kind /* 'error' | 'warn' | 'info' */) {
+            var t = document.createElement('div');
+            t.className = 'toast toast-' + (kind || 'info');
+            t.setAttribute('role', 'alert');
+            t.textContent = msg;
+            document.body.appendChild(t);
+            var duration = (kind === 'error') ? 12000 : 4000;
+            setTimeout(function() {
+                t.style.opacity = '0';
+                setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 250);
+            }, duration);
+        }
+
         try {
             const AC = window.AudioContext || window.webkitAudioContext;
             if (AC) audioCtx = new AC();
@@ -605,7 +618,7 @@
                 console.error('Erro ao cancelar:', err);
                 confirmBtn.disabled = false;
                 confirmBtn.textContent = 'Confirmar Cancelamento';
-                alert('Erro ao cancelar demanda. Tente novamente.');
+                showToast('Erro ao cancelar demanda. Tente novamente.', 'error');
             }
         });
 

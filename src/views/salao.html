@@ -401,6 +401,19 @@
         toastTimeout = setTimeout(function() { toast.classList.remove('show'); }, 6000);
     }
 
+    function showNotification(msg, kind /* 'error' | 'warn' | 'info' */) {
+        var t = document.createElement('div');
+        t.className = 'toast toast-' + (kind || 'info');
+        t.setAttribute('role', 'alert');
+        t.textContent = msg;
+        document.body.appendChild(t);
+        var duration = (kind === 'error') ? 12000 : 4000;
+        setTimeout(function() {
+            t.style.opacity = '0';
+            setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 250);
+        }, duration);
+    }
+
     function renderDemands() {
         var container = document.getElementById('demandList');
         if (!container) return;
@@ -802,7 +815,7 @@
         var productSelectEl2 = document.getElementById('productSelect');
         var productId = productSelectEl2 ? productSelectEl2.value : '';
         if (!productId) {
-            alert('Selecione um produto para continuar.');
+            showNotification('Selecione um produto para continuar.', 'warn');
             return;
         }
         var btn = e.target.querySelector('button[type="submit"]');
