@@ -20,7 +20,7 @@
         .tabs { display: flex; gap: 0; margin-bottom: 0; }
         .tab {
             padding: 14px 24px; background: #e5e7eb; border: none; cursor: pointer;
-            font-size: 15px; font-weight: 600; border-radius: 12px 12px 0 0;
+            font-size: 15px; font-weight: 600; border-radius: var(--radius-md) var(--radius-md) 0 0;
             color: #374151; transition: all 0.2s ease; font-family: inherit;
         }
         .tab:hover { background: #d1d5db; }
@@ -28,7 +28,7 @@
 
         .panel {
             display: none; background: white; padding: 24px;
-            border-radius: 0 14px 14px 14px;
+            border-radius: 0 var(--radius-xl) var(--radius-xl) var(--radius-xl);
             box-shadow: 0 4px 16px rgba(0,0,0,0.06);
             animation: fadeInUp 0.3s ease;
         }
@@ -98,6 +98,8 @@
         ::-webkit-scrollbar-track { background: #e5e7eb; border-radius: 3px; }
         ::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 3px; }
 
+        .sla-input { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateY(16px); }
             to { opacity: 1; transform: translateY(0); }
@@ -139,8 +141,8 @@
             <div class="form-group"><label>Nome</label><input type="text" id="newName" style="width:200px;"></div>
             <div class="form-group"><label>Categoria</label><input type="text" id="newCategory" style="width:150px;"></div>
             <div class="form-group"><label>Cozinha</label><select id="newStation" style="width:180px;"></select></div>
-            <div class="form-group"><label>SLA Normal</label><input type="number" id="newSlaN" value="10" min="1" style="width:80px;"></div>
-            <div class="form-group"><label>SLA Urgente</label><input type="number" id="newSlaU" value="7" min="1" style="width:80px;"></div>
+            <div class="form-group"><label>SLA Normal</label><input type="number" id="newSlaN" class="sla-input" value="10" min="1" style="width:80px;"></div>
+            <div class="form-group"><label>SLA Urgente</label><input type="number" id="newSlaU" class="sla-input" value="7" min="1" style="width:80px;"></div>
             <div class="form-group"><label>&nbsp;</label><button class="btn-success" onclick="addProduct()">Criar</button></div>
         </div>
         <div class="divider"></div>
@@ -284,8 +286,8 @@ function loadProducts() {
                     '<option value="">--</option>' +
                     allStations.map(function(s) { return '<option value="' + s.id + '"' + (p.kitchen_station_id === s.id ? ' selected' : '') + '>' + s.name + '</option>'; }).join('') +
                 '</select></td>' +
-                '<td><input type="number" value="' + p.sla_minutes_normal + '" min="1" onchange="updateProduct(\'' + p.id + '\',\'sla_minutes_normal\',this.value)" style="width:70px;"></td>' +
-                '<td><input type="number" value="' + p.sla_minutes_urgente + '" min="1" onchange="updateProduct(\'' + p.id + '\',\'sla_minutes_urgente\',this.value)" style="width:70px;"></td>' +
+                '<td><input type="number" class="sla-input" value="' + p.sla_minutes_normal + '" min="1" onchange="updateProduct(\'' + p.id + '\',\'sla_minutes_normal\',this.value)" style="width:70px;"></td>' +
+                '<td><input type="number" class="sla-input" value="' + p.sla_minutes_urgente + '" min="1" onchange="updateProduct(\'' + p.id + '\',\'sla_minutes_urgente\',this.value)" style="width:70px;"></td>' +
                 '<td>' + (p.active ? '<span style="color:#2a9d8f;">Sim</span>' : '<span style="color:#e63946;">Não</span>') + '</td>' +
                 '<td>' +
                     '<button class="btn-sm ' + (p.active ? 'btn-warning' : 'btn-success') + '" onclick="toggleProduct(\'' + p.id + '\')">' + (p.active ? 'Desativar' : 'Ativar') + '</button> ' +
