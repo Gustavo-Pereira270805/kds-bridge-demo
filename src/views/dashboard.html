@@ -27,13 +27,6 @@
             border-radius: 0 0 16px 16px;
         }
         .header h1 { font-size: 22px; font-weight: 700; }
-        .period-selector { display: flex; gap: 4px; background: rgba(255,255,255,0.15); border-radius: 10px; padding: 4px; }
-        .period-btn {
-            padding: 8px 16px; border: none; border-radius: 8px;
-            font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
-            background: transparent; color: rgba(255,255,255,0.75); transition: all 0.2s;
-        }
-        .period-btn.active { background: white; color: var(--c-primary); }
         .btn-back {
             padding: 10px 20px; background: #e63946; color: white; border: none; border-radius: 10px;
             font-size: 14px; font-weight: 700; cursor: pointer; text-decoration: none;
@@ -982,9 +975,9 @@ if (document.readyState === 'loading') {
             data: {
                 labels: labels,
                 datasets: [
-                    { type: 'bar', label: 'Per\u00edodo atual', data: wc.map(function(d) { return d.this_week || 0; }), backgroundColor: PALETTE.accentWarm },
-                    { type: 'bar', label: 'Per\u00edodo anterior', data: wc.map(function(d) { return d.last_week || 0; }), backgroundColor: PALETTE.border },
-                    { type: 'line', label: 'Estouro SLA %', data: wc.map(function(d) { return d.indicators ? d.indicators.sla_pct : null; }), borderColor: PALETTE.danger, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'y1' }
+                    { type: 'bar', label: 'Per\u00edodo atual', data: wc.map(function(d) { return d.this_week || 0; }), backgroundColor: PALETTE.accentWarm, order: 1 },
+                    { type: 'bar', label: 'Per\u00edodo anterior', data: wc.map(function(d) { return d.last_week || 0; }), backgroundColor: PALETTE.border, order: 1 },
+                    { type: 'line', label: 'Estouro SLA %', data: wc.map(function(d) { return d.indicators ? d.indicators.sla_pct : null; }), borderColor: PALETTE.danger, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'y1', order: 2 }
                 ]
             },
             options: {
@@ -1015,8 +1008,8 @@ if (document.readyState === 'loading') {
             data: {
                 labels: labels,
                 datasets: [
-                    { type: 'bar', label: 'Volume di\u00e1rio', data: values, backgroundColor: 'rgba(69,123,157,.5)', borderWidth: 0 },
-                    { type: 'line', label: 'MA 7d', data: ma7, borderColor: PALETTE.primary, borderWidth: 2, pointRadius: 0, fill: false }
+                    { type: 'bar', label: 'Volume di\u00e1rio', data: values, backgroundColor: 'rgba(69,123,157,.5)', borderWidth: 0, order: 1 },
+                    { type: 'line', label: 'MA 7d', data: ma7, borderColor: PALETTE.primary, borderWidth: 2, pointRadius: 0, fill: false, order: 2 }
                 ]
             },
             options: { scales: { y: { beginAtZero: true } } }
@@ -1182,13 +1175,21 @@ if (document.readyState === 'loading') {
                     '<div style="max-height:200px;overflow-y:auto;font-size:11px;">' +
                     '<table style="width:100%;border-collapse:collapse;">' +
                     '<thead><tr style="border-bottom:1px solid var(--c-border-light);text-align:left;">' +
-                    '<th style="padding:3px 4px;">Hora</th><th style="padding:3px 4px;">Tipo</th><th style="padding:3px 4px;">Produto</th><th style="padding:3px 4px;">Detalhe</th></tr></thead><tbody>';
+                    '<th style="padding:3px 4px;">Data</th><th style="padding:3px 4px;">Tipo</th><th style="padding:3px 4px;">Produto</th><th style="padding:3px 4px;">Detalhe</th></tr></thead><tbody>';
                 datesList.forEach(function(occ) {
                     var d = String(occ.date || '');
-                    var time = '';
-                    if (d.indexOf('T') > -1) { var tPart = d.split('T')[1]; time = tPart ? tPart.substring(0, 5) : ''; }
+                    var formatted = '';
+                    if (d.indexOf('T') > -1) {
+                        var parts = d.split('T');
+                        var datePart = parts[0];
+                        var timePart = parts[1] ? parts[1].substring(0, 5) : '';
+                        var dp = datePart.split('-');
+                        formatted = dp.length === 3 ? dp[2] + '/' + dp[1] + ' ' + timePart : d.substring(0, 16);
+                    } else {
+                        formatted = d.substring(0, 16);
+                    }
                     bars += '<tr style="border-bottom:1px solid var(--c-border-light);">' +
-                        '<td style="padding:3px 4px;font-family:var(--font-mono);">' + time + '</td>' +
+                        '<td style="padding:3px 4px;font-family:var(--font-mono);">' + formatted + '</td>' +
                         '<td style="padding:3px 4px;">' + (occ.type || '') + '</td>' +
                         '<td style="padding:3px 4px;">' + (occ.product_name || '-') + '</td>' +
                         '<td style="padding:3px 4px;color:var(--c-text-muted);">' + (occ.detail || '') + '</td></tr>';
