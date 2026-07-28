@@ -239,7 +239,7 @@ export interface DetractorDate {
   detail: string;
 }
 
-export async function getDetractorDates(entity: string, dateStr: string): Promise<DetractorDate[]> {
+export async function getDetractorDates(entity: string, dateFrom: string, dateTo: string): Promise<DetractorDate[]> {
   const results: DetractorDate[] = [];
 
   if (entity === 'cozinha_quente_a' || entity === 'cozinha_quente_b' || entity === 'cozinha_fria') {
@@ -249,8 +249,8 @@ export async function getDetractorDates(entity: string, dateStr: string): Promis
     const slaRows = await query<{ id: string; product_name: string; created_at: string; sla_breach_minutes_cozinha: number }>(
       `SELECT d.id, d.product_name, d.created_at, d.sla_breach_minutes_cozinha
        FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
-       WHERE ks.code = $1 AND d.created_at::date = $2 AND d.sla_breached_cozinha = true AND d.status != 'annulled'`,
-      [stationCode, dateStr]
+       WHERE ks.code = $1 AND d.created_at::date >= $2 AND d.created_at::date <= $3 AND d.sla_breached_cozinha = true AND d.status != 'annulled'`,
+      [stationCode, dateFrom, dateTo]
     );
     slaRows.forEach(r => results.push({
       type: 'Estouro de SLA',
@@ -262,8 +262,8 @@ export async function getDetractorDates(entity: string, dateStr: string): Promis
     const cancelRows = await query<{ id: string; product_name: string; created_at: string; cancel_reason: string | null }>(
       `SELECT d.id, d.product_name, d.created_at, d.cancel_reason
        FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
-       WHERE ks.code = $1 AND d.created_at::date = $2 AND d.status = 'cancelled_cozinha'`,
-      [stationCode, dateStr]
+       WHERE ks.code = $1 AND d.created_at::date >= $2 AND d.created_at::date <= $3 AND d.status = 'cancelled_cozinha'`,
+      [stationCode, dateFrom, dateTo]
     );
     cancelRows.forEach(r => results.push({
       type: 'Cancelamento', date: (r.created_at as any) instanceof Date ? (r.created_at as any).toISOString() : String(r.created_at),
@@ -274,8 +274,8 @@ export async function getDetractorDates(entity: string, dateStr: string): Promis
     const stockRows = await query<{ id: string; product_name: string; created_at: string }>(
       `SELECT d.id, d.product_name, d.created_at
        FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
-       WHERE ks.code = $1 AND d.created_at::date = $2 AND d.stockout_reported = true AND d.status != 'annulled'`,
-      [stationCode, dateStr]
+       WHERE ks.code = $1 AND d.created_at::date >= $2 AND d.created_at::date <= $3 AND d.stockout_reported = true AND d.status != 'annulled'`,
+      [stationCode, dateFrom, dateTo]
     );
     stockRows.forEach(r => results.push({
       type: 'Zerado', date: (r.created_at as any) instanceof Date ? (r.created_at as any).toISOString() : String(r.created_at),
@@ -285,10 +285,10 @@ export async function getDetractorDates(entity: string, dateStr: string): Promis
     const slowRows = await query<{ id: string; product_name: string; created_at: string; sla_minutes: number }>(
       `SELECT d.id, d.product_name, d.created_at, d.sla_minutes
        FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
-       WHERE ks.code = $1 AND d.created_at::date = $2 AND d.status != 'annulled'
+       WHERE ks.code = $1 AND d.created_at::date >= $2 AND d.created_at::date <= $3 AND d.status != 'annulled'
          AND d.ready_at IS NOT NULL AND d.sla_minutes IS NOT NULL
          AND EXTRACT(EPOCH FROM (d.ready_at - d.created_at))/60 > d.sla_minutes * 1.5`,
-      [stationCode, dateStr]
+      [stationCode, dateFrom, dateTo]
     );
     slowRows.forEach(r => results.push({
       type: 'Item lento', date: (r.created_at as any) instanceof Date ? (r.created_at as any).toISOString() : String(r.created_at),
@@ -300,8 +300,8 @@ export async function getDetractorDates(entity: string, dateStr: string): Promis
   if (entity === 'salao') {
     const sSlaRows = await query<{ id: string; product_name: string; created_at: string; sla_breach_minutes_salao: number }>(
       `SELECT id, product_name, created_at, sla_breach_minutes_salao
-       FROM demands WHERE created_at::date = $1 AND sla_breached_salao = true AND status != 'annulled'`,
-      [dateStr]
+       FROM demands WHERE created_at::date >= $1 AND created_at::date <= $2 AND sla_breached_salao = true AND status != 'annulled'`,
+      [dateFrom, dateTo]
     );
     sSlaRows.forEach(r => results.push({
       type: 'Estouro de SLA', date: (r.created_at as any) instanceof Date ? (r.created_at as any).toISOString() : String(r.created_at),
@@ -311,8 +311,8 @@ export async function getDetractorDates(entity: string, dateStr: string): Promis
 
     const sCancelRows = await query<{ id: string; product_name: string; created_at: string; cancel_reason: string | null }>(
       `SELECT id, product_name, created_at, cancel_reason
-       FROM demands WHERE created_at::date = $1 AND status = 'cancelled_salao'`,
-      [dateStr]
+       FROM demands WHERE created_at::date >= $1 AND created_at::date <= $2 AND status = 'cancelled_salao'`,
+      [dateFrom, dateTo]
     );
     sCancelRows.forEach(r => results.push({
       type: 'Cancelamento', date: (r.created_at as any) instanceof Date ? (r.created_at as any).toISOString() : String(r.created_at),
@@ -322,8 +322,8 @@ export async function getDetractorDates(entity: string, dateStr: string): Promis
 
     const sStockRows = await query<{ id: string; product_name: string; created_at: string }>(
       `SELECT id, product_name, created_at
-       FROM demands WHERE created_at::date = $1 AND stockout_reported = true AND status != 'annulled'`,
-      [dateStr]
+       FROM demands WHERE created_at::date >= $1 AND created_at::date <= $2 AND stockout_reported = true AND status != 'annulled'`,
+      [dateFrom, dateTo]
     );
     sStockRows.forEach(r => results.push({
       type: 'Zerado', date: (r.created_at as any) instanceof Date ? (r.created_at as any).toISOString() : String(r.created_at),
@@ -337,10 +337,10 @@ export async function getDetractorDates(entity: string, dateStr: string): Promis
 
     const sSlowRows = await query<{ id: string; product_name: string; created_at: string }>(
       `SELECT id, product_name, created_at
-       FROM demands WHERE created_at::date = $1 AND status != 'annulled'
+       FROM demands WHERE created_at::date >= $1 AND created_at::date <= $2 AND status != 'annulled'
          AND retrieved_at IS NOT NULL AND ready_at IS NOT NULL
-         AND EXTRACT(EPOCH FROM (retrieved_at - ready_at))/60 > $2`,
-      [dateStr, tolerance * 2]
+         AND EXTRACT(EPOCH FROM (retrieved_at - ready_at))/60 > $3`,
+      [dateFrom, dateTo, tolerance * 2]
     );
     sSlowRows.forEach(r => results.push({
       type: 'Item lento', date: (r.created_at as any) instanceof Date ? (r.created_at as any).toISOString() : String(r.created_at),
@@ -354,7 +354,7 @@ export async function getDetractorDates(entity: string, dateStr: string): Promis
     for (const code of stationCodes) {
       const subResults = await getDetractorDates(
         code === 'quente_a' ? 'cozinha_quente_a' : code === 'quente_b' ? 'cozinha_quente_b' : 'cozinha_fria',
-        dateStr
+        dateFrom, dateTo
       );
       results.push(...subResults);
     }

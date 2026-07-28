@@ -957,7 +957,7 @@ if (document.readyState === 'loading') {
             if (!rotBars) rotBars = '<p style="color:var(--c-text-muted);padding:20px 0;text-align:center;">Nenhum zerado no período</p>';
             diagnosisGrid.innerHTML += '<article class="panel" data-cols="6">' +
                 '<header class="panel-header"><h3 class="panel-title">Zerados por Produto</h3><p class="panel-subtitle">Top 10</p></header>' +
-                '<div class="panel-body"><div style="max-height:220px;overflow-y:auto;">' + rotBars + '</div></div></article>';
+                '<div class="panel-body"><div class="panel" style="box-shadow:none;"><div style="max-height:220px;overflow-y:auto;">' + rotBars + '</div></div></div></article>';
         }
 
         diagnosisGrid.innerHTML += '<article class="panel" data-cols="12">' +

@@ -743,7 +743,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         const detractorDates: Record<string, any[]> = {};
         for (const entity of entities) {
           try {
-            detractorDates[entity] = await getDetractorDates(entity, dateTo);
+            detractorDates[entity] = await getDetractorDates(entity, dateFrom, dateTo);
           } catch (e) {
             detractorDates[entity] = [];
           }
