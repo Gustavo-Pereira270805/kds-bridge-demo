@@ -809,7 +809,14 @@ if (document.readyState === 'loading') {
         }
 
         overviewGrid.innerHTML += '<article class="panel panel-chart" data-cols="6">' +
-            '<header class="panel-header"><h3 class="panel-title">Comparativo Atual vs Período Anterior</h3></header>' +
+            '<header class="panel-header"><h3 class="panel-title">Comparativo Atual vs Per\u00edodo Anterior</h3>' +
+            '<select id="comp-indicator" style="margin-left:auto;font-size:12px;padding:4px 8px;border:1px solid var(--c-border-light);border-radius:6px;background:var(--c-surface);color:var(--c-text);font-family:inherit;cursor:pointer;" aria-label="Indicador da linha">' +
+            '<option value="sla_pct">Estouro SLA %</option>' +
+            '<option value="avg_time_min">Tempo m\u00e9dio (min)</option>' +
+            '<option value="cancel_rate">Cancelamentos %</option>' +
+            '<option value="stockouts">Zerados</option>' +
+            '<option value="urgent_pct">Urgentes %</option>' +
+            '</select></header>' +
             '<div class="panel-body chart-container" id="chart-comparativo"></div></article>';
 
         // Section 2: Demanda (#demand)
@@ -963,7 +970,12 @@ if (document.readyState === 'loading') {
             '<div class="panel-body" style="display:flex;align-items:center;justify-content:center;color:var(--c-text-muted);padding:var(--sp-5);">Carregando notas...</div></article>';
     }
 
-    function createComparativoChart(canvas, data) {
+    function createComparativoChart(canvas, data, indicator) {
+        indicator = indicator || 'sla_pct';
+        var indicatorLabels = { sla_pct: 'Estouro SLA %', avg_time_min: 'Tempo m\u00e9dio (min)', cancel_rate: 'Cancelamentos %', stockouts: 'Zerados', urgent_pct: 'Urgentes %' };
+        var indicatorColors = { sla_pct: PALETTE.danger, avg_time_min: PALETTE.primary, cancel_rate: PALETTE.warn, stockouts: PALETTE.danger, urgent_pct: PALETTE.accentCold };
+        var indicatorLabel = indicatorLabels[indicator] || 'Indicador';
+        var indicatorColor = indicatorColors[indicator] || PALETTE.primary;
         var wc = data.week_comparison || [];
         if (wc.length === 0) return null;
         var labels = wc.map(function(d) {
@@ -975,15 +987,15 @@ if (document.readyState === 'loading') {
             data: {
                 labels: labels,
                 datasets: [
-                    { type: 'bar', label: 'Per\u00edodo atual', data: wc.map(function(d) { return d.this_week || 0; }), backgroundColor: PALETTE.accentWarm, order: 1 },
-                    { type: 'bar', label: 'Per\u00edodo anterior', data: wc.map(function(d) { return d.last_week || 0; }), backgroundColor: PALETTE.border, order: 1 },
-                    { type: 'line', label: 'Estouro SLA %', data: wc.map(function(d) { return d.indicators ? d.indicators.sla_pct : null; }), borderColor: PALETTE.danger, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'y1', order: 2 }
+                    { type: 'bar', label: 'Per\u00edodo atual', data: wc.map(function(d) { return d.this_week || 0; }), backgroundColor: PALETTE.accentWarm, order: 0 },
+                    { type: 'bar', label: 'Per\u00edodo anterior', data: wc.map(function(d) { return d.last_week || 0; }), backgroundColor: PALETTE.border, order: 0 },
+                    { type: 'line', label: indicatorLabel, data: wc.map(function(d) { return d.indicators ? d.indicators[indicator] : null; }), borderColor: indicatorColor, backgroundColor: 'transparent', borderWidth: 2, pointRadius: 3, tension: 0.3, yAxisID: 'y1', order: 10 }
                 ]
             },
             options: {
                 scales: {
                     y: { beginAtZero: true, title: { display: true, text: 'demandas' } },
-                    y1: { position: 'right', beginAtZero: true, max: 100, title: { display: true, text: '%' }, grid: { display: false } }
+                    y1: { position: 'right', beginAtZero: true, max: (indicator === 'avg_time_min' ? undefined : 100), title: { display: true, text: indicator === 'avg_time_min' ? 'min' : '%' }, grid: { display: false } }
                 }
             }
         });
@@ -1330,6 +1342,7 @@ if (document.readyState === 'loading') {
 
         api('/api/v1/analytics/dashboard?' + params).then(function(data) {
             state.lastData = data;
+            window._dashboardData = data;
             // Step A: KPI strip (from Task 5.3)
             var kpiEl = document.getElementById('kpiStrip');
             if (kpiEl) {
@@ -1390,6 +1403,7 @@ if (document.readyState === 'loading') {
 
             // Step D: Wire all 6 Chart.js charts + zoom
             if (typeof Chart !== 'undefined') {
+                if (window._compChart) { window._compChart.destroy(); window._compChart = null; }
                 var chartIds = ['chart-comparativo', 'chart-volume-ma', 'chart-fila-hora', 'chart-velocidade', 'chart-retirada'];
                 chartIds.forEach(function(id) {
                     var el = document.getElementById(id);
@@ -1400,11 +1414,33 @@ if (document.readyState === 'loading') {
                 });
 
                 var c1El = document.getElementById('chart-comparativo');
+                var compIndicator = document.getElementById('comp-indicator');
+                var compIndicatorVal = compIndicator ? compIndicator.value : 'sla_pct';
                 if (c1El) {
-                    var compChart = createComparativoChart(c1El.querySelector('canvas'), data);
+                    var compChart = createComparativoChart(c1El.querySelector('canvas'), data, compIndicatorVal);
                     if (!compChart) {
                         c1El.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;min-height:200px;color:var(--c-text-muted);font-size:13px;">Sem dados comparativos — selecione 7d ou 30d</div>';
+                    } else {
+                        window._compChart = compChart;
                     }
+                }
+                if (compIndicator) {
+                    if (compIndicator._ch) compIndicator.removeEventListener('change', compIndicator._ch);
+                    var handler = function() {
+                        if (window._compChart) {
+                            window._compChart.destroy();
+                            window._compChart = null;
+                        }
+                        var c1ElInner = document.getElementById('chart-comparativo');
+                        if (!c1ElInner || !window._dashboardData) return;
+                        c1ElInner.innerHTML = '';
+                        var canvas = document.createElement('canvas');
+                        c1ElInner.appendChild(canvas);
+                        var newChart = createComparativoChart(canvas, window._dashboardData, compIndicator.value);
+                        if (newChart) window._compChart = newChart;
+                    };
+                    compIndicator.addEventListener('change', handler);
+                    compIndicator._ch = handler;
                 }
                 var c2El = document.getElementById('chart-volume-ma');
                 if (c2El) createVolumeMAChart(c2El.querySelector('canvas'), data);
