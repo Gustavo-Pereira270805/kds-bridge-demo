@@ -504,7 +504,8 @@
             btn.textContent = '...';
             api('/api/v1/demands/' + id2 + '/stockout', { method: 'POST' })
                 .catch(function(err) {
-                    alert(err.message);
+                    console.error(err);
+                    showNotification(err.message, 'error');
                     btn.disabled = false;
                     btn.textContent = 'Zerou';
                 });
@@ -541,7 +542,8 @@
             btn.disabled = false;
             btn.textContent = 'Confirmar Cancelamento';
         }).catch(function(err) {
-            alert(err.message);
+            console.error(err);
+            showNotification(err.message, 'error');
             btn.disabled = false;
             btn.textContent = 'Confirmar Cancelamento';
         });
@@ -581,7 +583,8 @@
                 btn.textContent = 'Sim, Confirmar Retirada';
             })
             .catch(function(err) {
-                alert(err.message);
+                console.error(err);
+                showNotification(err.message, 'error');
                 btn.disabled = false;
                 btn.textContent = 'Sim, Confirmar Retirada';
             });
@@ -766,7 +769,7 @@
                 }
                 api('/api/v1/products/search?q=' + encodeURIComponent(q))
                     .then(function(data) { renderProductDropdown(data); })
-                    .catch(function() { renderProductDropdown([]); });
+                    .catch(function(err) { console.error(err); renderProductDropdown([]); });
             }, 250);
         });
         productSearchEl.addEventListener('keydown', function(e) {
@@ -859,7 +862,8 @@
                 replSelect2.style.display = 'none';
             }
         }).catch(function(err) {
-            alert(err.message);
+            console.error(err);
+            showNotification(err.message, 'error');
         }).finally(function() {
             if (btn) {
                 btn.disabled = false;

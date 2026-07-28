@@ -266,7 +266,7 @@ function api(url, opts) {
             return res.json().then(function(e) { throw new Error(e.error || 'Erro ' + res.status); })
                 .catch(function(e2) { throw e2 instanceof Error ? e2 : new Error('Erro ' + res.status); });
         }
-        return res.json().catch(function() { return {}; });
+        return res.json().catch(function(err) { console.error(err); return {}; });
     });
 }
 
@@ -344,7 +344,7 @@ function loadProducts() {
                 '</td>' +
             '</tr>';
         }).join('');
-    }).catch(function() { toast('Erro ao carregar produtos', false); });
+    }).catch(function(err) { console.error(err); toast('Erro ao carregar produtos', false); });
 }
 
 function addProduct() {
@@ -373,11 +373,11 @@ function updateProduct(id, field, value) {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
-    }).catch(function() {});
+    }).catch(function(err) { console.error(err); });
 }
 
 function toggleProduct(id) {
-    api('/api/v1/products/' + id, { method: 'PATCH' }).then(function() { loadProducts(); }).catch(function() {});
+    api('/api/v1/products/' + id, { method: 'PATCH' }).then(function() { loadProducts(); }).catch(function(err) { console.error(err); });
 }
 
 async function deleteProduct(id, name) {
@@ -594,7 +594,7 @@ function loadReasons() {
                 '</td>' +
                 '</tr>';
         }).join('');
-    }).catch(function() { toast('Erro ao carregar motivos', false); });
+    }).catch(function(err) { console.error(err); toast('Erro ao carregar motivos', false); });
 }
 
 function addReason() {

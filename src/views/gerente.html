@@ -343,6 +343,19 @@
 
     var allProducts = [];
 
+    function showToast(msg, kind /* 'error' | 'warn' | 'info' */) {
+        var t = document.createElement('div');
+        t.className = 'toast toast-' + (kind || 'info');
+        t.setAttribute('role', 'alert');
+        t.textContent = msg;
+        document.body.appendChild(t);
+        var duration = (kind === 'error') ? 12000 : 4000;
+        setTimeout(function() {
+            t.style.opacity = '0';
+            setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 250);
+        }, duration);
+    }
+
     function api(url, opts) {
         return fetch(url, opts).then(function(res) {
             if (!res.ok) return res.json().then(function(e) { throw new Error(e.error || 'Erro ' + res.status); });
@@ -423,7 +436,8 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ product_id: productId, action: 'remove' })
         }).then(function() { fetchProducts(); }).catch(function(err) {
-            alert(err.message);
+            console.error(err);
+            showToast(err.message, 'error');
             btn.disabled = false;
             btn.textContent = 'Remover';
         });
