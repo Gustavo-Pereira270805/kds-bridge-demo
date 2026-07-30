@@ -1,0 +1,13 @@
+step 1 action: initial state check
+  state: {"today": "true", "yesterday": "false", "week": "false", "month": "false"}
+step 2 action: click Ontem
+  state: {"today": "false", "yesterday": "true", "week": "false", "month": "false"}
+step 3 action: click Últimos 7 dias
+  state: {"today": "false", "yesterday": "false", "week": "true", "month": "false"}
+step 4 action: click Últimos 30 dias
+  state: {"today": "false", "yesterday": "false", "week": "false", "month": "true"}
+step 5 action: click Hoje
+  state: {"today": "true", "yesterday": "false", "week": "false", "month": "false"}
+step 99 action: keyboard activation test
+  state: {"today": "false", "yesterday": "true", "week": "false", "month": "false"}
+RESULT: PASS

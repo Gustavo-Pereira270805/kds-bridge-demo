@@ -1,0 +1,12 @@
+step 0 params: url=http://127.0.0.1:3000/dashboard
+step 1 action: navigated to /dashboard
+step 2 palette_keys: ["primary", "primaryTint", "accentWarm", "accentCold", "warn", "danger", "replacement", "textMuted", "border", "text", "textInvert"]
+step 3 series_count: 7
+step 4 chart_defined: True
+step 5 chart_font: family="'Inter', -apple-system, sans-serif" size=12
+step 7 body_text_length: 503 kpi_count: 14
+step 6 screenshot: dashboard loaded
+step 8 console_errors: []
+step 9 page_errors: []
+step 10 palette_sample: {"primary": "#1d3557", "primaryTint": "#457b9d", "accentWarm": "#2a9d8f", "danger": "#e63946", "textMuted": "#6b7280"}
+ALL CHECKS PASSED

@@ -1,0 +1,28 @@
+step 1: navigating to /dashboard
+step 2: capturing initial collapsed side nav
+step 3: hovering over side nav to expand it
+step 4: checking side nav structure
+  side nav count: 1
+  list item count: 6
+  sections: [{'data_section': 'top', 'aria_current': 'false', 'svg_count': 1, 'label': 'Topo'}, {'data_section': 'overview', 'aria_current': 'false', 'svg_count': 1, 'label': 'Visão Geral'}, {'data_section': 'demand', 'aria_current': 'false', 'svg_count': 1, 'label': 'Demanda'}, {'data_section': 'sla', 'aria_current': 'false', 'svg_count': 1, 'label': 'SLA e Tempos'}, {'data_section': 'diagnosis', 'aria_current': 'false', 'svg_count': 1, 'label': 'Diagnóstico'}, {'data_section': 'performance', 'aria_current': 'false', 'svg_count': 1, 'label': 'Performance'}]
+step 5: verifying data-section values
+  actual: ['top', 'overview', 'demand', 'sla', 'diagnosis', 'performance']
+  expected: ['top', 'overview', 'demand', 'sla', 'diagnosis', 'performance']
+step 6: verifying aria-current values
+step 7: verifying each li has exactly one svg.icon
+step 8: verifying labels
+  actual: ['Topo', 'Visão Geral', 'Demanda', 'SLA e Tempos', 'Diagnóstico', 'Performance']
+  expected: ['Topo', 'Visão Geral', 'Demanda', 'SLA e Tempos', 'Diagnóstico', 'Performance']
+step 9: verifying SVG viewBox is 24x24
+  first svg viewBox: 0 0 24 24
+step 10: clicking each nav link to verify anchor target
+  target #top: count=1
+  target #overview: count=1
+  target #demand: count=1
+  target #sla: count=1
+  target #diagnosis: count=1
+  target #performance: count=1
+step 11: console errors
+  console errors: []
+step 12: capturing page after scroll to demand section
+DONE: all 6 nav items verified, all anchors resolve, no console errors

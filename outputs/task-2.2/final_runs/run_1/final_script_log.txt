@@ -1,0 +1,21 @@
+step 1 action: navigate to /dashboard
+step 2 action: verify dashboard.css link is in head
+  result: dashboard.css linked = True
+step 3 action: verify header structure
+  result: {'hasStickyHeader': True, 'hasHeaderInner': True, 'titleText': 'Dashboard', 'titleClass': 'header-title'}
+step 4 action: verify layout structure
+  result: {'hasLayout': True, 'hasAside': True, 'asideContent': '<!-- populated in Phase 3 -->', 'hasMain': True, 'hasTopAnchor': True, 'childCount': 8}
+step 5 action: verify 5 sections with verbatim text
+  section overview: found=True eyebrow=True title=True desc=True
+  section demand: found=True eyebrow=True title=True desc=True
+  section sla: found=True eyebrow=True title=True desc=True
+  section diagnosis: found=True eyebrow=True title=True desc=True
+  section performance: found=True eyebrow=True title=True desc=True
+step 6 action: verify legacyContent wraps #content
+  result: {'legacyExists': True, 'legacyHidden': True, 'contentExists': True, 'contentInsideLegacy': True, 'contentStyle': 'display: block;'}
+step 7 action: verify KPI strip placeholder
+  result: {'exists': True, 'hasClass': True, 'content': '<!-- populated in Phase 5 -->'}
+step 8 action: take final screenshot
+step 9 action: console errors count = 0
+step 10 action: page errors count = 0
+FINAL: all_ok = True

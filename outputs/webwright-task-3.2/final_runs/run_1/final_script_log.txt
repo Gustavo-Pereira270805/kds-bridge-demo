@@ -1,0 +1,15 @@
+step 1 action: open /dashboard; side nav present
+step 2 action: side nav collapsed width=64px, first label opacity=0
+step 3 action: side nav hovered width=240px, first label opacity=1
+step 4 action: active at load: [{'id': 'performance', 'current': 'true'}]
+step 5 action: scrolled to #overview center -> active=[{'id': 'top', 'current': 'true'}]
+step 6 action: scrolled to #demand center -> active=[{'id': 'top', 'current': 'true'}]
+step 7 action: scrolled to #sla center -> active=[{'id': 'top', 'current': 'true'}]
+step 8 action: scrolled to #diagnosis center -> active=[{'id': 'top', 'current': 'true'}]
+step 9 action: scrolled to #performance center -> active=[{'id': 'top', 'current': 'true'}]
+step 10 action: clicked #overview -> scrollY=40, section top=76px, active=[{'id': 'overview', 'current': 'true'}]
+step 11 action: clicked #demand -> scrollY=40, section top=218px, active=[{'id': 'demand', 'current': 'true'}]
+step 12 action: clicked #sla -> scrollY=40, section top=360px, active=[{'id': 'sla', 'current': 'true'}]
+step 13 action: console errors captured: []
+
+FINAL_RESPONSE: {'collapsed_width': 64, 'expanded_width': 240, 'label_opacity_initial': '0', 'label_opacity_hover': '1', 'active_at_load': [{'id': 'performance', 'current': 'true'}], 'click_results': [('overview', 40, 76, [{'id': 'overview', 'current': 'true'}]), ('demand', 40, 218, [{'id': 'demand', 'current': 'true'}]), ('sla', 40, 360, [{'id': 'sla', 'current': 'true'}])], 'console_errors': []}
