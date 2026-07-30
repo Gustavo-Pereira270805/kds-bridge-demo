@@ -6,6 +6,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/styles/theme.css">
     <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -178,46 +179,64 @@
         });
         let demands = [];
         let timeInterval;
-        let audioCtx = null;
-        try {
-            const AC = window.AudioContext || window.webkitAudioContext;
-            if (AC) audioCtx = new AC();
-        } catch (e) {
-            console.warn('Web Audio API não disponível');
-        }
-
-        function playTone(frequency, duration, type, volume) {
-            if (!audioCtx) return;
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.type = type || 'square';
-            osc.frequency.value = frequency;
-            gain.gain.setValueAtTime(volume || 0.3, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.start();
-            osc.stop(audioCtx.currentTime + duration);
-        }
-
         function playNormalAlert() {
-            playTone(800, 0.15, 'sine', 0.3);
-            setTimeout(() => playTone(1000, 0.15, 'sine', 0.3), 200);
-            setTimeout(() => playTone(1200, 0.2, 'sine', 0.3), 400);
+            if (typeof Tone === 'undefined') return;
+            Tone.start();
+            var synth = new Tone.Synth({
+                oscillator: { type: 'triangle' },
+                envelope: { attack: 0.003, decay: 0.15, sustain: 0, release: 0.2 }
+            }).toDestination();
+            synth.volume.value = Tone.gainToDb(0.35);
+            var now = Tone.context.currentTime;
+            var notes = ['C#5', 'F#5', 'G#5'];
+            for (var c = 0; c < 2; c++) {
+                for (var i = 0; i < notes.length; i++) {
+                    synth.triggerAttackRelease(notes[i], '16n', now + c * 0.40 + i * 0.09);
+                }
+            }
+            setTimeout(function() { synth.dispose(); }, 2000);
         }
 
         function playUrgentAlert() {
-            for (let i = 0; i < 6; i++) {
-                setTimeout(() => {
-                    playTone(880, 0.12, 'square', 0.4);
-                }, i * 250);
+            if (typeof Tone === 'undefined') return;
+            Tone.start();
+            var now = Tone.context.currentTime;
+            var cycleLen = 0.45;
+            var freqs = [2000, 2500, 3000];
+            for (var c = 0; c < 2; c++) {
+                var fm = new Tone.FMSynth({
+                    harmonicity: 3.2,
+                    modulationIndex: 15,
+                    carrier: { type: 'sawtooth' },
+                    modulation: { type: 'square' }
+                }).toDestination();
+                fm.volume.value = Tone.gainToDb(0.4);
+                var base = now + c * cycleLen;
+                fm.triggerAttackRelease(freqs[0], '64n', base);
+                fm.triggerAttackRelease(freqs[1], '64n', base + 0.15);
+                fm.triggerAttackRelease(freqs[2], '64n', base + 0.28);
+                setTimeout(function(s) { s.dispose(); }, 1500, fm);
             }
         }
 
         function playStockoutAlert() {
-            for (let i = 0; i < 12; i++) {
-                setTimeout(() => playTone(1000, 0.15, 'square', 0.6), i * 200);
+            if (typeof Tone === 'undefined') return;
+            Tone.start();
+            var fm = new Tone.FMSynth({
+                harmonicity: 2.5,
+                modulationIndex: 6,
+                carrier: { partials: [1, 0.3, 0.1] },
+                modulation: { type: 'sine' }
+            }).toDestination();
+            fm.volume.value = Tone.gainToDb(0.3);
+            var now = Tone.context.currentTime;
+            var notes = ['C6', 'G5', 'E5', 'C5'];
+            for (var c = 0; c < 2; c++) {
+                for (var i = 0; i < notes.length; i++) {
+                    fm.triggerAttackRelease(notes[i], '8n', now + c * 0.50 + i * 0.11);
+                }
             }
+            setTimeout(function() { fm.dispose(); }, 2000);
         }
 
         socket.emit('identify', 'cozinha');
@@ -438,14 +457,14 @@
         socket.on('demand:new', (demand) => {
             demands.push(demand);
             render();
-            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+            if (typeof Tone !== 'undefined') Tone.start();
             playNormalAlert();
         });
 
         socket.on('demand:urgent', (demand) => {
             demands.push(demand);
             render();
-            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+            if (typeof Tone !== 'undefined') Tone.start();
             playUrgentAlert();
         });
 
@@ -470,7 +489,7 @@
             const idx = demands.findIndex(d => d.id === updated.id);
             if (idx !== -1) demands[idx] = updated;
             render();
-            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+            if (typeof Tone !== 'undefined') Tone.start();
             playStockoutAlert();
         });
 
