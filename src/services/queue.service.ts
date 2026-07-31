@@ -42,12 +42,15 @@ export async function recomputeStationQueue(stationId: string): Promise<void> {
   const nonUrgentLocked = locked.filter(d => d.priority !== 'urgent');
   const preemptedIds = new Set<string>();
 
-  if (urgentWaiting.length > 0 && nonUrgentLocked.length > 0) {
+  const freeSlotsCount = Math.max(0, station.capacity - locked.length);
+  const neededPreemptions = Math.max(0, urgentWaiting.length - freeSlotsCount);
+
+  if (neededPreemptions > 0 && nonUrgentLocked.length > 0) {
     nonUrgentLocked.sort((a, b) =>
       new Date(b.expected_ready_at!).getTime() - new Date(a.expected_ready_at!).getTime()
     );
 
-    const preemptCount = Math.min(urgentWaiting.length, nonUrgentLocked.length);
+    const preemptCount = Math.min(neededPreemptions, nonUrgentLocked.length);
 
     for (let i = 0; i < preemptCount; i++) {
       const victim = nonUrgentLocked[i];
@@ -89,9 +92,18 @@ export async function recomputeStationQueue(stationId: string): Promise<void> {
     }
   }
 
+  const relockedIds = new Set(toLock.map(l => l.id));
+  const unlockOnly = toUnlock.filter(id => !relockedIds.has(id));
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    for (const id of unlockOnly) {
+      await client.query(
+        `UPDATE demands SET cooking_started = false, cooking_started_at = NULL WHERE id = $1`,
+        [id]
+      );
+    }
     for (const u of toLock) {
       await client.query(
         `UPDATE demands SET expected_ready_at = $1, cooking_started = true, cooking_started_at = now()
