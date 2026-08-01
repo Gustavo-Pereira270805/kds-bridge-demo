@@ -141,6 +141,7 @@
         <button class="tab" onclick="switchTab('menus')">Cardápios</button>
         <button class="tab" onclick="switchTab('unidades')">Unidades</button>
         <button class="tab" onclick="switchTab('reasons')">Motivos Cancelamento</button>
+        <button class="tab" onclick="switchTab('weights'); loadWeights();">Critérios de Avaliação</button>
     </div>
 
     <!-- Painel: Produtos -->
@@ -243,15 +244,49 @@
                 <tr><th>Motivo</th><th>Categoria</th><th>Status</th><th style="width:140px;">Ações</th></tr>
             </thead>
             <tbody id="reasonsTableBody">
-<tr><td colspan="4"><div class="skeleton-block" style="height:14px;width:100%;"></div></td></tr>
-<tr><td colspan="4"><div class="skeleton-block" style="height:14px;width:100%;"></div></td></tr>
-<tr><td colspan="4"><div class="skeleton-block" style="height:14px;width:100%;"></div></td></tr>
-<tr><td colspan="4"><div class="skeleton-block" style="height:14px;width:100%;"></div></td></tr>
-</tbody>
-        </table>
-    </div>
+<tr><td colspan="4"><div class="skeleton-block" style="height:14px;width:100%;</div</td</tr>
+<tr><td colspan="4"><div class="skeleton-block" style="height:14px;width:100%;</div</td</tr>
+<tr><td colspan="4"><div class="skeleton-block" style="height:14px;width:100%;</div</td</tr>
+<tr><td colspan="4"><div class="skeleton-block" style="height:14px;width:100%;</div</td</tr>
+           </tbody>
+       </table>
+   </div>
+
+    <!-- Painel: Critérios de Avaliação (Pesos de Performance) -->
+    <div class="panel" id="panel-weights">
+        <h2>Critérios de Avaliação (Pesos da Nota de Performance</h2>
+        <p style="color:#6b7280; font-size:14px; margin-bottom: 24px;">
+            Ajuste o impacto (penalidade) de cada tipo de evento no cálculo automático da nota diária do restaurante. A nota base é 5.0; cada ocorrência subtrai o valor definido abaixo. As alterações recalcularão as notas já geradas.
+       </p>
+        <div style="max-width: 620px; display: flex; flex-direction: column; gap: 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:#f9fafb; border-radius:10px;">
+                <label style="flex:1; font-weight:600; color:#1d3557;">Estouro de SLA (Cozinha</label>
+                <input type="number" step="0.01" min="0" max="5" id="weightSlaBreach" class="sla-input" style="width:110px;">
+           </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:#f9fafb; border-radius:10px;">
+                <label style="flex:1; font-weight:600; color:#1d3557;">Cancelamento de Pedido</label>
+                <input type="number" step="0.01" min="0" max="5" id="weightCancellation" class="sla-input" style="width:110px;">
+           </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:#f9fafb; border-radius:10px;">
+                <label style="flex:1; font-weight:600; color:#1d3557;">Zerou (Reportado pela Cozinha</label>
+                <input type="number" step="0.01" min="0" max="5" id="weightStockoutKitchen" class="sla-input" style="width:110px;">
+           </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:#f9fafb; border-radius:10px;">
+                <label style="flex:1; font-weight:600; color:#1d3557;">Zerou (Reportado pelo Salão</label>
+                <input type="number" step="0.01" min="0" max="5" id="weightStockoutSalao" class="sla-input" style="width:110px;">
+           </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:#f9fafb; border-radius:10px;">
+                <label style="flex:1; font-weight:600; color:#1d3557;">Item Lento</label>
+                <input type="number" step="0.01" min="0" max="5" id="weightSlowItem" class="sla-input" style="width:110px;">
+           </div>
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:8px;">
+                <button class="btn-success" onclick="saveWeights()">Salvar e Recalcular</button>
+           </div>
+       </div>
+   </div>
 
 <script>
+
 function toast(msg, ok) {
     var el = document.createElement('div');
     el.className = 'toast ' + (ok ? 'success' : 'error');
@@ -315,6 +350,34 @@ function switchTab(name) {
     if (name === 'menus') loadMenus();
     if (name === 'unidades') loadUnitsPanel();
     if (name === 'reasons') loadReasons();
+}
+
+// === PESOS DE PERFORMANCE ===
+function loadWeights() {
+    api('/api/v1/admin/settings/weights').then(function(data) {
+        document.getElementById('weightSlaBreach').value = data.sla_breach;
+        document.getElementById('weightCancellation').value = data.cancellation;
+        document.getElementById('weightStockoutKitchen').value = data.stockout_kitchen;
+        document.getElementById('weightStockoutSalao').value = data.stockout_salao;
+        document.getElementById('weightSlowItem').value = data.slow_item;
+    }).catch(function(err) { toast(err.message, false); });
+}
+
+function saveWeights() {
+    var body = {
+        sla_breach: parseFloat(document.getElementById('weightSlaBreach').value),
+        cancellation: parseFloat(document.getElementById('weightCancellation').value),
+        stockout_kitchen: parseFloat(document.getElementById('weightStockoutKitchen').value),
+        stockout_salao: parseFloat(document.getElementById('weightStockoutSalao').value),
+        slow_item: parseFloat(document.getElementById('weightSlowItem').value)
+    };
+    api('/api/v1/admin/settings/weights', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    }).then(function() {
+        toast('Pesos salvos! As notas serão recalculadas.', true);
+    }).catch(function(err) { toast(err.message, false); });
 }
 
 // === PRODUTOS ===

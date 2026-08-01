@@ -427,4 +427,65 @@ export default async function adminRoutes(fastify: FastifyInstance) {
       reply.code(500).send({ error: 'Erro ao definir cardápio da data' });
     }
   });
+
+  // GET: Configuração dos Pesos de Desempenho
+  fastify.get('/settings/weights', async (request, reply) => {
+    try {
+      const rows = await query<{ key: string; value: string }>(
+        `SELECT key, value FROM system_settings WHERE key LIKE 'score_weight_%'`
+      );
+      const map: Record<string, number> = {};
+      rows.forEach(r => { map[r.key] = parseFloat(r.value); });
+      
+      return {
+        sla_breach: map.score_weight_sla_breach ?? 0.15,
+        cancellation: map.score_weight_cancellation ?? 0.30,
+        stockout_kitchen: map.score_weight_stockout_kitchen ?? 0.20,
+        stockout_salao: map.score_weight_stockout_salao ?? 0.10,
+        slow_item: map.score_weight_slow_item ?? 0.10,
+      };
+    } catch (error) {
+      request.log.error(error);
+      reply.code(500).send({ error: 'Erro ao buscar pesos' });
+    }
+  });
+
+  // PUT: Atualiza a configuração de pesos de desempenho
+  fastify.put<{
+    Body: {
+      sla_breach: number;
+      cancellation: number;
+      stockout_kitchen: number;
+      stockout_salao: number;
+      slow_item: number;
+    }
+  }>('/settings/weights', async (request, reply) => {
+    try {
+      const { sla_breach, cancellation, stockout_kitchen, stockout_salao, slow_item } = request.body;
+      
+      const queries = [
+        { key: 'score_weight_sla_breach', val: sla_breach },
+        { key: 'score_weight_cancellation', val: cancellation },
+        { key: 'score_weight_stockout_kitchen', val: stockout_kitchen },
+        { key: 'score_weight_stockout_salao', val: stockout_salao },
+        { key: 'score_weight_slow_item', val: slow_item }
+      ];
+
+      for (const q of queries) {
+        if (typeof q.val === 'number' && !isNaN(q.val)) {
+          await query(
+            `INSERT INTO system_settings (key, value) VALUES ($1, $2)
+             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+            [q.key, q.val.toString()]
+          );
+        }
+      }
+      
+      return { success: true };
+    } catch (error) {
+      request.log.error(error);
+      reply.code(500).send({ error: 'Erro ao salvar pesos' });
+    }
+  });
+
 }
