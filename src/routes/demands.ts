@@ -467,10 +467,29 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           const novoSla = (urgente != null && Number(urgente) > 0)
             ? Math.min(demand.sla_minutes ?? Infinity, Number(urgente))
             : demand.sla_minutes;
-          await query(
-            `UPDATE demands SET priority = 'urgent', sla_minutes = $1 WHERE id = $2`,
-            [novoSla, id]
-          );
+          // Se a demanda já está em preparo (locked) e o SLA foi reduzido, recalcular expected_ready_at
+          // com o novo SLA. O recomputeStationQueue preserva slots locked, então ajustamos aqui.
+          if (novoSla != null && demand.sla_minutes != null && novoSla < demand.sla_minutes) {
+            // Parâmetros separados ($3 explícito) para o driver pg deduzir corretamente o tipo
+            await query(
+              `UPDATE demands
+                  SET priority = 'urgent', sla_minutes = $1,
+                      expected_ready_at = cooking_started_at + ($3::int * INTERVAL '1 minute')
+                WHERE id = $2 AND cooking_started = true AND cooking_started_at IS NOT NULL`,
+              [novoSla, id, Number(novoSla)]
+            );
+            // Se não estava locked, update normal (sem mexer no expected_ready_at — recompute cuida)
+            await query(
+              `UPDATE demands SET priority = 'urgent', sla_minutes = $1
+                WHERE id = $2 AND (cooking_started = false OR cooking_started_at IS NULL)`,
+              [novoSla, id]
+            );
+          } else {
+            await query(
+              `UPDATE demands SET priority = 'urgent', sla_minutes = $1 WHERE id = $2`,
+              [novoSla, id]
+            );
+          }
         } else if (demand.status === 'pending') {
           await query(
             `UPDATE demands SET priority = 'urgent' WHERE id = $1`,
