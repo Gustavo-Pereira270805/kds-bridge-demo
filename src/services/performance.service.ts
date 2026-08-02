@@ -4,7 +4,6 @@ import { PerformanceScoreRow, PerformanceDetractor } from '../types';
 interface Weights {
   sla_breach: number;
   cancellation: number;
-  stockout_kitchen: number;
   stockout_salao: number;
   slow_item: number;
 }
@@ -18,7 +17,6 @@ async function getWeights(): Promise<Weights> {
   return {
     sla_breach: map.score_weight_sla_breach ?? 0.15,
     cancellation: map.score_weight_cancellation ?? 0.30,
-    stockout_kitchen: map.score_weight_stockout_kitchen ?? 0.20,
     stockout_salao: map.score_weight_stockout_salao ?? 0.10,
     slow_item: map.score_weight_slow_item ?? 0.10,
   };
@@ -112,7 +110,7 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
 
     const slaDed = Math.round(slaBreaches * weights.sla_breach * 100) / 100;
     const cancelDed = Math.round(cancellations * weights.cancellation * 100) / 100;
-    const stockDed = Math.round(stockouts * weights.stockout_kitchen * 100) / 100;
+    const stockDed = 0; // Removido o peso para cozinha: "Zerou" não tira nota da cozinha
     const slowDed = Math.round(slowItems * weights.slow_item * 100) / 100;
     const totalDed = slaDed + cancelDed + stockDed + slowDed;
     const finalScore = Math.max(0, Math.round((5.0 - totalDed) * 10) / 10);
