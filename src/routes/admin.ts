@@ -480,8 +480,21 @@ export default async function adminRoutes(fastify: FastifyInstance) {
           );
         }
       }
-      
-      return { success: true };
+
+      // Recálculo retroativo: dispara o recálculo em background
+      // sem travar a request HTTP do usuário
+      query<{ date: any }>(
+        `SELECT DISTINCT date FROM performance_scores ORDER BY date`
+      ).then(async (dates) => {
+        request.log.info(`Iniciando recálculo retroativo para ${dates.length} datas...`);
+        for (const row of dates) {
+          const dateStr = row.date instanceof Date ? row.date.toISOString().slice(0, 10) : String(row.date);
+          await computeDailyScores(dateStr).catch(e => request.log.error(e));
+        }
+        request.log.info('Recálculo retroativo concluído.');
+      }).catch(e => request.log.error('Erro ao buscar datas para recálculo', e));
+
+      return { success: true, message: 'Recálculo em background iniciado.' };
     } catch (error) {
       request.log.error(error);
       reply.code(500).send({ error: 'Erro ao salvar pesos' });
