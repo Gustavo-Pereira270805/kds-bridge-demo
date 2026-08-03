@@ -19,6 +19,7 @@ export interface KitchenStation {
   code: string;
   name: string;
   capacity: number;
+  theme: 'dark' | 'light';
   created_at: string;
   updated_at: string;
 }

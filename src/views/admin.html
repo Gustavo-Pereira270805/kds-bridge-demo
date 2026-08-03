@@ -4,57 +4,61 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Gerenciamento KDS Bridge</title>
+    <script>
+      document.documentElement.setAttribute('data-theme', localStorage.getItem('kds-theme') || 'dark');
+    </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/styles/theme.css">
+    <script src="/scripts/theme.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: #f4f4f5; color: #1e1e1e; padding: 20px; min-height: 100vh;
+            background: var(--c-bg-page); color: var(--c-text-body); padding: 20px; min-height: 100vh;
         }
         h1 { margin-top: 0; font-weight: 700; color: white; }
-        h2 { margin: 20px 0 10px 0; font-weight: 700; font-size: 20px; color: #1d3557; }
-        h3 { font-weight: 600; font-size: 16px; color: #374151; margin-bottom: 10px; }
+        h2 { margin: 20px 0 10px 0; font-weight: 700; font-size: 20px; color: var(--c-accent-gold); }
+        h3 { font-weight: 600; font-size: 16px; color: var(--c-text-body); margin-bottom: 10px; }
 
         .tabs { display: flex; gap: 0; margin-bottom: 0; }
         .tab {
-            padding: 14px 24px; background: #e5e7eb; border: none; cursor: pointer;
+            padding: 14px 24px; background: var(--c-bg-panel); border: 1px solid var(--c-border-default); cursor: pointer;
             font-size: 15px; font-weight: 600; border-radius: var(--radius-md) var(--radius-md) 0 0;
-            color: #374151; transition: all 0.2s ease; font-family: inherit;
+            color: var(--c-text-secondary); transition: all 0.2s ease; font-family: inherit;
         }
-        .tab:hover { background: #d1d5db; }
-        .tab.active { background: #1d3557; color: white; }
+        .tab:hover { background: var(--c-primary-tint); }
+        .tab.active { background: var(--c-accent-gold); color: var(--c-on-accent); }
 
         .panel {
-            display: none; background: white; padding: 24px;
+            display: none; background: var(--c-bg-panel); padding: 24px;
             border-radius: 0 var(--radius-xl) var(--radius-xl) var(--radius-xl);
-            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            box-shadow: var(--shadow-card-dark);
             animation: fadeInUp 0.3s ease;
         }
         .panel.active { display: block; }
 
         table { width: 100%; border-collapse: collapse; margin-top: 12px; }
         th, td {
-            padding: 12px 14px; text-align: left; border-bottom: 1px solid #e5e7eb;
+            padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--c-border-default);
             font-size: 14px;
         }
         th {
-            background: #1d3557; color: white;
+            background: var(--c-primary-tint); color: var(--c-text-body);
             font-weight: 600; font-size: 13px; text-transform: uppercase;
             letter-spacing: 0.5px;
         }
-        tr:nth-child(even) { background-color: #f9fafb; }
-        tr:hover { background-color: #f0fdf8; }
+        tr:nth-child(even) { background-color: var(--c-bg-page); }
+        tr:hover { background-color: var(--alert-ok-bg-dark); }
 
         input, select {
-            padding: 10px 14px; border: 2px solid #e0e0e0; border-radius: 10px;
+            padding: 10px 14px; border: 2px solid var(--c-border-default); border-radius: 10px;
             font-size: 14px; font-family: inherit;
             transition: border-color 0.2s ease, box-shadow 0.2s ease;
-            background: white;
+            background: var(--c-bg-page); color: var(--c-text-body);
         }
         input:focus, select:focus {
-            border-color: #2a9d8f; box-shadow: 0 0 0 3px rgba(42,157,143,0.2);
+            border-color: var(--c-accent-warm); box-shadow: 0 0 0 3px rgba(16,185,129,0.2);
             outline: none;
         }
         input[type="number"] { width: 80px; }
@@ -71,18 +75,18 @@
         button:disabled { opacity: 0.5; cursor: not-allowed; filter: none; transform: none; }
 
         .btn-sm { padding: 6px 14px; font-size: 12px; border-radius: 8px; }
-        .btn-primary { background: #1d3557; color: white; }
-        .btn-success { background: #2a9d8f; color: white; }
-        .btn-danger { background: #e63946; color: white; }
-        .btn-warning { background: #f4a261; color: #1e1e1e; }
+        .btn-primary { background: var(--c-primary); color: var(--c-on-primary); }
+        .btn-success { background: var(--c-accent-warm); color: var(--c-text-invert); }
+        .btn-danger { background: var(--c-danger); color: var(--c-text-invert); }
+        .btn-warning { background: var(--c-warn); color: var(--c-on-primary); }
 
         .row { display: flex; gap: 12px; align-items: flex-end; margin-bottom: 12px; flex-wrap: wrap; }
         .form-group { display: flex; flex-direction: column; gap: 4px; }
         .form-group label {
-            font-weight: 600; font-size: 12px; color: #6b7280;
+            font-weight: 600; font-size: 12px; color: var(--c-text-secondary);
             text-transform: uppercase; letter-spacing: 0.5px;
         }
-        .divider { border-top: 2px solid #f3f4f6; margin: 20px 0; }
+        .divider { border-top: 2px solid var(--c-border-default); margin: 20px 0; }
 
         .toast {
             position: fixed; bottom: 24px; right: 24px;
@@ -91,12 +95,12 @@
             box-shadow: 0 4px 16px rgba(0,0,0,0.2);
             animation: slideUp 0.3s ease;
         }
-        .toast.success { background: #2a9d8f; }
-        .toast.error { background: #e63946; }
+        .toast.success { background: var(--c-accent-warm); }
+        .toast.error { background: var(--c-danger); }
 
         ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #e5e7eb; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 3px; }
+        ::-webkit-scrollbar-track { background: var(--c-bg-page); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: var(--c-text-secondary); border-radius: 3px; }
 
         .sla-input { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
@@ -127,12 +131,50 @@
         .modal-confirm h3 { margin: 0 0 var(--sp-3); color: var(--c-text); }
         .modal-confirm p { color: var(--c-text-muted); margin: 0 0 var(--sp-5); }
         .modal-actions { display: flex; gap: var(--sp-3); justify-content: flex-end; }
+
+        body { background: var(--c-bg-page); color: var(--c-text-body); }
+        h1 { color: var(--c-text-body); }
+        h2 { color: var(--c-accent-gold); }
+        h3 { color: var(--c-text-body); }
+        .tabs { gap: 4px; overflow-x: auto; }
+        .tab { background: var(--c-bg-panel); color: var(--c-text-secondary); border: 1px solid var(--c-border-default); min-height: 48px; }
+        .tab:hover { background: var(--c-primary-tint); color: var(--c-text-body); }
+        .tab.active { background: var(--c-accent-gold); color: var(--c-on-accent); border-color: var(--c-accent-gold); }
+        .panel { background: var(--c-bg-panel); border: 1px solid var(--c-border-default); box-shadow: var(--shadow-card-dark); }
+        table { color: var(--c-text-body); }
+        th, td { border-bottom-color: var(--c-border-default); }
+        th { background: var(--c-primary-tint); color: var(--c-text-body); }
+        tr:nth-child(even) { background-color: var(--c-bg-page); }
+        tr:hover { background-color: var(--alert-warn-bg-dark); }
+        input, select { background: var(--c-bg-page); color: var(--c-text-body); border-color: var(--c-border-default); min-height: 44px; }
+        input:focus, select:focus { border-color: var(--c-accent-gold); box-shadow: 0 0 0 3px rgba(212,165,116,0.18); }
+        button { min-height: 44px; box-shadow: 0 3px 0 rgba(0,0,0,0.25); }
+        button:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,0.25); }
+        .btn-sm { min-height: 40px; }
+        .btn-primary { background: var(--c-accent-gold); color: var(--c-on-accent); }
+        .btn-success { background: linear-gradient(180deg, #10b981 0%, #059669 100%); color: var(--c-on-primary); }
+        .btn-danger { background: linear-gradient(180deg, #e11d48 0%, #be123c 100%); color: var(--c-on-primary); }
+        .btn-warning { background: var(--c-warn); color: var(--c-on-primary); }
+        .form-group label { color: var(--c-text-secondary); }
+        .divider { border-top-color: var(--c-border-default); }
+        .toast { box-shadow: var(--shadow-elevated); }
+        .modal-confirm { background: var(--c-bg-panel); border: 1px solid var(--c-border-default); }
+        .modal-confirm h3 { color: var(--c-text-body); }
+        .modal-confirm p { color: var(--c-text-secondary); }
+        @media (max-width: 768px) { .tab { min-height: 52px; } }
     </style>
 </head>
 <body>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;background:#1d3557;color:white;padding:20px 30px;border-radius:0 0 16px 16px;margin:-20px -20px 20px -20px;">
-        <h1 style="margin:0;">⚙️ Painel de Gerenciamento</h1>
-        <a href="/gerente" style="padding:12px 24px;background:#6c757d;color:white;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;text-decoration:none;letter-spacing:0.5px;text-transform:uppercase;box-shadow:0 2px 8px rgba(0,0,0,0.2);transition:all 0.2s ease;">← Voltar ao Painel</a>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;background:var(--header-bg);color:var(--c-text-body);padding:20px 30px;border-radius:0 0 16px 16px;margin:-20px -20px 20px -20px;border-bottom:1px solid var(--c-border-default);">
+        <h1 style="margin:0;">Painel de Gerenciamento</h1>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <button type="button" id="themeToggle" class="btn-theme-toggle" aria-pressed="false" title="Alternar tema">
+                <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+                <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+                <span class="theme-toggle-label">Tema: Escuro</span>
+            </button>
+            <a href="/gerente" class="btn-dash-back">← Voltar ao Painel</a>
+        </div>
     </div>
 
     <div class="tabs">
@@ -213,7 +255,7 @@
         <div class="divider"></div>
         <div class="row" style="align-items:flex-end;">
             <div class="form-group"><label>Produto</label><select id="unitProductSelect" style="width:250px;"></select></div>
-            <div class="form-group"><label>Vincular Unidades</label><div id="unitCheckboxes" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;border:2px solid #e0e0e0;border-radius:10px;min-height:36px;"></div></div>
+            <div class="form-group"><label>Vincular Unidades</label><div id="unitCheckboxes" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;border:2px solid var(--c-border-default);border-radius:10px;min-height:36px;"></div></div>
             <div class="form-group"><label>&nbsp;</label><button class="btn-primary" onclick="saveProductUnits()">Salvar Vínculos</button></div>
         </div>
     </div>
@@ -255,24 +297,24 @@
     <!-- Painel: Critérios de Avaliação (Pesos de Performance) -->
     <div class="panel" id="panel-weights">
         <h2>Critérios de Avaliação (Pesos da Nota de Performance)</h2>
-        <p style="color:#6b7280; font-size:14px; margin-bottom: 24px;">
+        <p style="color:var(--c-text-secondary); font-size:14px; margin-bottom: 24px;">
             Ajuste o impacto (penalidade) de cada tipo de evento no cálculo automático da nota diária do restaurante. A nota base é 5.0; cada ocorrência subtrai o valor definido abaixo. As alterações recalcularão as notas já geradas.
        </p>
         <div style="max-width: 620px; display: flex; flex-direction: column; gap: 14px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:#f9fafb; border-radius:10px;">
-                <label style="flex:1; font-weight:600; color:#1d3557;">Estouro de SLA (Cozinha)</label>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                <label style="flex:1; font-weight:600; color:var(--c-text-body);">Estouro de SLA (Cozinha)</label>
                 <input type="number" step="0.01" min="0" max="5" id="weightSlaBreach" class="sla-input" style="width:110px;">
            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:#f9fafb; border-radius:10px;">
-                <label style="flex:1; font-weight:600; color:#1d3557;">Cancelamento de Pedido</label>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                <label style="flex:1; font-weight:600; color:var(--c-text-body);">Cancelamento de Pedido</label>
                 <input type="number" step="0.01" min="0" max="5" id="weightCancellation" class="sla-input" style="width:110px;">
            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:#f9fafb; border-radius:10px;">
-                <label style="flex:1; font-weight:600; color:#1d3557;">Zerou (Reportado pelo Salão)</label>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                <label style="flex:1; font-weight:600; color:var(--c-text-body);">Zerou (Reportado pelo Salão)</label>
                 <input type="number" step="0.01" min="0" max="5" id="weightStockoutSalao" class="sla-input" style="width:110px;">
            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:#f9fafb; border-radius:10px;">
-                <label style="flex:1; font-weight:600; color:#1d3557;">Item Lento</label>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                <label style="flex:1; font-weight:600; color:var(--c-text-body);">Item Lento</label>
                 <input type="number" step="0.01" min="0" max="5" id="weightSlowItem" class="sla-input" style="width:110px;">
            </div>
             <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:8px;">
@@ -282,6 +324,19 @@
    </div>
 
 <script>
+(function () {
+    var button = document.getElementById('themeToggle');
+    var label = button && button.querySelector('.theme-toggle-label');
+    function refreshThemeLabel() {
+        var theme = window.KDSTheme ? KDSTheme.getCurrent() : 'dark';
+        if (label) label.textContent = theme === 'light' ? 'Tema: Claro' : 'Tema: Escuro';
+        if (button) button.setAttribute('aria-pressed', String(theme === 'light'));
+    }
+    if (button) button.addEventListener('click', function () { KDSTheme.toggle(); });
+    document.addEventListener('kds-theme-change', refreshThemeLabel);
+    refreshThemeLabel();
+})();
+
 
 function toast(msg, ok) {
     var el = document.createElement('div');
@@ -403,7 +458,7 @@ function loadProducts() {
                 '</select></td>' +
                 '<td><input type="number" class="sla-input" value="' + p.sla_minutes_normal + '" min="1" onchange="updateProduct(\'' + p.id + '\',\'sla_minutes_normal\',this.value)" style="width:70px;"></td>' +
                 '<td><input type="number" class="sla-input" value="' + p.sla_minutes_urgente + '" min="1" onchange="updateProduct(\'' + p.id + '\',\'sla_minutes_urgente\',this.value)" style="width:70px;"></td>' +
-                '<td>' + (p.active ? '<span style="color:#2a9d8f;">Sim</span>' : '<span style="color:#e63946;">Não</span>') + '</td>' +
+                '<td>' + (p.active ? '<span style="color:var(--c-accent-warm);">Sim</span>' : '<span style="color:var(--c-danger);">Não</span>') + '</td>' +
                 '<td>' +
                     '<button class="btn-sm ' + (p.active ? 'btn-warning' : 'btn-success') + '" onclick="toggleProduct(\'' + p.id + '\')">' + (p.active ? 'Desativar' : 'Ativar') + '</button> ' +
                     '<button class="btn-sm btn-danger" onclick="deleteProduct(\'' + p.id + '\',\'' + p.name + '\')">X</button>' +
@@ -453,18 +508,45 @@ async function deleteProduct(id, name) {
 
 // === COZINHAS ===
 function loadStations() {
-    api('/api/v1/kitchen-stations').then(function(stations) {
+    Promise.all([api('/api/v1/kitchen-stations'), api('/api/v1/station-themes/salao')]).then(function(results) {
+        var stations = results[0];
+        var salonTheme = results[1].theme === 'light' ? 'light' : 'dark';
         allStations = stations;
         var tbody = document.querySelector('#stationsTable tbody');
-        tbody.innerHTML = stations.map(function(s) {
+        var salonRow = '<tr><td><strong>Salão</strong></td><td>salao</td><td>—</td>' +
+                '<td><select id="theme-salao" aria-label="Tema do Salão"><option value="dark"' + (salonTheme === 'dark' ? ' selected' : '') + '>Escuro</option><option value="light"' + (salonTheme === 'light' ? ' selected' : '') + '>Claro</option></select></td>' +
+                '<td><button class="btn-primary btn-sm" id="save-theme-salao" onclick="saveSalonTheme()">Salvar</button></td></tr>';
+        tbody.innerHTML = salonRow + stations.map(function(s) {
+            var theme = s.theme === 'light' ? 'light' : 'dark';
             return '<tr><td><strong>' + s.name + '</strong></td><td>' + s.code + '</td>' +
                 '<td><input type="number" id="cap-' + s.id + '" value="' + s.capacity + '" min="1" style="width:70px;"></td>' +
-                '<td><button class="btn-primary btn-sm" onclick="updateCapacity(\'' + s.id + '\')">Salvar</button></td></tr>';
+                '<td><select id="theme-' + s.id + '" aria-label="Tema de ' + s.name + '"><option value="dark"' + (theme === 'dark' ? ' selected' : '') + '>Escuro</option><option value="light"' + (theme === 'light' ? ' selected' : '') + '>Claro</option></select></td>' +
+                '<td><button class="btn-primary btn-sm" id="save-' + s.id + '" onclick="saveStationSettings(\'' + s.id + '\')">Salvar</button></td></tr>';
         }).join('');
         if (document.getElementById('panel-products').classList.contains('active')) loadProducts();
         var sel = document.getElementById('newStation');
         sel.innerHTML = '<option value="">Sem cozinha</option>' + stations.map(function(s) { return '<option value="' + s.id + '">' + s.name + '</option>'; }).join('');
     });
+}
+
+function saveStationSettings(id) {
+    var button = document.getElementById('save-' + id);
+    var cap = parseInt(document.getElementById('cap-' + id).value);
+    var theme = document.getElementById('theme-' + id).value;
+    if (!cap || cap < 1) { toast('Capacidade deve ser >= 1', false); return; }
+    button.disabled = true; button.textContent = 'Salvando...';
+    api('/api/v1/kitchen-stations/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ capacity: cap, theme: theme }) })
+        .then(function() { toast('Configuração atualizada', true); loadStations(); })
+        .catch(function(e) { button.disabled = false; button.textContent = 'Salvar'; toast(e.message, false); });
+}
+
+function saveSalonTheme() {
+    var button = document.getElementById('save-theme-salao');
+    var theme = document.getElementById('theme-salao').value;
+    button.disabled = true; button.textContent = 'Salvando...';
+    api('/api/v1/station-themes/salao', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: theme }) })
+        .then(function() { toast('Tema do Salão atualizado', true); loadStations(); })
+        .catch(function(e) { button.disabled = false; button.textContent = 'Salvar'; toast(e.message, false); });
 }
 
 function updateCapacity(id) {
@@ -501,17 +583,17 @@ function loadMenuProducts() {
         var menuProds = data.menu_products || [];
         var allProds = data.all_products || [];
         document.getElementById('menuProductList').innerHTML = menuProds.length === 0
-            ? '<p style="color:#999;">Nenhum produto neste cardápio</p>'
+            ? '<p style="color:var(--c-text-secondary);">Nenhum produto neste cardápio</p>'
             : menuProds.map(function(p) {
-                return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid #eee;">' +
-                    '<span>' + p.name + ' <small style="color:#999;">(' + p.category + ')</small></span>' +
+                return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid var(--c-border-default);">' +
+                    '<span>' + p.name + ' <small style="color:var(--c-text-secondary);">(' + p.category + ')</small></span>' +
                     '<button class="btn-sm btn-danger" onclick="removeFromMenu(\'' + menuId + '\',\'' + p.product_id + '\')">Remover</button></div>';
             }).join('');
 
         var menuProdIds = new Set(menuProds.map(function(p) { return p.product_id; }));
         document.getElementById('availableProductList').innerHTML = allProds.filter(function(p) { return !menuProdIds.has(p.id); }).map(function(p) {
-            return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid #eee;">' +
-                '<span>' + p.name + ' <small style="color:#999;">(' + p.category + ')</small></span>' +
+            return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid var(--c-border-default);">' +
+                '<span>' + p.name + ' <small style="color:var(--c-text-secondary);">(' + p.category + ')</small></span>' +
                 '<button class="btn-sm btn-success" onclick="addToMenu(\'' + menuId + '\',\'' + p.id + '\')">Adicionar</button></div>';
         }).join('');
     });
@@ -545,15 +627,15 @@ function loadUnitsPanel() {
         var tbody = document.getElementById('unitsTableBody');
         tbody.innerHTML = allUnits.map(function(u) {
             var star = u.featured ? '\u2605' : '\u2606';
-            var starColor = u.featured ? 'color:#f4a261;' : '';
+            var starColor = u.featured ? 'color:var(--c-warn);' : '';
             var rowStyle = u.active ? '' : 'opacity:0.5;';
             return '<tr style="' + rowStyle + '">' +
                 '<td><input type="text" id="ucode-' + u.id + '" value="' + esc(u.code) + '" style="width:120px;"></td>' +
                 '<td><input type="text" id="ulabel-' + u.id + '" value="' + esc(u.label) + '" style="width:200px;"></td>' +
                 '<td><span onclick="toggleUnitFeatured(\'' + u.id + '\')" style="cursor:pointer;font-size:18px;' + starColor + '" title="Favoritar">' + star + '</span></td>' +
                 '<td>' + (u.active
-                    ? '<span style="color:#2a9d8f;cursor:pointer;" onclick="toggleUnitActive(\'' + u.id + '\')" title="Desativar">Sim</span>'
-                    : '<span style="color:#e63946;cursor:pointer;" onclick="toggleUnitActive(\'' + u.id + '\')" title="Reativar">Nao</span>') + '</td>' +
+                    ? '<span style="color:var(--c-accent-warm);cursor:pointer;" onclick="toggleUnitActive(\'' + u.id + '\')" title="Desativar">Sim</span>'
+                    : '<span style="color:var(--c-danger);cursor:pointer;" onclick="toggleUnitActive(\'' + u.id + '\')" title="Reativar">Nao</span>') + '</td>' +
                 '<td>' +
                     '<button class="btn-sm btn-primary" onclick="saveUnit(\'' + u.id + '\')">Salvar</button> ' +
                     '<button class="btn-sm btn-danger" onclick="deleteUnit(\'' + u.id + '\',\'' + esc(u.label) + '\')">X</button>' +
@@ -563,7 +645,7 @@ function loadUnitsPanel() {
 
         // Checkboxes para vínculo com produto (só ativas)
         document.getElementById('unitCheckboxes').innerHTML = allUnits.filter(function(u) { return u.active; }).map(function(u) {
-            return '<label style="white-space:nowrap;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:4px;"><input type="checkbox" class="unit-cb" value="' + u.id + '" style="accent-color:#2a9d8f;"> ' + u.label + '</label>';
+            return '<label style="white-space:nowrap;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:4px;"><input type="checkbox" class="unit-cb" value="' + u.id + '" style="accent-color:var(--c-accent-warm);"> ' + u.label + '</label>';
         }).join('');
     });
     api('/api/v1/products/all').then(function(prods) {
@@ -647,8 +729,8 @@ function loadReasons() {
         var tbody = document.getElementById('reasonsTableBody');
         tbody.innerHTML = reasons.map(function(r) {
             var categoryBadge = r.category === 'salao'
-                ? '<span style="background:#1d3557;color:white;padding:3px 10px;border-radius:20px;font-size:12px;">Salão</span>'
-                : '<span style="background:#f4a261;color:white;padding:3px 10px;border-radius:20px;font-size:12px;">Cozinha</span>';
+                ? '<span style="background:var(--c-accent-cold);color:var(--c-text-invert);padding:3px 10px;border-radius:20px;font-size:12px;">Salão</span>'
+                : '<span style="background:var(--c-warn);color:var(--c-primary);padding:3px 10px;border-radius:20px;font-size:12px;">Cozinha</span>';
             return '<tr>' +
                 '<td><strong>' + r.label + '</strong></td>' +
                 '<td>' + categoryBadge + '</td>' +

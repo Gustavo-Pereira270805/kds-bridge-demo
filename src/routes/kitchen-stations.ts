@@ -16,15 +16,16 @@ export default async function kitchenStationsRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.patch<{ Params: { id: string }; Body: { capacity: number } }>(
+  fastify.patch<{ Params: { id: string }; Body: { capacity?: number; theme?: 'dark' | 'light' } }>(
     '/:id',
     {
       schema: {
         body: {
           type: 'object',
-          required: ['capacity'],
+          minProperties: 1,
           properties: {
             capacity: { type: 'number', minimum: 1 },
+            theme: { type: 'string', enum: ['dark', 'light'] },
           },
         },
       },
@@ -32,10 +33,13 @@ export default async function kitchenStationsRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       try {
         const { id } = request.params;
-        const { capacity } = request.body;
+        const { capacity, theme } = request.body;
 
-        if (!Number.isInteger(capacity) || capacity < 1) {
+        if (capacity !== undefined && (!Number.isInteger(capacity) || capacity < 1)) {
           return reply.code(400).send({ error: 'Capacidade inválida' });
+        }
+        if (theme !== undefined && theme !== 'dark' && theme !== 'light') {
+          return reply.code(400).send({ error: 'Tema inválido' });
         }
 
         const station = await query<KitchenStation>(
@@ -46,16 +50,32 @@ export default async function kitchenStationsRoutes(fastify: FastifyInstance) {
           return reply.code(404).send({ error: 'Estação não encontrada' });
         }
 
+        const sets: string[] = [];
+        const values: unknown[] = [];
+        if (capacity !== undefined) {
+          sets.push(`capacity = $${values.length + 1}`);
+          values.push(capacity);
+        }
+        if (theme !== undefined) {
+          sets.push(`theme = $${values.length + 1}`);
+          values.push(theme);
+        }
+        values.push(id);
         await query(
-          'UPDATE kitchen_stations SET capacity = $1, updated_at = now() WHERE id = $2',
-          [capacity, id]
+          `UPDATE kitchen_stations SET ${sets.join(', ')}, updated_at = now() WHERE id = $${values.length}`,
+          values
         );
-        await recomputeStationQueue(id);
+        if (capacity !== undefined) await recomputeStationQueue(id);
 
         fastify.io.to('cozinha_quente').emit('kitchen:capacity-updated', {
           stationId: id,
-          capacity,
+          ...(capacity !== undefined ? { capacity } : {}),
+          ...(theme !== undefined ? { theme } : {}),
         });
+        if (theme !== undefined) {
+          fastify.io.to('cozinha_quente').emit('station:theme-updated', { stationCode: station[0].code, theme });
+          fastify.io.to('cozinha_fria').emit('station:theme-updated', { stationCode: station[0].code, theme });
+        }
         fastify.io.to('cozinha_fria').emit('kitchen:capacity-updated', {
           stationId: id,
           capacity,

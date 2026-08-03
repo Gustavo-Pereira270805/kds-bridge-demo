@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cozinha Fria - KDS Bridge</title>
+    <script>document.documentElement.setAttribute('data-theme', 'dark');</script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/styles/theme.css">
+    <script src="/scripts/station-theme.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     <style>
@@ -140,16 +142,16 @@
         .card .actions { display: flex; gap: 10px; margin-top: 14px; }
         .card .actions button {
             flex: 1; padding: 12px 16px; border: none; border-radius: 8px;
-            font-size: 15px; font-weight: 700; cursor: pointer; min-height: 46px;
+            font-size: 16px; font-weight: 700; cursor: pointer; min-height: 56px;
             text-transform: uppercase; letter-spacing: 0.5px;
             transition: background 0.15s ease; font-family: inherit;
         }
-        .card .actions .ready-btn { background: var(--c-accent-warm); color: #fff; }
+        .card .actions .ready-btn { background: var(--c-accent-warm); color: var(--c-text-invert); box-shadow: var(--shadow-btn-3d-dark); }
         .card .actions .ready-btn:hover { background: #238b7d; }
         .card .actions .ready-btn.confirm-pending { background: var(--c-warn); color: #1a1a1a; }
         .card .actions .ready-btn.confirm-pending:hover { background: #e76f51; color: #1a1a1a; }
         .card .actions .cancel-btn {
-            background: var(--c-border-dark-cold); color: #8899bb;
+            background: var(--c-border-dark-cold); color: var(--c-text-secondary); box-shadow: var(--shadow-btn-3d-dark);
             min-width: 64px; min-height: 64px; font-size: 18px;
             padding: 14px 20px; border-radius: 10px;
         }
@@ -228,6 +230,29 @@
             .card .name { font-size: 18px; }
             .card { padding: 12px 14px; }
         }
+
+        :root[data-theme="light"] body { background: var(--c-bg-page); color: var(--c-text-body); }
+        :root[data-theme="light"] h1 { color: var(--c-text-body); }
+        :root[data-theme="light"] .card { background: var(--c-surface-panel); border-color: #b8cbbf; color: var(--c-text-body); box-shadow: 0 2px 8px rgba(43, 31, 23, 0.08); }
+        :root[data-theme="light"] .card .qty, :root[data-theme="light"] .card .name,
+        :root[data-theme="light"] .card .elapsed, :root[data-theme="light"] .ready-strip .ready-pill .pill-name { color: var(--c-text-body); }
+        :root[data-theme="light"] .card .unit-label, :root[data-theme="light"] .card .elapsed,
+        :root[data-theme="light"] .ready-strip .ready-pill .pill-qty,
+        :root[data-theme="light"] .ready-strip .ready-pill .pill-unit { color: var(--c-text-secondary); }
+        :root[data-theme="light"] .card.cooking { background: #d1fae5; border-color: #0e9f6e; }
+        :root[data-theme="light"] .card.replacement { background: var(--alert-replacement-bg-light); }
+        :root[data-theme="light"] .empty-state { color: var(--c-text-secondary); }
+        :root[data-theme="light"] #globalTimer, :root[data-theme="light"] .card-timer { background: var(--c-bg-page); color: var(--c-text-secondary); border-color: var(--c-border-default); }
+        :root[data-theme="light"] .card .qty, :root[data-theme="light"] .card .name { color: var(--c-text-body); }
+        :root[data-theme="light"] .card .unit-label, :root[data-theme="light"] .card .elapsed { color: var(--c-text-secondary); }
+        :root[data-theme="light"] .ready-strip { border-top-color: var(--c-border-default); }
+        :root[data-theme="light"] .ready-strip .ready-pill { background: #d1fae5; border-color: #0e9f6e; color: var(--c-text-body); }
+        :root[data-theme="light"] .ready-strip .ready-pill .pill-qty,
+        :root[data-theme="light"] .ready-strip .ready-pill .pill-unit { color: var(--c-text-secondary); }
+        :root[data-theme="light"] .ready-strip .ready-pill .pill-name { color: var(--c-text-body); }
+        :root[data-theme="light"] .modal-confirm { background: var(--c-bg-panel) !important; border-color: var(--c-border-default) !important; color: var(--c-text-body); }
+        :root[data-theme="light"] .modal-confirm h3, :root[data-theme="light"] .modal-confirm label { color: var(--c-text-body) !important; }
+        :root[data-theme="light"] .modal-confirm select, :root[data-theme="light"] .modal-confirm input { background: var(--c-bg-page) !important; color: var(--c-text-body) !important; border-color: var(--c-border-default) !important; }
     </style>
 </head>
 <body>
@@ -261,6 +286,8 @@
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000
         });
+        KDSStationTheme.watch(socket, 'fria');
+        KDSStationTheme.load('fria');
         let demands = [];
         let timeInterval;
         let stationId = null;
@@ -529,8 +556,8 @@
                     </div>
                     ${progressBar}
                     <div class="actions">
-                        <button class="ready-btn" data-id="${d.id}">PRONTO</button>
-                        <button class="cancel-btn" data-id="${d.id}">CANCELAR</button>
+                        <button class="ready-btn btn-touch btn-touch-primary" data-id="${d.id}">PRONTO</button>
+                        <button class="cancel-btn btn-touch btn-touch-secondary" data-id="${d.id}">CANCELAR</button>
                     </div>
                 </div>`;
             }).join('');

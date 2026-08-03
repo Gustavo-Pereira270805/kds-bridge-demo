@@ -43,14 +43,18 @@ async function seed() {
     const { rows: ksCount } = await client.query('SELECT COUNT(*) as count FROM kitchen_stations');
     if (parseInt(ksCount[0].count) === 0) {
       await client.query(
-        `INSERT INTO kitchen_stations (code, name, capacity) VALUES
-         ('quente_a', 'Cozinha Quente A', 2),
-         ('quente_b', 'Cozinha Quente B', 2),
-         ('fria',     'Cozinha Fria',     1)
+        `INSERT INTO kitchen_stations (code, name, capacity, theme) VALUES
+         ('quente_a', 'Cozinha Quente A', 2, 'dark'),
+         ('quente_b', 'Cozinha Quente B', 2, 'dark'),
+         ('fria',     'Cozinha Fria',     1, 'dark')
          ON CONFLICT (code) DO NOTHING`
       );
       console.log('[Seed] 3 estações de cozinha inseridas');
     }
+    await client.query(
+      `INSERT INTO system_settings (key, value) VALUES ('station_theme_salao', 'dark')
+       ON CONFLICT (key) DO NOTHING`
+    );
 
     const { rows: unitCount } = await client.query('SELECT COUNT(*) as count FROM units');
     if (parseInt(unitCount[0].count) === 0) {

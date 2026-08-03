@@ -2,165 +2,157 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Cozinha - KDS Bridge v2.1</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <title>Cozinha - KDS Bridge</title>
     <link rel="stylesheet" href="/styles/theme.css">
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--c-bg-dark); color: var(--c-text-invert); padding: 20px; min-height: 100vh;
+            font-family: var(--font-sans);
+            background: var(--c-bg-dark); color: var(--c-text-invert); 
+            padding: var(--sp-5); min-height: 100vh;
+            display: flex; flex-direction: column;
         }
 
         .reconnect-banner {
-            display: none; background: var(--c-warn); color: #111;
-            text-align: center; padding: 8px 16px; font-weight: 700; font-size: 14px;
-            margin-bottom: 16px; border-radius: 6px;
+            display: none; background: var(--c-warn); color: var(--c-primary);
+            text-align: center; padding: 8px 16px; font-weight: var(--fw-semi); font-size: 13px;
+            margin-bottom: var(--sp-4); border-radius: var(--radius-md);
         }
 
         h1 {
-            font-size: 18px; font-weight: 800; margin-bottom: 20px; text-align: center;
-            text-transform: uppercase; letter-spacing: 2px;
-            color: var(--c-primary-tint); padding-bottom: 10px; border-bottom: 2px solid var(--c-border-dark);
+            font-size: 15px; font-weight: var(--fw-bold); margin-bottom: var(--sp-5); text-align: center;
+            text-transform: uppercase; letter-spacing: 1.5px;
+            color: var(--c-text-invert-muted); padding-bottom: var(--sp-3); 
+            border-bottom: 1px solid var(--c-border-dark);
         }
 
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 12px;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: var(--sp-4);
+            flex: 1;
         }
 
         .card {
-            background: var(--c-surface-dark); padding: 16px 18px; border-radius: 10px;
-            border-left: 4px solid var(--c-border-dark); position: relative;
-            animation: fadeInUp 0.25s ease;
+            background: var(--c-surface-dark); padding: var(--sp-4); border-radius: var(--radius-lg);
+            border: 1px solid var(--c-border-dark); position: relative;
+            display: flex; flex-direction: column; gap: var(--sp-3);
         }
 
-        .card.urgent { background: var(--alert-urgent-bg-dark); border-left-color: var(--c-danger); border-left-width: 6px; animation: urgentPulse 2s infinite; }
-        .card.breached { border-left-color: var(--c-warn); }
-        .card.cooking { background: var(--alert-ok-bg-dark); border-left-color: var(--c-accent-warm); }
-        .card.late { background: linear-gradient(135deg, var(--c-surface-dark) 0%, #2a0d0d 100%); border-left-color: var(--c-danger); }
-        .card.critical { background: var(--alert-urgent-bg-dark); border-left-color: var(--c-danger-strong); animation: criticalPulse 1.6s infinite; }
-        .card.stockout { background: var(--alert-warn-bg-dark); border: 2px solid var(--c-warn); border-left-width: 6px; animation: stockoutPulse 1.5s infinite; }
+        .card.urgent { 
+            background: var(--alert-urgent-bg-dark); 
+            border: 1px solid rgba(225, 29, 72, 0.3); 
+        }
+        .card.breached { border-color: rgba(245, 158, 11, 0.5); }
+        .card.cooking { background: var(--alert-ok-bg-dark); border-color: rgba(16, 185, 129, 0.3); }
+        .card.late { background: #180a0a; border-color: rgba(225, 29, 72, 0.5); }
+        .card.critical { background: #2d0a0a; border: 1px solid rgba(225, 29, 72, 0.8); }
+        .card.stockout { background: #1a1306; border: 1px solid rgba(245, 158, 11, 0.6); }
 
         .card .urgent-label {
-            font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px;
-            color: var(--c-danger); margin-bottom: 6px;
+            font-size: 10px; font-weight: var(--fw-bold); text-transform: uppercase; letter-spacing: 1px;
+            color: var(--c-danger); margin-bottom: var(--sp-1);
         }
 
-        .card .card-top { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 6px; }
+        .card .card-top { display: flex; align-items: flex-start; gap: var(--sp-3); }
 
         .card .qty {
-            font-size: 26px; font-weight: 800; color: var(--c-text-invert-muted); line-height: 1;
-            white-space: nowrap; min-width: 36px;
+            font-size: 32px; font-family: var(--font-mono); font-weight: var(--fw-bold); color: var(--c-text-invert-muted); line-height: 1;
+            white-space: nowrap; min-width: 40px;
         }
         .card.urgent .qty { color: var(--c-text-invert); }
 
         .card .product-info { flex: 1; min-width: 0; }
         .card .name {
-            font-size: 22px; font-weight: 700; color: var(--c-text-invert); line-height: 1.2;
+            font-size: 18px; font-weight: var(--fw-bold); color: var(--c-text-invert); line-height: 1.2;
             word-break: break-word;
         }
-        .card.urgent .name { color: var(--c-text-invert); }
-
-        .card .unit-label { font-size: 13px; color: var(--c-text-invert-muted); margin-top: 1px; display: inline; }
+        .card .unit-label { font-size: 12px; color: var(--c-text-invert-muted); margin-left: 4px; font-weight: 400;}
         .card.urgent .unit-label { color: rgba(255,255,255,0.6); }
 
         .card .cooking-badge {
             display: inline-block; background: var(--c-accent-warm); color: var(--c-text-invert);
-            font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 3px;
-            text-transform: uppercase; letter-spacing: 1px; margin-top: 4px;
+            font-size: 10px; font-weight: var(--fw-bold); padding: 2px 6px; border-radius: var(--radius-sm);
+            text-transform: uppercase; letter-spacing: 0.5px; margin-top: var(--sp-1);
         }
 
         .card .time-row {
-            display: flex; align-items: center; gap: 14px; margin-top: 8px;
-            font-size: 13px; font-weight: 600; flex-wrap: wrap;
+            display: flex; align-items: center; gap: var(--sp-4); 
+            font-size: 13px; font-weight: var(--fw-medium);
         }
-        .card .elapsed { color: var(--c-text-invert-muted); }
-        .card .elapsed span { color: var(--c-warn); font-weight: 700; }
+        .card .elapsed { color: var(--c-text-invert-muted); font-family: var(--font-mono); }
+        .card .elapsed span { color: var(--c-warn); }
         .card.urgent .elapsed { color: rgba(255,255,255,0.8); }
         .card.urgent .elapsed span { color: var(--c-text-invert); }
 
-        .card .eta { color: var(--c-accent-warm); font-weight: 700; }
-        .card .eta.overdue { color: var(--c-danger); font-weight: 800; }
+        .card .eta { color: var(--c-accent-warm); font-weight: var(--fw-bold); font-family: var(--font-mono); }
+        .card .eta.overdue { color: var(--c-danger); }
         .card.urgent .eta { color: rgba(255,255,255,0.7); }
         .card.urgent .eta.overdue { color: var(--c-text-invert); }
 
-        .card .progress-wrap { margin-top: 8px; }
+        .card .progress-wrap { margin-top: auto; padding-top: var(--sp-2); }
         .card .progress-bar {
             height: 4px; background: var(--c-border-dark); border-radius: 2px; overflow: hidden;
         }
-        .card.urgent .progress-bar { background: rgba(255,255,255,0.15); }
-        .card .progress-fill {
-            height: 100%; border-radius: 2px; transition: width 30s linear;
-        }
+        .card.urgent .progress-bar { background: rgba(255,255,255,0.1); }
+        .card .progress-fill { height: 100%; border-radius: 2px; transition: width 30s linear; }
 
-        .card .actions { display: flex; gap: 10px; margin-top: 14px; }
+        .card .actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); padding-top: var(--sp-3); border-top: 1px solid var(--c-border-dark); margin-top: var(--sp-1); }
         .card .actions button {
-            flex: 1; padding: 12px 16px; border: none; border-radius: 8px;
-            font-size: 15px; font-weight: 700; cursor: pointer; min-height: 46px;
+            border: none; border-radius: 10px;
+            font-size: 15px; font-weight: 700; cursor: pointer; height: 56px; min-height: 56px;
             text-transform: uppercase; letter-spacing: 0.5px;
-            transition: background 0.15s ease; font-family: inherit;
+            transition: transform 0.1s, box-shadow 0.1s; font-family: inherit;
+            box-shadow: 0 4px 0 var(--c-bg-dark);
         }
-        .card .actions .ready-btn { background: var(--c-accent-warm); color: var(--c-text-invert); }
-        .card .actions .ready-btn:hover { background: #238b7d; }
+        .card .actions button:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,0.4); }
+        .card .actions .ready-btn {
+            background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+            color: var(--c-text-invert);
+            box-shadow: var(--shadow-btn-3d-dark);
+        }
+        .card .actions .ready-btn:active { box-shadow: 0 1px 0 rgba(0,0,0,0.4); }
+        .card .actions .ready-btn:hover { filter: brightness(1.1); }
         .card .actions .cancel-btn {
-            background: #3a3a3a; color: var(--c-text-invert-muted);
-            min-width: 64px; min-height: 64px; font-size: 18px;
-            padding: 14px 20px; border-radius: 10px;
+            background: #2a2632; color: var(--c-text-invert-muted);
+            border: 1px solid var(--c-border-dark);
         }
-        .card .actions .cancel-btn:hover { background: var(--c-danger); color: var(--c-text-invert); }
-        .card .actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .card .actions .cancel-btn:hover { background: var(--c-danger); color: var(--c-text-invert); border-color: var(--c-danger); }
 
         .ready-strip {
-            margin-top: 16px; padding-top: 12px;
+            margin-top: var(--sp-4); padding-top: var(--sp-4);
             border-top: 1px solid var(--c-border-dark);
         }
         .ready-strip-header {
-            font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
-            color: var(--c-accent-warm); margin-bottom: 8px;
+            font-size: 10px; font-weight: var(--fw-bold); text-transform: uppercase; letter-spacing: 1px;
+            color: var(--c-accent-warm); margin-bottom: var(--sp-3);
         }
         .ready-strip .ready-pill {
-            display: inline-flex; align-items: center; gap: 6px;
-            background: var(--alert-ok-bg-dark); border: 1px solid #1a3a2a; border-radius: 6px;
-            padding: 5px 12px; margin: 0 6px 6px 0; font-size: 13px;
-            font-weight: 600; color: #8ab8a8; white-space: nowrap;
+            display: inline-flex; align-items: center; gap: var(--sp-2);
+            background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: var(--radius-md);
+            padding: var(--sp-2) var(--sp-3); margin: 0 var(--sp-2) var(--sp-2) 0; font-size: 13px;
+            font-weight: var(--fw-medium); white-space: nowrap;
         }
-        .ready-strip .ready-pill .pill-qty { color: var(--c-text-invert-muted); font-weight: 700; }
+        .ready-strip .ready-pill .pill-qty { font-family: var(--font-mono); font-weight: var(--fw-bold); }
         .ready-strip .ready-pill .pill-name { color: var(--c-text-invert); }
-        .ready-strip .ready-pill .pill-unit { color: var(--c-text-invert-muted); font-size: 11px; }
 
-        .empty-state { grid-column: 1 / -1; text-align: center; padding: 50px 20px; color: var(--c-text-invert-muted); font-size: 16px; font-weight: 500; }
+        .empty-state { grid-column: 1 / -1; text-align: center; padding: 80px 20px; color: var(--c-text-invert-muted); font-size: 14px; }
+        .empty-state h4 { color: var(--c-text-invert); font-size: 16px; margin-top: var(--sp-3); }
 
-        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--c-border-dark); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: var(--c-border-dark); border-radius: 2px; }
 
-        @keyframes urgentPulse {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.01); opacity: .92; }
+        @media (prefers-reduced-motion: reduce) {
+            .card { animation: none !important; }
         }
-        @keyframes criticalPulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.015); }
-        }
-        @keyframes stockoutPulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: .85; }
-        }
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(12px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
+        
         @media (max-width: 768px) {
-            body { padding: 12px; }
-            h1 { font-size: 16px; }
+            body { padding: var(--sp-3); }
             .grid { grid-template-columns: 1fr; }
-            .card .name { font-size: 18px; }
-            .card { padding: 12px 14px; }
+            .card .name { font-size: 16px; }
         }
     </style>
 </head>
@@ -274,17 +266,17 @@
             const diff = Math.floor((Date.now() - parseDate(dateStr).getTime()) / 1000);
             if (diff < 60) return 'agora';
             const min = Math.floor(diff / 60);
-            if (min < 60) return `há ${min} min`;
+            if (min < 60) return `há ${min}min`;
             const h = Math.floor(min / 60);
-            return `há ${h}h ${min % 60}min`;
+            return `há ${h}h${min % 60}m`;
         }
 
         function etaDisplay(expectedReadyAt) {
             if (!expectedReadyAt) return '';
             const remaining = Math.ceil((parseDate(expectedReadyAt).getTime() - Date.now()) / 60000);
             if (remaining <= 0) return 'ATRASADO';
-            if (remaining === 1) return '~1 min';
-            return `~${remaining} min`;
+            if (remaining === 1) return '~1m';
+            return `~${remaining}m`;
         }
 
         function isOverdue(expectedReadyAt) {
@@ -364,9 +356,9 @@
 
                 const etaText = etaDisplay(d.expected_ready_at);
                 const etaClass = overdue ? 'eta overdue' : 'eta';
-                const unitText = d.unit_label ? ` <span class="unit-label">(${d.unit_label})</span>` : '';
-                const cookingBadge = d.cooking_started ? ' <span class="cooking-badge">EM PREPARO</span>' : '';
-                const urgentLabel = d.priority === 'urgent' ? '<div class="urgent-label">URGENTE</div>' : '';
+                const unitText = d.unit_label ? `<span class="unit-label">(${d.unit_label})</span>` : '';
+                const cookingBadge = d.cooking_started ? `<span class="cooking-badge">EM PREPARO</span>` : '';
+                const urgentLabel = d.priority === 'urgent' ? `<div class="urgent-label">URGENTE</div>` : '';
 
                 const pct = calcProgress(d.created_at, d.expected_ready_at);
                 let progressBar = '';
@@ -392,7 +384,7 @@
                     ${progressBar}
                     <div class="actions">
                         <button class="ready-btn" data-id="${d.id}">PRONTO</button>
-                        <button class="cancel-btn" data-id="${d.id}">CANCELAR</button>
+                        <button class="cancel-btn" data-id="${d.id}">X</button>
                     </div>
                 </div>`;
             }).join('');
@@ -400,10 +392,10 @@
             if (ready.length > 0) {
                 const sortedReady = [...ready].sort((a, b) => parseDate(a.created_at) - parseDate(b.created_at));
                 readyStrip.innerHTML =
-                    '<div class="ready-strip-header">PRONTO PARA RETIRAR &middot; ' + ready.length + '</div>' +
+                    '<div class="ready-strip-header">PRONTO PARA RETIRAR · ' + ready.length + '</div>' +
                     sortedReady.map(d => {
-                        const unitText = d.unit_label ? ' <span class="pill-unit">' + d.unit_label + '</span>' : '';
-                        return '<div class="ready-pill"><span class="pill-qty">' + d.quantity + 'x</span><span class="pill-name">' + d.product_name + '</span>' + unitText + '</div>';
+                        const unitText = d.unit_label ? `<span class="pill-unit">${d.unit_label}</span>` : '';
+                        return `<div class="ready-pill"><span class="pill-qty">${d.quantity}x</span><span class="pill-name">${d.product_name}</span>${unitText}</div>`;
                     }).join('');
             } else {
                 readyStrip.innerHTML = '';
@@ -412,7 +404,7 @@
             if (timeInterval) clearInterval(timeInterval);
             timeInterval = setInterval(() => {
                 document.querySelectorAll('.elapsed[data-created]').forEach(el => {
-                    el.innerHTML = '<span>' + timeAgo(el.dataset.created) + '</span>';
+                    el.innerHTML = `<span>${timeAgo(el.dataset.created)}</span>`;
                 });
                 render();
             }, 30000);
@@ -449,7 +441,7 @@
                 } catch (err) {
                     console.error('Erro ao cancelar:', err);
                     cancelBtn.disabled = false;
-                    cancelBtn.textContent = 'CANCELAR';
+                    cancelBtn.textContent = 'X';
                 }
             }
         });
