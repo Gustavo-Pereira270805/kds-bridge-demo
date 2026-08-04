@@ -47,3 +47,10 @@ Implementação concluída em `src/views/dashboard.html`.
 - `git diff --check`: passou.
 - Busca estrutural: não há chamadas de performance no fluxo de exportação, `ANALYTICS` novo, nem mensagem de erro cru no DOM.
 - Endpoint real de performance: continua HTTP 500 por ausência de versão de pesos no banco local; o detalhe permanece apenas no console e a interface mostra mensagem fixa.
+
+## Re-revisão de `28e5f93`
+
+- Ocorrências preservam hora e minuto (`HH:MM`) quando o campo de data contém timestamp.
+- O fallback de `criterion` também passa por escape HTML antes da inserção em `innerHTML`.
+- O `catch` síncrono de performance usa a mesma mensagem fixa em pt-BR do `catch` assíncrono.
+- A guarda de `perf` e `operational` ocorre antes de qualquer acesso a `perf.operational`.

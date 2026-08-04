@@ -1227,9 +1227,11 @@ if (document.readyState === 'loading') {
 
     function formatPerfDate(value) {
         var raw = String(value === null || value === undefined ? '' : value);
-        var datePart = raw.split('T')[0];
+        var timestampIndex = raw.indexOf('T');
+        var datePart = timestampIndex > -1 ? raw.substring(0, timestampIndex) : raw;
         var parts = datePart.split('-');
-        var formatted = parts.length === 3 ? parts[2] + '/' + parts[1] + '/' + parts[0] : raw.substring(0, 16);
+        var timePart = timestampIndex > -1 ? raw.substring(timestampIndex + 1, timestampIndex + 6) : '';
+        var formatted = parts.length === 3 ? parts[2] + '/' + parts[1] + (timePart ? ' ' + timePart : '') : raw.substring(0, 16);
         return escapePerfHtml(formatted);
     }
 
@@ -1257,8 +1259,8 @@ if (document.readyState === 'loading') {
     }
 
     function renderPerfDetractors(perf) {
+        if(!perf || !perf.operational) return '';
         var source = perf.operational;
-        if(!perf || !source) return '';
         var order = ['cozinha_geral','salao','cozinha_quente_a','cozinha_quente_b','cozinha_fria'];
         var labels = { cozinha_geral:'Cozinha Geral', cozinha_quente_a:'Quente A', cozinha_quente_b:'Quente B', cozinha_fria:'Fria', salao:'Sal\u00E3o' };
         var h = '<div class="panels" style="grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));">';
@@ -1271,7 +1273,7 @@ if (document.readyState === 'loading') {
                 var weights = c.weights || [];
                 var weightText = weights.length ? weights.map(function(w) { return Number(w.weight).toFixed(2) + ' (' + String(w.weight_version_id).substring(0, 8) + ')'; }).join('<br>') : (c.weight === null ? 'Várias versões' : Number(c.weight || 0).toFixed(2));
                 var criterionLabels = { sla_breach_cozinha:'Preparo lento / SLA cozinha', sla_breach_salao:'Retirada lenta / SLA salão', cancellation_cozinha:'Cancelamento cozinha', cancellation_salao:'Cancelamento salão', stockout_cozinha:'Zerado informativo (cozinha)', stockout_salao:'Zerado salão', slow_item_cozinha:'Preparo lento', slow_pickup_salao:'Retirada lenta' };
-                bars += '<tr><td>'+ (criterionLabels[c.criterion] || c.criterion) +'</td><td>'+Number(c.count || 0)+'</td><td>'+Number(c.eligible_base || 0)+'</td><td>'+(Number(c.rate || 0) * 100).toFixed(1)+'%</td><td>'+weightText+'<br>Desconto: '+Number(c.deduction || 0).toFixed(2)+'</td></tr>';
+                bars += '<tr><td>'+ escapePerfHtml(criterionLabels[c.criterion] || c.criterion) +'</td><td>'+Number(c.count || 0)+'</td><td>'+Number(c.eligible_base || 0)+'</td><td>'+(Number(c.rate || 0) * 100).toFixed(1)+'%</td><td>'+weightText+'<br>Desconto: '+Number(c.deduction || 0).toFixed(2)+'</td></tr>';
             });
             bars += '</tbody></table></div>';
             var sc = Number(s.operational_score), daily = Number(s.daily_average_score);
@@ -1371,7 +1373,7 @@ if (document.readyState === 'loading') {
             });
         } catch(e) {
             console.error('Erro ao preparar performance:', e);
-            if (perfGrid) perfGrid.innerHTML = '<article class="panel" data-cols="12"><div class="panel-body loading" style="color:var(--c-danger);">Erro ao carregar performance.</div></article>';
+            if (perfGrid) perfGrid.innerHTML = '<article class="panel" data-cols="12"><div class="panel-body loading" style="color:var(--c-danger);">Não foi possível carregar as notas de performance. Tente novamente.</div></article>';
         }
     }
 
