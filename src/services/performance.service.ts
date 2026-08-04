@@ -19,11 +19,16 @@ export interface OcorrenciaBruta {
   station?: string | null;
 }
 
-export function calcularNotasCozinhaGeral(stations: { total: number; deduction: number; final?: number }[]): NotaCozinhaGeral {
+export function calcularNotasCozinhaGeral(stations: { entity: PerformanceEntity; total: number; deduction: number; final?: number }[]): NotaCozinhaGeral {
+  const expectedEntities = new Set<PerformanceEntity>(['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria']);
+  const stationEntities = new Set(stations.map(station => station.entity));
+  const hasExactlyThreeStations = stations.length === 3
+    && stationEntities.size === expectedEntities.size
+    && Array.from(expectedEntities).every(entity => stationEntities.has(entity));
   const total = stations.reduce((sum, station) => sum + station.total, 0);
   const deduction = stations.reduce((sum, station) => sum + station.deduction, 0);
   const operationalScore = round1(5 - deduction);
-  const dailyAverageComplete = stations.length === 3;
+  const dailyAverageComplete = hasExactlyThreeStations;
   const dailyAverageScore = dailyAverageComplete
     ? round1(stations.reduce((sum, station) => sum + (station.final ?? round1(5 - station.deduction)), 0) / stations.length)
     : null;
@@ -284,6 +289,7 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
   );
   if (stationRows.length > 0) {
     const aggregate = calcularNotasCozinhaGeral(stationRows.map(row => ({
+      entity: row.entity as PerformanceEntity,
       total: Number(row.total_demands),
       deduction: Number(row.sla_breach_deduction) + Number(row.cancellation_deduction)
         + Number(row.stockout_deduction) + Number(row.slow_item_deduction),
@@ -403,7 +409,7 @@ export function buildCriterionSummaries(
       : getCriterionWeight(criterion, weights);
     return {
       criterion, count, eligible_base: total, rate: total ? count / total : 0,
-      weight, deduction: criterion === 'stockout_cozinha' ? 0 : deduction,
+      weight, weights_status: 'aplicado', deduction: criterion === 'stockout_cozinha' ? 0 : deduction,
     };
   });
 }
@@ -656,16 +662,24 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
   } as PerformanceScoreRow, latest, entity !== 'salao', bases);
   for (const criterion of criteria) {
     const observedWeights = criterionWeights.get(criterion.criterion) || new Map();
-    criterion.weights = Array.from(versions.values()).map(version => {
-      const observed = observedWeights.get(version.id);
-      return {
-        weight_version_id: version.id,
-        weight: criterion.criterion === 'stockout_cozinha' ? 0 : getCriterionWeight(criterion.criterion, version),
-        count: observed?.count || 0,
-        deduction: observed?.deduction || 0,
-      };
-    });
-    criterion.weight = criterion.weights.length === 1 ? criterion.weights[0].weight : null;
+    criterion.weights_status = scoreRows.some(row => row.weight_version_id === null)
+      ? 'indisponivel_snapshot_legado'
+      : 'vigente_intervalo';
+    if (criterion.weights_status === 'indisponivel_snapshot_legado') {
+      criterion.weights = [];
+      criterion.weight = null;
+    } else {
+      criterion.weights = Array.from(versions.values()).map(version => {
+        const observed = observedWeights.get(version.id);
+        return {
+          weight_version_id: version.id,
+          weight: criterion.criterion === 'stockout_cozinha' ? 0 : getCriterionWeight(criterion.criterion, version),
+          count: observed?.count || 0,
+          deduction: observed?.deduction || 0,
+        };
+      });
+      criterion.weight = criterion.weights.length === 1 ? criterion.weights[0].weight : null;
+    }
   }
   const [openRow] = await query<{ count: string }>(
     `SELECT COUNT(*)::int AS count FROM demands

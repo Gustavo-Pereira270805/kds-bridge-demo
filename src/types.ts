@@ -378,6 +378,7 @@ export interface PerformanceCriterionSummary {
   rate: number;
   weight: number | null;
   weights?: { weight_version_id: string; weight: number; count: number; deduction: number }[];
+  weights_status: 'aplicado' | 'vigente_intervalo' | 'indisponivel_snapshot_legado';
   multi_version?: boolean;
   deduction: number;
 }

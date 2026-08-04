@@ -61,3 +61,5 @@ Implementação concluída em `src/views/dashboard.html`.
 - A média diária simples de `Cozinha Geral` só é válida quando as três estações (`quente_a`, `quente_b` e `fria`) estão presentes no dia. Caso contrário, o contrato retorna `daily_average_score: null` e `daily_average_complete: false`.
 - Ocorrências lentas usam tipos distintos: `Preparo lento` para cozinha e `Retirada lenta` para salão. O mesmo campo `type` é consumido pelo dashboard, PDF e Excel.
 - O identificador `weight_version_id` é escapado antes da renderização HTML do detalhamento.
+- Critérios de scores legados retornam `weights_status: indisponivel_snapshot_legado` e `weights: []`; as versões vigentes do intervalo permanecem somente em `weight_versions` como contexto, sem serem apresentadas como pesos aplicados.
+- PDF e Excel exibem `Snapshot indisponível` para qualquer ocorrência sem peso, desconto ou versão; a média da Cozinha Geral valida as três entidades distintas, não apenas a quantidade de linhas.
