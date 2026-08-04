@@ -21,6 +21,21 @@ Implementação concluída no backend, sem alteração no dashboard.
 ## Testes
 
 - `npx tsc --noEmit`: passou.
+
+## Rodada de correção da re-revisão
+
+- Cozinha Geral não retorna mais ocorrências sem enriquecimento: as ocorrências das três estações passam por `enriquecerOcorrencias` e carregam entidade, estação, tipo, data, demanda, produto, detalhe, peso, desconto e `weight_version_id`.
+- `getCriterionEligibleBases` agrega as três estações para Cozinha Geral, usa população elegível para SLA/preparo/retirada e mantém cancelamento/zerado na base total aplicável.
+- `stockout_cozinha` é somente critério informativo, com peso e desconto zero; não foi adicionado a `PerformanceWeights` nem ao PUT administrativo.
+- `getPerformanceDetails` fornece à Tarefa 3 um contrato conectado de critérios, ocorrências e versões usadas no período.
+- `PerformanceOccurrence.weight_version_id` tornou-se obrigatório e cada ocorrência resolve sua versão pela própria data.
+- Erros de banco continuam sendo propagados pelo serviço.
+
+## Testes da re-revisão
+
+- `npx ts-node --transpile-only .tmp-task-2-rereview-test.ts`: passou para Cozinha Geral/enriquecimento, bases, critério informativo e pesos por data.
+- `npx tsc --noEmit`: passou.
+- `git diff --check`: passou.
 - Verificação isolada com `npx ts-node --transpile-only .tmp-task-2-test.ts`: passou para leitura idempotente da versão vigente e ausência de recálculo retroativo no PUT.
 
 ## Preocupações

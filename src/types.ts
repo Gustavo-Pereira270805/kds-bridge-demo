@@ -390,6 +390,7 @@ export interface PerformanceOccurrence {
   detail: string;
   weight: number;
   deduction: number;
+  weight_version_id: string;
 }
 
 export interface EntityPerformance {

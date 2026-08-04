@@ -1,11 +1,21 @@
 import { query, pool } from '../db/client';
-import { PerformanceScoreRow, PerformanceDetractor, PerformanceWeights, PerformanceWeightVersion } from '../types';
+import { PerformanceScoreRow, PerformanceDetractor, PerformanceWeights, PerformanceWeightVersion, PerformanceOccurrence, PerformanceCriterionSummary, PerformanceEntity } from '../types';
 
 export interface NotaCozinhaGeral {
   operational_score: number;
   daily_average_score: number;
   total_demands: number;
   kitchen_stockout_weight: number;
+}
+
+export interface OcorrenciaBruta {
+  type: string;
+  date: string;
+  demand_id: string;
+  product_name: string;
+  detail: string;
+  entity?: PerformanceEntity;
+  station?: string | null;
 }
 
 export function calcularNotasCozinhaGeral(stations: { total: number; deduction: number; final?: number }[]): NotaCozinhaGeral {
@@ -285,17 +295,34 @@ export function buildDetractors(score: PerformanceScoreRow): PerformanceDetracto
   return list;
 }
 
-export interface DetractorDate {
-  entity?: string;
-  station?: string | null;
-  type: string;
-  date: string;
-  demand_id: string;
-  product_name: string;
-  detail: string;
-  weight?: number;
-  deduction?: number;
-  weight_version_id?: string;
+export type DetractorDate = PerformanceOccurrence;
+
+export async function enriquecerOcorrencias(
+  entity: PerformanceEntity,
+  ocorrencias: OcorrenciaBruta[]
+): Promise<PerformanceOccurrence[]> {
+  const isKitchen = entity !== 'salao';
+  return Promise.all(ocorrencias.map(async occurrence => {
+    const occurrenceDate = String(occurrence.date).slice(0, 10);
+    const version = await getWeightVersionForDate(occurrenceDate);
+    const resultEntity = occurrence.entity || entity;
+    const key = occurrence.type === 'Estouro de SLA'
+      ? (isKitchen ? 'sla_breach_cozinha' : 'sla_breach_salao')
+      : occurrence.type === 'Cancelamento'
+        ? (isKitchen ? 'cancellation_cozinha' : 'cancellation_salao')
+        : occurrence.type === 'Zerado'
+          ? (isKitchen ? null : 'stockout_salao')
+          : (isKitchen ? 'slow_item_cozinha' : 'slow_pickup_salao');
+    const weight = key ? version[key] : 0;
+    return {
+      ...occurrence,
+      entity: resultEntity,
+      station: occurrence.station ?? (isKitchen ? resultEntity.replace('cozinha_', '') : null),
+      weight,
+      deduction: weight,
+      weight_version_id: version.id,
+    };
+  }));
 }
 
 export function buildCriterionSummaries(
@@ -319,16 +346,29 @@ export function buildCriterionSummaries(
     ];
   return criteria.map(([criterion, count, deduction]) => {
     const total = eligibleBases[criterion] ?? (Number(score.total_demands) || 0);
+    const weight = criterion === 'stockout_cozinha'
+      ? 0
+      : getCriterionWeight(criterion, weights);
     return {
       criterion, count, eligible_base: total, rate: total ? count / total : 0,
-      weight: weights[criterion as keyof PerformanceWeights], deduction,
+      weight, deduction: criterion === 'stockout_cozinha' ? 0 : deduction,
     };
   });
 }
 
+function getCriterionWeight(criterion: string, weights: PerformanceWeights): number {
+  if (criterion === 'stockout_cozinha') return 0;
+  if (criterion in weights) return weights[criterion as keyof PerformanceWeights];
+  throw new Error(`Critério de desempenho desconhecido: ${criterion}`);
+}
+
 export async function getCriterionEligibleBases(entity: string, dateStr: string): Promise<Record<string, number>> {
-  const stationFilter = entity === 'salao' ? '' : 'AND kitchen_station_id = (SELECT id FROM kitchen_stations WHERE code = $2)';
-  const params = entity === 'salao' ? [dateStr] : [dateStr, entityFromStationCode(entity.replace('cozinha_', ''))];
+  const isGeneral = entity === 'cozinha_geral';
+  const stationFilter = entity === 'salao' ? '' : 'AND kitchen_station_id IN (SELECT id FROM kitchen_stations WHERE code = ANY($2))';
+  const stationCodes = isGeneral
+    ? ['quente_a', 'quente_b', 'fria']
+    : [entityFromStationCode(entity.replace('cozinha_', ''))];
+  const params = entity === 'salao' ? [dateStr] : [dateStr, stationCodes];
   const [row] = await query<{
     total_demands: string;
     sla_cozinha: string;
@@ -338,8 +378,8 @@ export async function getCriterionEligibleBases(entity: string, dateStr: string)
   }>(
     `SELECT
        COUNT(*)::int AS total_demands,
-       COUNT(*) FILTER (WHERE sla_breached_cozinha = true)::int AS sla_cozinha,
-       COUNT(*) FILTER (WHERE sla_breached_salao = true)::int AS sla_salao,
+       COUNT(*) FILTER (WHERE sla_minutes IS NOT NULL)::int AS sla_cozinha,
+       COUNT(*)::int AS sla_salao,
        COUNT(*) FILTER (WHERE ready_at IS NOT NULL AND sla_minutes IS NOT NULL)::int AS slow_cozinha,
        COUNT(*) FILTER (WHERE ready_at IS NOT NULL AND retrieved_at IS NOT NULL)::int AS slow_salao
      FROM demands
@@ -360,8 +400,8 @@ export async function getCriterionEligibleBases(entity: string, dateStr: string)
   };
 }
 
-export async function getDetractorDates(entity: string, dateFrom: string, dateTo: string): Promise<DetractorDate[]> {
-  const results: DetractorDate[] = [];
+export async function getDetractorDates(entity: string, dateFrom: string, dateTo: string): Promise<PerformanceOccurrence[]> {
+  const results: OcorrenciaBruta[] = [];
 
   if (entity === 'cozinha_quente_a' || entity === 'cozinha_quente_b' || entity === 'cozinha_fria') {
     const stationCode = entity === 'cozinha_quente_a' ? 'quente_a'
@@ -482,28 +522,56 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
   }
 
   results.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  const isKitchen = entity !== 'salao';
-  if (entity === 'cozinha_geral') return results;
-  const datedResults = await Promise.all(results.map(async result => {
-    const occurrenceDate = String(result.date).slice(0, 10);
-    const version = await getWeightVersionForDate(occurrenceDate);
-    const resultEntity = result.entity || entity;
-    const key = result.type === 'Estouro de SLA'
-      ? (isKitchen ? 'sla_breach_cozinha' : 'sla_breach_salao')
-      : result.type === 'Cancelamento'
-        ? (isKitchen ? 'cancellation_cozinha' : 'cancellation_salao')
-        : result.type === 'Zerado'
-          ? (isKitchen ? null : 'stockout_salao')
-          : (isKitchen ? 'slow_item_cozinha' : 'slow_pickup_salao');
-    const weight = key ? version[key] : 0;
-    return {
-      ...result,
-      entity: resultEntity,
-      station: result.station ?? (isKitchen ? resultEntity.replace('cozinha_', '') : null),
-      weight,
-      deduction: weight,
-      weight_version_id: version.id,
-    };
-  }));
-  return datedResults;
+  if (!['salao', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'cozinha_geral'].includes(entity)) {
+    throw new Error(`Entidade de desempenho desconhecida: ${entity}`);
+  }
+  return enriquecerOcorrencias(entity as PerformanceEntity, results);
+}
+
+export interface PerformanceDetails {
+  entity: string;
+  criteria: PerformanceCriterionSummary[];
+  occurrences: PerformanceOccurrence[];
+  weight_versions: PerformanceWeightVersion[];
+}
+
+export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom: string, dateTo: string): Promise<PerformanceDetails> {
+  const occurrences = await getDetractorDates(entity, dateFrom, dateTo) as PerformanceOccurrence[];
+  const bases: Record<string, number> = {};
+  const versions = new Map<string, PerformanceWeightVersion>();
+  const from = new Date(`${dateFrom}T00:00:00Z`);
+  const to = new Date(`${dateTo}T00:00:00Z`);
+  for (const date = new Date(from); date <= to; date.setUTCDate(date.getUTCDate() + 1)) {
+    const dateStr = date.toISOString().slice(0, 10);
+    const dailyBases = await getCriterionEligibleBases(entity, dateStr);
+    for (const [criterion, base] of Object.entries(dailyBases)) bases[criterion] = (bases[criterion] || 0) + base;
+    const version = await getWeightVersionForDate(dateStr);
+    versions.set(version.id, version);
+  }
+  const counts = new Map<string, number>();
+  const deductions = new Map<string, number>();
+  for (const occurrence of occurrences) {
+    const criterion = occurrence.type === 'Estouro de SLA'
+      ? (entity === 'salao' ? 'sla_breach_salao' : 'sla_breach_cozinha')
+      : occurrence.type === 'Cancelamento'
+        ? (entity === 'salao' ? 'cancellation_salao' : 'cancellation_cozinha')
+        : occurrence.type === 'Zerado'
+          ? (entity === 'salao' ? 'stockout_salao' : 'stockout_cozinha')
+          : (entity === 'salao' ? 'slow_pickup_salao' : 'slow_item_cozinha');
+    counts.set(criterion, (counts.get(criterion) || 0) + 1);
+    deductions.set(criterion, (deductions.get(criterion) || 0) + occurrence.deduction);
+  }
+  const latest = await getWeightVersionForDate(dateTo);
+  const criteria = buildCriterionSummaries({
+    total_demands: bases.total_demands || 0,
+    sla_breaches: counts.get(entity === 'salao' ? 'sla_breach_salao' : 'sla_breach_cozinha') || 0,
+    sla_breach_deduction: deductions.get(entity === 'salao' ? 'sla_breach_salao' : 'sla_breach_cozinha') || 0,
+    cancellations: counts.get(entity === 'salao' ? 'cancellation_salao' : 'cancellation_cozinha') || 0,
+    cancellation_deduction: deductions.get(entity === 'salao' ? 'cancellation_salao' : 'cancellation_cozinha') || 0,
+    stockouts: counts.get(entity === 'salao' ? 'stockout_salao' : 'stockout_cozinha') || 0,
+    stockout_deduction: deductions.get(entity === 'salao' ? 'stockout_salao' : 'stockout_cozinha') || 0,
+    slow_items: counts.get(entity === 'salao' ? 'slow_pickup_salao' : 'slow_item_cozinha') || 0,
+    slow_item_deduction: deductions.get(entity === 'salao' ? 'slow_pickup_salao' : 'slow_item_cozinha') || 0,
+  } as PerformanceScoreRow, latest, entity !== 'salao', bases);
+  return { entity, criteria, occurrences, weight_versions: Array.from(versions.values()) };
 }
