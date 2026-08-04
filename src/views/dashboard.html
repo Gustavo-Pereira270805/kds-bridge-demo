@@ -418,7 +418,7 @@
         </table>
         <div class="modal-label">Como interpretar</div>
         <div class="criteria-example">
-            A nota operacional e os descontos são calculados pela API para o período selecionado. Quando houver mais de uma versão vigente, o detalhamento preserva cada peso por versão e não resume o período pelo peso mais recente.
+            A nota operacional e os descontos são calculados pela API para o período selecionado. Quando houver mais de uma versão vigente, o detalhamento preserva cada peso por versão e não resume o período pelo peso mais recente. Alterações de pesos valem para novas apurações e não recalculam notas históricas.
         </div>
         <div class="modal-label">Escala de cores</div>
         <div class="criteria-scale">
@@ -428,7 +428,7 @@
             <div class="criteria-chip" style="background:#e63946;"><div class="cs-range">0 &ndash; 1.9</div><div class="cs-label">Ruim</div></div>
         </div>
         <div class="criteria-entities">
-             <strong>Entidades avaliadas:</strong> Cozinha Quente A, Cozinha Quente B, Cozinha Fria, Sal&atilde;o e Cozinha Geral. A cozinha geral mostra a nota operacional agregada e, separadamente, a m&eacute;dia simples das esta&ccedil;&otilde;es. Demandas abertas entram no total, mas ficam fora das bases eleg&iacute;veis que exigem timestamps.
+            <strong>Entidades avaliadas:</strong> Cozinha Quente A, Cozinha Quente B, Cozinha Fria, Sal&atilde;o e Cozinha Geral. A cozinha geral mostra a nota operacional agregada e, separadamente, a m&eacute;dia simples das esta&ccedil;&otilde;es. Demandas abertas entram no total, mas ficam fora das bases eleg&iacute;veis que exigem timestamps.
         </div>
         <div class="modal-actions">
             <button id="btnCriteriaClose" class="btn-modal-confirm" type="button">Fechar</button>
@@ -1216,6 +1216,23 @@ if (document.readyState === 'loading') {
         return s;
     }
 
+    function escapePerfHtml(value) {
+        return String(value === null || value === undefined ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function formatPerfDate(value) {
+        var raw = String(value === null || value === undefined ? '' : value);
+        var datePart = raw.split('T')[0];
+        var parts = datePart.split('-');
+        var formatted = parts.length === 3 ? parts[2] + '/' + parts[1] + '/' + parts[0] : raw.substring(0, 16);
+        return escapePerfHtml(formatted);
+    }
+
     function renderScoreCards(perf) {
         if(!perf || !perf.operational) return '';
         var source = perf.operational;
@@ -1233,7 +1250,7 @@ if (document.readyState === 'loading') {
             h += '<div class="score-value '+cls+'">'+sc.toFixed(1)+'</div>';
             h += '<div class="score-stars '+cls+'">'+perfStars(sc)+'</div>';
             h += '<div class="score-sub">Nota operacional</div>';
-            h += '<div class="score-sub">Média diária: '+daily.toFixed(1)+' · '+(Number(s.total_demands)||0)+' demandas</div>';
+            h += '<div class="score-sub">'+(order[i] === 'cozinha_geral' ? 'Média simples das estações' : 'Média diária')+': '+daily.toFixed(1)+' · '+(Number(s.total_demands)||0)+' demandas</div>';
             h += '</div>';
         }
         return h + '</div>';
@@ -1267,24 +1284,13 @@ if (document.readyState === 'loading') {
                     '<thead><tr style="border-bottom:1px solid var(--c-border-light);text-align:left;">' +
                     '<th style="padding:3px 4px;">Data</th><th style="padding:3px 4px;">Tipo</th><th style="padding:3px 4px;">Produto</th><th style="padding:3px 4px;">Detalhe</th><th style="padding:3px 4px;">Origem</th><th style="padding:3px 4px;">Peso / desconto</th></tr></thead><tbody>';
                 datesList.forEach(function(occ) {
-                    var d = String(occ.date || '');
-                    var formatted = '';
-                    if (d.indexOf('T') > -1) {
-                        var parts = d.split('T');
-                        var datePart = parts[0];
-                        var timePart = parts[1] ? parts[1].substring(0, 5) : '';
-                        var dp = datePart.split('-');
-                        formatted = dp.length === 3 ? dp[2] + '/' + dp[1] + ' ' + timePart : d.substring(0, 16);
-                    } else {
-                        formatted = d.substring(0, 16);
-                    }
                     bars += '<tr style="border-bottom:1px solid var(--c-border-light);">' +
-                        '<td style="padding:3px 4px;font-family:var(--font-mono);">' + formatted + '</td>' +
-                        '<td style="padding:3px 4px;">' + (occ.type || '') + '</td>' +
-                        '<td style="padding:3px 4px;">' + (occ.product_name || '-') + '</td>' +
-                        '<td style="padding:3px 4px;color:var(--c-text-muted);">' + (occ.detail || '') + '</td>' +
-                        '<td style="padding:3px 4px;">' + (occ.station || (order[i] === 'cozinha_geral' ? 'Cozinha' : '-')) + '</td>' +
-                        '<td style="padding:3px 4px;">' + Number(occ.weight || 0).toFixed(2) + ' / -' + Number(occ.deduction || 0).toFixed(2) + '<br><small>' + String(occ.weight_version_id || '').substring(0, 8) + '</small></td></tr>';
+                        '<td style="padding:3px 4px;font-family:var(--font-mono);">' + formatPerfDate(occ.date) + '</td>' +
+                        '<td style="padding:3px 4px;">' + escapePerfHtml(occ.type) + '</td>' +
+                        '<td style="padding:3px 4px;">' + escapePerfHtml(occ.product_name || '-') + '</td>' +
+                        '<td style="padding:3px 4px;color:var(--c-text-muted);">' + escapePerfHtml(occ.detail) + '</td>' +
+                        '<td style="padding:3px 4px;">' + escapePerfHtml(occ.station || (order[i] === 'cozinha_geral' ? 'Cozinha' : '-')) + '</td>' +
+                        '<td style="padding:3px 4px;">' + Number(occ.weight || 0).toFixed(2) + ' / -' + Number(occ.deduction || 0).toFixed(2) + '<br><small>' + escapePerfHtml(String(occ.weight_version_id || '').substring(0, 8)) + '</small></td></tr>';
                 });
                 bars += '</tbody></table></div></div>';
             }
@@ -1361,7 +1367,7 @@ if (document.readyState === 'loading') {
                 }
             }).catch(function(err) {
                 console.error('Erro ao carregar performance:', err);
-                if (perfGrid) perfGrid.innerHTML = '<article class="panel" data-cols="12"><div class="panel-body loading" style="color:var(--c-danger);">Erro ao carregar performance: '+(err.message || 'tente novamente')+'</div></article>';
+                if (perfGrid) perfGrid.innerHTML = '<article class="panel" data-cols="12"><div class="panel-body loading" style="color:var(--c-danger);">Não foi possível carregar as notas de performance. Tente novamente.</div></article>';
             });
         } catch(e) {
             console.error('Erro ao preparar performance:', e);
@@ -1539,7 +1545,7 @@ if (document.readyState === 'loading') {
             // Show error in overview section
             var overviewGrid = document.querySelector('#overview .bento-grid');
             if (overviewGrid) {
-                overviewGrid.innerHTML = '<article class="panel" data-cols="12" style="text-align:center;padding:var(--sp-8);color:var(--c-danger);">Erro ao carregar: ' + (err.message || 'Tente novamente') + '</article>';
+                overviewGrid.innerHTML = '<article class="panel" data-cols="12" style="text-align:center;padding:var(--sp-8);color:var(--c-danger);">Não foi possível carregar o dashboard. Tente novamente.</article>';
             }
             console.error(err);
         });
@@ -1655,216 +1661,6 @@ if (document.readyState === 'loading') {
         });
     }
 
-    function formatExportDate(value) {
-        var parts = String(value || '').split('-');
-        return parts.length === 3 ? parts[2] + '/' + parts[1] + '/' + parts[0] : String(value || '');
-    }
-
-    function exportValue(value) {
-        return value === null || value === undefined || value === '' ? '-' : String(value);
-    }
-
-    function exportTable(title, columns, rows) {
-        if (!rows || !rows.length) return '';
-        var html = '<section class="export-section"><h2>' + title + '</h2><table><thead><tr>';
-        columns.forEach(function(c) { html += '<th>' + c[1] + '</th>'; });
-        html += '</tr></thead><tbody>';
-        rows.forEach(function(row) {
-            html += '<tr>';
-            columns.forEach(function(c) { html += '<td>' + exportValue(row[c[0]]) + '</td>'; });
-            html += '</tr>';
-        });
-        return html + '</tbody></table></section>';
-    }
-
-    function exportBars(title, rows, labelKey, valueKey, color, formatter) {
-        if (!rows || !rows.length) return '';
-        var max = 1;
-        rows.forEach(function(row) {
-            var value = typeof valueKey === 'function' ? valueKey(row) : parseFloat(row[valueKey]) || 0;
-            if (value > max) max = value;
-        });
-        var html = '<section class="export-visual-section"><h2>' + title + '</h2><div class="export-bars">';
-        rows.forEach(function(row) {
-            var value = typeof valueKey === 'function' ? valueKey(row) : parseFloat(row[valueKey]) || 0;
-            var label = row[labelKey] === undefined ? '-' : row[labelKey];
-            var width = Math.max(value > 0 ? 3 : 0, (value / max) * 100);
-            var shown = formatter ? formatter(value, row) : value;
-            html += '<div class="export-bar-row"><span class="export-bar-label" title="' + label + '">' + label + '</span><span class="export-bar-track"><span class="export-bar-fill" style="width:' + width + '%;background:' + color + ';"></span></span><strong class="export-bar-value">' + shown + '</strong></div>';
-        });
-        return html + '</div></section>';
-    }
-
-    function exportDonut(title, segments, colors) {
-        var total = segments.reduce(function(sum, segment) { return sum + (parseFloat(segment.value) || 0); }, 0);
-        if (!total) return '';
-        var cx = 70, cy = 70, radius = 55, innerRadius = 35, angle = -Math.PI / 2;
-        var paths = '';
-        segments.forEach(function(segment, index) {
-            var slice = ((parseFloat(segment.value) || 0) / total) * Math.PI * 2;
-            if (slice < 0.01) return;
-            var x1 = Math.cos(angle) * radius, y1 = Math.sin(angle) * radius;
-            var x2 = Math.cos(angle + slice) * radius, y2 = Math.sin(angle + slice) * radius;
-            var x3 = Math.cos(angle + slice) * innerRadius, y3 = Math.sin(angle + slice) * innerRadius;
-            var x4 = Math.cos(angle) * innerRadius, y4 = Math.sin(angle) * innerRadius;
-            var large = slice > Math.PI ? 1 : 0;
-            paths += '<path d="M ' + x1 + ' ' + y1 + ' A ' + radius + ' ' + radius + ' 0 ' + large + ' 1 ' + x2 + ' ' + y2 + ' L ' + x3 + ' ' + y3 + ' A ' + innerRadius + ' ' + innerRadius + ' 0 ' + large + ' 0 ' + x4 + ' ' + y4 + ' Z" fill="' + colors[index % colors.length] + '"></path>';
-            angle += slice;
-        });
-        var legend = '<div class="export-donut-legend">';
-        segments.forEach(function(segment, index) {
-            legend += '<div><i style="background:' + colors[index % colors.length] + '"></i>' + segment.label + '<strong>' + segment.value + '</strong></div>';
-        });
-        return '<section class="export-visual-section"><h2>' + title + '</h2><div class="export-donut"><svg width="160" height="160" viewBox="0 0 140 140" aria-label="' + title + '"><g transform="translate(' + cx + ',' + cy + ')">' + paths + '<text text-anchor="middle" dy="0.35em" font-size="16" font-weight="800" fill="#f3f0f5">' + total + '</text></g></svg>' + legend + '</div></section>';
-    }
-
-    function exportPerformanceHtml(perf) {
-        if (!perf || (!perf.current && !perf.averages)) return '';
-        var source = perf.averages && Object.keys(perf.averages).length ? perf.averages : perf.current;
-        var labels = { cozinha_geral: 'Cozinha Geral', cozinha_quente_a: 'Quente A', cozinha_quente_b: 'Quente B', cozinha_fria: 'Fria', salao: 'Salão' };
-        var order = ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'salao'];
-        var html = '<section class="export-performance"><h2>Notas de performance das estações</h2><div class="export-score-grid">';
-        order.forEach(function(entity) {
-            var score = source[entity];
-            if (!score) return;
-            var value = Number(score.final_score) || 0;
-            var color = value >= 4.5 ? '#10b981' : value >= 3.5 ? '#d4a574' : value >= 2.5 ? '#f59e0b' : '#e11d48';
-            var stars = '', full = Math.floor(value);
-            for (var i = 0; i < 5; i++) stars += i < full ? '★' : '☆';
-            html += '<div class="export-score-card"><span>' + labels[entity] + '</span><strong style="color:' + color + '">' + value.toFixed(1) + '</strong><b style="color:' + color + '">' + stars + '</b><small>' + (Number(score.total_demands) || 0) + ' demandas</small></div>';
-        });
-        html += '</div>';
-        var detractorRows = [];
-        order.forEach(function(entity) {
-            var score = source[entity];
-            if (!score) return;
-            (score.detractors || []).forEach(function(detractor) {
-                detractorRows.push({ estacao: labels[entity], tipo: detractor.label, ocorrencias: detractor.count, desconto: Number(detractor.deduction).toFixed(2) });
-            });
-        });
-        html += exportTable('Principais detratores', [['estacao','Estação'],['tipo','Tipo'],['ocorrencias','Ocorrências'],['desconto','Desconto']], detractorRows);
-        if (perf.history && perf.history.length > 1) {
-            html += '<div class="export-chart-section"><h2>Evolução das notas</h2><div class="export-chart"><canvas id="export-performance-chart"></canvas></div></div>';
-        }
-        return html + '</section>';
-    }
-
-    function buildExportHtml(data, from, to, dayLabel, performance) {
-        var k = data.kpis || {};
-        var title = dayLabel ? 'Relatório diário' : 'Relatório operacional';
-        var station = state.stationId ? (document.getElementById('stationSelect') || {}).selectedOptions : null;
-        var stationLabel = station && station.length ? station[0].textContent : 'Todas as cozinhas';
-        var cards = [
-            ['Pedidos', k.total_pedidos], ['Entregues', (k.pct_entregues || 0) + '%'],
-            ['Dentro do SLA', (k.pct_dentro_sla || 0) + '%'], ['Cancelados', k.total_cancelados],
-            ['Zerados', k.total_roturas], ['Urgentes', (k.pct_urgentes || 0) + '%'],
-            ['Preparo médio', (k.tempo_medio_cozinha_min || 0) + ' min'],
-            ['Retirada média', (k.tempo_medio_retirada_min || 0) + ' min']
-        ];
-        var html = '<div class="export-report"><header class="export-header"><div><div class="export-kicker">KDS BRIDGE / ANALYTICS</div><h1>' + title + '</h1><p>' + formatExportDate(from) + ' a ' + formatExportDate(to) + ' · ' + stationLabel + '</p></div><div class="export-mark">KDS</div></header><section class="export-kpis">';
-        cards.forEach(function(c) { html += '<div class="export-kpi"><span>' + c[0] + '</span><strong>' + exportValue(c[1]) + '</strong></div>'; });
-        html += '</section>';
-        if (data.funnel && parseInt(data.funnel.created)) {
-            var funnel = data.funnel;
-            html += exportBars('Funil de demandas', [
-                { label: 'Criadas', value: parseInt(funnel.created) || 0 },
-                { label: 'Prontas', value: parseInt(funnel.ready) || 0 },
-                { label: 'Retiradas', value: parseInt(funnel.retrieved) || 0 }
-            ], 'label', 'value', '#d4a574', function(value) { return value; });
-            html += exportDonut('Status das demandas', [
-                { label: 'Pendentes', value: parseInt(funnel.pending_now) || 0 },
-                { label: 'Prontas', value: Math.max(0, (parseInt(funnel.ready) || 0) - (parseInt(funnel.retrieved) || 0)) },
-                { label: 'Retiradas', value: parseInt(funnel.retrieved) || 0 },
-                { label: 'Canceladas', value: parseInt(funnel.cancelled) || 0 }
-            ], ['#0ea5e9', '#10b981', '#34d399', '#e11d48']);
-            html += exportDonut('Origem das urgências', [
-                { label: 'Urgentes puros', value: parseInt(k.urgentes_puros) || 0 },
-                { label: 'Por zerou', value: parseInt(k.urgentes_rotura) || 0 }
-            ], ['#e11d48', '#f59e0b']);
-        }
-        html += exportBars('Produtos mais demandados', (data.produtos || []).slice(0, 12), 'product_name', function(row) { return parseFloat(row.total_qty) || 0; }, '#10b981', function(value) { return Math.round(value * 10) / 10; });
-        html += exportBars('Sazonalidade por dia da semana', data.weekday_seasonality || [], 'dia', 'total', '#0ea5e9');
-        html += exportBars('Motivos de cancelamento', (data.cancel_reasons || []).slice(0, 10), 'label', 'total', '#e11d48');
-        html += exportBars('Estouro de SLA por produto', (data.sla_by_product || []).slice(0, 10), 'product_name', 'breached', '#f59e0b');
-        html += exportBars('Tempo de fila por estação', data.queue_time_by_station || [], 'estacao', function(row) { return (parseFloat(row.avg_wait_min) || 0) + (parseFloat(row.avg_cooking_min) || 0); }, '#8b5cf6', function(value) { return Math.round(value * 10) / 10 + ' min'; });
-        if (data.occupancy_by_shift && data.occupancy_by_shift.length) {
-            html += exportBars('Ocupação por turno', data.occupancy_by_shift, 'turno', function(row) { return 100 - (parseFloat(row.pct_ociosa) || 0); }, '#10b981', function(value) { return Math.round(value * 10) / 10 + '%'; });
-        }
-        html += exportPerformanceHtml(performance);
-        html += exportTable('Produtos mais demandados', [['product_name','Produto'],['total_qty','Quantidade'],['total_demandas','Pedidos']], (data.produtos || []).slice(0, 15));
-        html += exportTable('SLA por produto', [['product_name','Produto'],['total','Pedidos'],['breached','Estouros'],['pct_ok','Dentro do SLA %'],['avg_overage_min','Excesso médio (min)']], (data.sla_by_product || []).slice(0, 15));
-        html += exportTable('Cancelamentos', [['label','Motivo'],['category','Categoria'],['total','Total']], (data.cancel_reasons || []).slice(0, 15));
-        html += exportTable('Filas por estação', [['estacao','Estação'],['avg_wait_min','Espera média (min)'],['avg_cooking_min','Preparo médio (min)'],['count','Pedidos']], data.queue_time_by_station || []);
-        html += exportTable('Trocas de cardápio', [['day','Dia'],['total','Pedidos'],['replacements','Trocas'],['replacement_pct','Trocas %']], (data.replacements || []).slice(0, 15));
-        html += exportTable('Velocidade por hora', [['hora','Hora'],['avg_min','Preparo médio (min)'],['count','Pedidos']], data.speed_by_hour || []);
-        html += exportTable('Retirada por hora', [['hora','Hora'],['avg_min','Retirada média (min)'],['count','Pedidos']], data.pickup_by_hour || []);
-        if ((data.volume_ma || []).length > 1) {
-            html += '<section class="export-chart-section"><h2>Volume diário e média móvel</h2><div class="export-chart"><canvas id="export-volume-chart"></canvas></div></section>';
-        }
-        if ((data.queue_time_by_hour || []).length) {
-            html += '<section class="export-chart-section"><h2>Fila por estação e hora</h2><div class="export-chart export-chart-tall"><canvas id="export-queue-chart"></canvas></div></section>';
-        }
-        if ((data.speed_by_hour || []).length) {
-            html += '<section class="export-chart-section"><h2>Velocidade da cozinha por hora</h2><div class="export-chart"><canvas id="export-speed-chart"></canvas></div></section>';
-        }
-        if ((data.pickup_by_hour || []).length) {
-            html += '<section class="export-chart-section"><h2>Tempo de retirada por hora</h2><div class="export-chart"><canvas id="export-pickup-chart"></canvas></div></section>';
-        }
-        return html + '</div>';
-    }
-
-    function createExportContainer(html) {
-        var temp = document.createElement('div');
-        temp.className = 'export-capture';
-        temp.innerHTML = '<style>' +
-            '.export-capture{position:absolute;left:-100000px;top:0;width:1040px;background:#141218;color:#f3f0f5;font-family:Inter,Arial,sans-serif;padding:34px}.export-report{background:#1e1b24;border:1px solid #2d2836;padding:28px}.export-header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid #403947;padding-bottom:22px;margin-bottom:20px}.export-kicker{color:#d4a574;font:700 11px JetBrains Mono,monospace;letter-spacing:1.6px}.export-header h1{font-size:28px;margin:8px 0 6px;color:#f3f0f5}.export-header p{color:#9a8f9e;font-size:12px;margin:0}.export-mark{border:1px solid #d4a574;color:#d4a574;padding:9px 12px;font:700 18px JetBrains Mono,monospace}.export-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px}.export-kpi{background:#141218;border:1px solid #2d2836;padding:13px}.export-kpi span{display:block;color:#9a8f9e;font-size:10px;text-transform:uppercase;letter-spacing:.6px}.export-kpi strong{display:block;color:#d4a574;font:700 22px JetBrains Mono,monospace;margin-top:7px}.export-section,.export-visual-section,.export-chart-section,.export-performance{margin:22px 0;break-inside:avoid}.export-section h2,.export-visual-section h2,.export-chart-section h2,.export-performance h2{font-size:15px;color:#d4a574;margin:0 0 9px;border-left:3px solid #d4a574;padding-left:9px}.export-section table{width:100%;border-collapse:collapse;font-size:11px}.export-section th{text-align:left;color:#9a8f9e;font-size:9px;text-transform:uppercase;letter-spacing:.6px;padding:7px;border-bottom:1px solid #584d5d}.export-section td{padding:7px;border-bottom:1px solid #2d2836;color:#f3f0f5}.export-section tr:nth-child(even){background:#25212b}.export-bars{background:#141218;border:1px solid #2d2836;padding:14px 16px}.export-bar-row{display:grid;grid-template-columns:190px 1fr 72px;gap:10px;align-items:center;margin:8px 0}.export-bar-label{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.export-bar-track{height:18px;background:#2d2836;border-radius:3px;overflow:hidden}.export-bar-fill{display:block;height:100%;border-radius:3px}.export-bar-value{text-align:right;font:600 11px JetBrains Mono,monospace;color:#d4a574}.export-donut{display:flex;align-items:center;gap:24px;background:#141218;border:1px solid #2d2836;padding:14px 22px}.export-donut svg{flex:0 0 auto}.export-donut-legend{display:flex;flex-direction:column;gap:8px;font-size:11px}.export-donut-legend div{display:grid;grid-template-columns:12px 1fr auto;gap:7px;align-items:center}.export-donut-legend i{width:12px;height:12px;border-radius:3px}.export-donut-legend strong{font:600 11px JetBrains Mono,monospace;color:#d4a574}.export-score-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px}.export-score-card{background:#141218;border:1px solid #2d2836;padding:14px;text-align:center}.export-score-card span,.export-score-card small{display:block;color:#9a8f9e;font-size:10px}.export-score-card strong{display:block;font:700 32px JetBrains Mono,monospace;margin:8px 0}.export-score-card b{display:block;font-size:13px;letter-spacing:2px}.export-score-card small{margin-top:8px}.export-chart{height:280px;background:#141218;border:1px solid #2d2836;padding:12px}.export-chart-tall{height:330px}' +
-            '</style>' + html;
-        document.body.appendChild(temp);
-        return temp;
-    }
-
-    function renderExportCharts(container, data) {
-        if (typeof Chart === 'undefined') throw new Error('Biblioteca de gráficos não carregada. Recarregue a página.');
-        var charts = [];
-        function addChart(id, create) {
-            var canvas = container.querySelector('#' + id);
-            if (!canvas) return;
-            var chart = create(canvas, data);
-            if (chart) charts.push(chart);
-        }
-        addChart('export-volume-chart', createVolumeMAChart);
-        addChart('export-queue-chart', createFilaHoraChart);
-        addChart('export-speed-chart', createVelocidadeChart);
-        addChart('export-pickup-chart', createRetiradaChart);
-        return new Promise(function(resolve) {
-            requestAnimationFrame(function() {
-                requestAnimationFrame(function() { resolve(charts); });
-            });
-        });
-    }
-
-    function renderExportPerformanceChart(container, performance) {
-        var canvas = container.querySelector('#export-performance-chart');
-        if (!canvas || !performance || !performance.history || performance.history.length < 2) return Promise.resolve(null);
-        var chart = createPerfTrendChart(canvas, performance);
-        return new Promise(function(resolve) {
-            requestAnimationFrame(function() { requestAnimationFrame(function() { resolve(chart); }); });
-        });
-    }
-
-    async function fetchPerformanceForDates(from, to) {
-        var resp = await fetch('/api/v1/analytics/performance?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to));
-        if (!resp.ok) throw new Error('Erro ao carregar notas de performance');
-        return resp.json();
-    }
-
-    async function fetchDashboardForDate(date) {
-        var params = 'from=' + date + '&to=' + date + (state.stationId ? '&station_id=' + encodeURIComponent(state.stationId) : '');
-        var resp = await fetch('/api/v1/analytics/dashboard?' + params);
-        if (!resp.ok) throw new Error('Erro ao carregar dados de ' + date);
-        return resp.json();
-    }
-
     async function exportPDF(from, to, byDay) {
         try {
             if (!window.jspdf || !window.html2canvas) throw new Error('Bibliotecas do PDF não carregadas. Recarregue a página.');
@@ -1916,27 +1712,22 @@ if (document.readyState === 'loading') {
                     var ds = days[i].toISOString().split('T')[0];
                     var parts = ds.split('-');
                     var dayLabel = parts[2] + '/' + parts[1] + '/' + parts[0];
-                    var dayData = await fetchDashboardForDate(ds);
-                    var dayPerformance = await fetchPerformanceForDates(ds, ds);
-                    var temp = createExportContainer(buildExportHtml(dayData, ds, ds, dayLabel, dayPerformance));
-                    var charts = await renderExportCharts(temp, dayData);
-                    var perfChart = await renderExportPerformanceChart(temp, dayPerformance);
+                    var params = 'from=' + ds + '&to=' + ds + (state.stationId ? '&station_id=' + encodeURIComponent(state.stationId) : '');
+                    var resp = await fetch('/api/v1/analytics/dashboard?' + params);
+                    if (!resp.ok) throw new Error('Erro ao carregar dados do dia ' + ds);
+                    var dayData = await resp.json();
+                    var temp = document.createElement('div');
+                    temp.style.cssText = 'position:absolute;left:-9999px;width:900px;background:white;font-family:Inter,sans-serif;padding:20px;';
+                    temp.innerHTML = '<div style="background:#1d3557;color:white;padding:12px 16px;border-radius:12px 12px 0 0;font-size:18px;font-weight:800;margin-bottom:12px;">' + dayLabel + '</div>' + buildContent(dayData);
+                    document.body.appendChild(temp);
                     var canvas = await html2canvas(temp, { scale: 1.5, useCORS: true, backgroundColor: '#f4f4f5' });
-                    charts.forEach(function(chart) { chart.destroy(); });
-                    if (perfChart) perfChart.destroy();
                     document.body.removeChild(temp);
                     firstPage = addCanvasToPdf(canvas, firstPage);
                 }
             } else {
                 if (exportProgress) exportProgress.textContent = 'Capturando dashboard...';
-                var performance = await fetchPerformanceForDates(from, to);
-                var temp = createExportContainer(buildExportHtml(state.lastData, from, to, '', performance));
-                var charts = await renderExportCharts(temp, state.lastData);
-                var perfChart = await renderExportPerformanceChart(temp, performance);
-                var canvas = await html2canvas(temp, { scale: 1.5, useCORS: true, backgroundColor: '#141218' });
-                charts.forEach(function(chart) { chart.destroy(); });
-                if (perfChart) perfChart.destroy();
-                document.body.removeChild(temp);
+                var contentEl = document.getElementById('content');
+                var canvas = await html2canvas(contentEl, { scale: 1.5, useCORS: true, backgroundColor: '#f4f4f5' });
                 addCanvasToPdf(canvas, true);
             }
             pdf.save('dashboard_' + from + '_' + to + '.pdf');
@@ -1950,65 +1741,6 @@ if (document.readyState === 'loading') {
             var wb = XLSX.utils.book_new();
             var data = state.lastData;
             if (!data) { throw new Error('Sem dados carregados'); }
-
-            function excelRows(rows, columns) {
-                return (rows || []).map(function(row) {
-                    var out = {};
-                    columns.forEach(function(c) { out[c[1]] = row[c[0]] === null || row[c[0]] === undefined ? '' : row[c[0]]; });
-                    return out;
-                });
-            }
-            function addSheet(title, rows, columns) {
-                if (!rows || !rows.length) return;
-                var sheet = XLSX.utils.json_to_sheet(excelRows(rows, columns));
-                sheet['!cols'] = columns.map(function(c) { return { wch: Math.max(12, Math.min(34, c[1].length + 4)) }; });
-                XLSX.utils.book_append_sheet(wb, sheet, title.substring(0, 31));
-            }
-            function addKpiSheet(report, title) {
-                var k = report.kpis || {};
-                var rows = [
-                    ['Indicador', 'Valor'], ['Pedidos', k.total_pedidos], ['Entregues (%)', k.pct_entregues],
-                    ['Dentro do SLA (%)', k.pct_dentro_sla], ['Cancelados', k.total_cancelados], ['Zerados', k.total_roturas],
-                    ['Urgentes (%)', k.pct_urgentes], ['Atrasos cozinha', k.atrasos_cozinha], ['Atrasos salão', k.atrasos_salao],
-                    ['Preparo médio (min)', k.tempo_medio_cozinha_min], ['Retirada média (min)', k.tempo_medio_retirada_min]
-                ];
-                var sheet = XLSX.utils.aoa_to_sheet(rows);
-                sheet['!cols'] = [{ wch: 28 }, { wch: 18 }];
-                XLSX.utils.book_append_sheet(wb, sheet, title.substring(0, 31));
-            }
-            function addPerformanceSheet(perf, title) {
-                if (!perf) return;
-                var source = perf.averages && Object.keys(perf.averages).length ? perf.averages : perf.current;
-                var labels = { cozinha_geral: 'Cozinha Geral', cozinha_quente_a: 'Quente A', cozinha_quente_b: 'Quente B', cozinha_fria: 'Fria', salao: 'Salão' };
-                var entities = ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'salao'];
-                var rows = [['Estação', 'Nota', 'Demandas', 'Estouros SLA', 'Cancelamentos', 'Zerados', 'Itens lentos']];
-                entities.forEach(function(entity) {
-                    var score = source && source[entity];
-                    if (!score) return;
-                    rows.push([labels[entity], Number(score.final_score) || 0, Number(score.total_demands) || 0, Number(score.sla_breaches) || 0, Number(score.cancellations) || 0, Number(score.stockouts) || 0, Number(score.slow_items) || 0]);
-                });
-                var sheet = XLSX.utils.aoa_to_sheet(rows);
-                sheet['!cols'] = [{ wch: 22 }, { wch: 10 }, { wch: 12 }, { wch: 16 }, { wch: 15 }, { wch: 10 }, { wch: 15 }];
-                XLSX.utils.book_append_sheet(wb, sheet, title.substring(0, 31));
-                var detractors = [];
-                entities.forEach(function(entity) {
-                    var score = source && source[entity];
-                    if (!score) return;
-                    (score.detractors || []).forEach(function(d) { detractors.push({ Estação: labels[entity], Tipo: d.label, Ocorrências: d.count, Desconto: d.deduction }); });
-                });
-                if (detractors.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detractors), (title + ' Detratores').substring(0, 31));
-            }
-            var columns = {
-                produtos: [['product_name','Produto'],['total_qty','Quantidade'],['total_demandas','Pedidos']],
-                sla: [['product_name','Produto'],['total','Pedidos'],['breached','Estouro SLA'],['pct_ok','Dentro do SLA (%)'],['avg_overage_min','Excesso médio (min)']],
-                cancelamentos: [['label','Motivo'],['category','Categoria'],['total','Total']],
-                filas: [['estacao','Estação'],['avg_wait_min','Espera média (min)'],['avg_cooking_min','Preparo médio (min)'],['count','Pedidos']],
-                trocas: [['day','Dia'],['total','Pedidos'],['replacements','Trocas'],['replacement_pct','Trocas (%)']],
-                velocidade: [['hora','Hora'],['avg_min','Preparo médio (min)'],['count','Pedidos']],
-                retirada: [['hora','Hora'],['avg_min','Retirada média (min)'],['count','Pedidos']],
-                sazonalidade: [['dia','Dia da semana'],['total','Pedidos'],['avg','Média diária']],
-                volume: [['day','Dia'],['total','Pedidos'],['ma7','Média móvel 7d']]
-            };
 
             if (byDay) {
                 var fromD = new Date(from + 'T00:00:00');
@@ -2025,15 +1757,14 @@ if (document.readyState === 'loading') {
                         var resp = await fetch('/api/v1/analytics/dashboard?' + params);
                         if (!resp.ok) throw new Error('HTTP ' + resp.status);
                         var dd = await resp.json();
-                        var dp = await fetchPerformanceForDates(ds, ds);
                         var name = ('D_' + ds).substring(0, 31);
-                        addKpiSheet(dd, (name + '_Resumo'));
-                        addPerformanceSheet(dp, (name + '_Notas'));
-                        addSheet(name + '_Produtos', (dd.produtos || []).slice(0, 30), columns.produtos);
-                        addSheet(name + '_SLA', (dd.sla_by_product || []).slice(0, 30), columns.sla);
-                        addSheet(name + '_Cancel', (dd.cancel_reasons || []).slice(0, 20), columns.cancelamentos);
-                        addSheet(name + '_Filas', dd.queue_time_by_station, columns.filas);
-                        addSheet(name + '_Trocas', dd.replacements, columns.trocas);
+                        var kpiArr = [['Métrica', 'Valor']];
+                        var kpis = dd.kpis || {};
+                        var km = { 'Pedidos': kpis.total_pedidos, 'Entregues %': kpis.pct_entregues, 'Zerados': kpis.total_roturas, 'Cancelados': kpis.total_cancelados, 'SLA %': kpis.pct_dentro_sla, 'Atrasos Cozinha': kpis.atrasos_cozinha, 'Atrasos Salão': kpis.atrasos_salao, 'Urgentes': kpis.urgentes_puros, 'Tempo Médio Coz.': kpis.tempo_medio_cozinha_min, 'Tempo Retirada': kpis.tempo_medio_retirada_min };
+                        Object.keys(km).forEach(function(k) { kpiArr.push([k, km[k]]); });
+                        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(kpiArr), (name + '_kpi').substring(0, 31));
+                        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((dd.produtos || []).slice(0, 30)), name);
+                        if (dd.cancel_reasons && dd.cancel_reasons.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dd.cancel_reasons.slice(0, 20)), (name + '_canc').substring(0, 31));
                         sheetsAdded++;
                     } catch (err) {
                         console.error('Erro ao carregar dia ' + ds + ':', err && err.message ? err.message : err);
@@ -2043,18 +1774,13 @@ if (document.readyState === 'loading') {
                 if (sheetsAdded === 0) { showToast('Nenhum dado encontrado para exporta\u00E7\u00E3o.', 'warn'); state.exporting = false; if (exportProgress) exportProgress.style.display = 'none'; return; }
             } else {
                 // Consolidated
-                addKpiSheet(data, 'Resumo');
-                var performance = await fetchPerformanceForDates(from, to);
-                addPerformanceSheet(performance, 'Notas Performance');
-                addSheet('Produtos', (data.produtos || []).slice(0, 50), columns.produtos);
-                addSheet('SLA por Produto', (data.sla_by_product || []).slice(0, 50), columns.sla);
-                addSheet('Cancelamentos', data.cancel_reasons, columns.cancelamentos);
-                addSheet('Filas por Estacao', data.queue_time_by_station, columns.filas);
-                addSheet('Trocas', data.replacements, columns.trocas);
-                addSheet('Velocidade Cozinha', data.speed_by_hour, columns.velocidade);
-                addSheet('Retirada por Hora', data.pickup_by_hour, columns.retirada);
-                addSheet('Sazonalidade', data.weekday_seasonality, columns.sazonalidade);
-                addSheet('Volume Diario', data.volume_ma, columns.volume);
+                var kpiArr = [['Métrica', 'Valor']];
+                var kpis = data.kpis || {};
+                var km = { 'Pedidos': kpis.total_pedidos, 'Entregues %': kpis.pct_entregues, 'Zerados': kpis.total_roturas, 'Cancelados': kpis.total_cancelados, 'SLA %': kpis.pct_dentro_sla, 'Atrasos Cozinha': kpis.atrasos_cozinha, 'Atrasos Salão': kpis.atrasos_salao, 'Urgentes': kpis.urgentes_puros, 'Tempo Médio Coz.': kpis.tempo_medio_cozinha_min, 'Tempo Retirada': kpis.tempo_medio_retirada_min };
+                Object.keys(km).forEach(function(k) { kpiArr.push([k, km[k]]); });
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(kpiArr), 'KPIs');
+                var sheets = [['produtos', 'Produtos'], ['cancel_reasons', 'Cancelamentos'], ['replacements', 'Trocas'], ['queue_time_by_hour', 'Fila por Hora'], ['sla_by_product', 'SLA por Produto'], ['pickup_by_hour', 'Retirada por Hora'], ['weekday_seasonality', 'Sazonalidade'], ['speed_by_hour', 'Velocidade Cozinha']];
+                sheets.forEach(function(ab) { if (data[ab[0]] && data[ab[0]].length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data[ab[0]]), ab[1].substring(0, 31)); });
             }
             var wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
             var blob = new Blob([wbout], { type: 'application/octet-stream' });
