@@ -330,7 +330,7 @@ export function buildCriterionSummaries(
   weights: PerformanceWeights,
   isKitchen: boolean,
   eligibleBases: Partial<Record<string, number>> = {}
-) {
+): PerformanceCriterionSummary[] {
   const criteria: [string, number, number][] = isKitchen
     ? [
       ['sla_breach_cozinha', score.sla_breaches, score.sla_breach_deduction],
@@ -529,14 +529,17 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
 }
 
 export interface PerformanceDetails {
-  entity: string;
+  entity: PerformanceEntity;
   criteria: PerformanceCriterionSummary[];
   occurrences: PerformanceOccurrence[];
   weight_versions: PerformanceWeightVersion[];
+  total_demands: number;
+  open_demands: number;
+  total_deduction: number;
 }
 
 export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom: string, dateTo: string): Promise<PerformanceDetails> {
-  const occurrences = await getDetractorDates(entity, dateFrom, dateTo) as PerformanceOccurrence[];
+  const occurrences = await getDetractorDates(entity, dateFrom, dateTo);
   const bases: Record<string, number> = {};
   const versions = new Map<string, PerformanceWeightVersion>();
   const from = new Date(`${dateFrom}T00:00:00Z`);
@@ -550,6 +553,7 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
   }
   const counts = new Map<string, number>();
   const deductions = new Map<string, number>();
+  const criterionWeights = new Map<string, Map<string, number>>();
   for (const occurrence of occurrences) {
     const criterion = occurrence.type === 'Estouro de SLA'
       ? (entity === 'salao' ? 'sla_breach_salao' : 'sla_breach_cozinha')
@@ -560,6 +564,10 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
           : (entity === 'salao' ? 'slow_pickup_salao' : 'slow_item_cozinha');
     counts.set(criterion, (counts.get(criterion) || 0) + 1);
     deductions.set(criterion, (deductions.get(criterion) || 0) + occurrence.deduction);
+    if (occurrence.weight_version_id) {
+      if (!criterionWeights.has(criterion)) criterionWeights.set(criterion, new Map());
+      criterionWeights.get(criterion)!.set(occurrence.weight_version_id, occurrence.weight);
+    }
   }
   const latest = await getWeightVersionForDate(dateTo);
   const criteria = buildCriterionSummaries({
@@ -573,5 +581,38 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
     slow_items: counts.get(entity === 'salao' ? 'slow_pickup_salao' : 'slow_item_cozinha') || 0,
     slow_item_deduction: deductions.get(entity === 'salao' ? 'slow_pickup_salao' : 'slow_item_cozinha') || 0,
   } as PerformanceScoreRow, latest, entity !== 'salao', bases);
-  return { entity, criteria, occurrences, weight_versions: Array.from(versions.values()) };
+  for (const criterion of criteria) {
+    const weights = criterionWeights.get(criterion.criterion);
+    const versionWeights = Array.from(weights?.entries() || []).map(([weight_version_id, weight]) => ({ weight_version_id, weight }));
+    if (versionWeights.length === 0) {
+      criterion.weights = Array.from(versions.values()).map(version => ({
+        weight_version_id: version.id,
+        weight: criterion.criterion === 'stockout_cozinha' ? 0 : getCriterionWeight(criterion.criterion, version),
+      }));
+    } else {
+      criterion.weights = versionWeights;
+    }
+    criterion.weight = criterion.weights.length === 1 ? criterion.weights[0].weight : null;
+  }
+  const [openRow] = await query<{ count: string }>(
+    `SELECT COUNT(*)::int AS count FROM demands
+     WHERE created_at::date >= $1 AND created_at::date <= $2
+       AND status IN ('pending', 'ready')
+       AND status != 'annulled'
+       ${entity === 'salao' ? '' : entity === 'cozinha_geral'
+         ? "AND kitchen_station_id IN (SELECT id FROM kitchen_stations WHERE code = ANY($3))"
+         : "AND kitchen_station_id = (SELECT id FROM kitchen_stations WHERE code = $3)"}`,
+    entity === 'salao' ? [dateFrom, dateTo] : entity === 'cozinha_geral'
+      ? [dateFrom, dateTo, ['quente_a', 'quente_b', 'fria']]
+      : [dateFrom, dateTo, entityFromStationCode(entity.replace('cozinha_', ''))]
+  );
+  return {
+    entity,
+    criteria,
+    occurrences,
+    weight_versions: Array.from(versions.values()),
+    total_demands: bases.total_demands || 0,
+    open_demands: Number(openRow?.count || 0),
+    total_deduction: round1(occurrences.reduce((sum, occurrence) => sum + occurrence.deduction, 0)),
+  };
 }

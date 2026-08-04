@@ -20,8 +20,13 @@ import {
   DayIndicators,
   ReplacementRow,
   PerformanceScoreRow,
+  PerformanceResponse,
+  EntityScore,
+  EntityPerformance,
+  PerformanceEntity,
+  PerformanceWeightVersion,
 } from '../types';
-import { ensureScoresForDate, buildDetractors, getDetractorDates } from '../services/performance.service';
+import { ensureScoresForDate, buildDetractors, getPerformanceDetails } from '../services/performance.service';
 
 // v2.5 (§5.6) — indicadores diários embutidos em cada dia do week_comparison;
 // a data fica no objeto externo, então `day` é omitida do sub-objeto
@@ -675,139 +680,82 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
   );
 
   // ── Performance / Notas de Desempenho ──
-  fastify.get<{ Querystring: { range?: string } }>(
+  fastify.get<{ Querystring: { range?: string; from?: string; to?: string } }>(
     '/performance',
     async (request, reply) => {
       try {
-        const { range } = request.query;
-        const now = new Date();
+        const { range, from, to } = request.query;
+        const today = new Date();
+        const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+        const validDate = (value: string): boolean => {
+          if (!isoDate.test(value)) return false;
+          const parsed = new Date(`${value}T00:00:00Z`);
+          return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+        };
+        const shiftDate = (days: number): string => {
+          const date = new Date(today);
+          date.setUTCDate(date.getUTCDate() + days);
+          return date.toISOString().slice(0, 10);
+        };
+        let dateFrom = from || to || (range === 'week' ? shiftDate(-6) : range === 'month' ? shiftDate(-30) : shiftDate(0));
+        let dateTo = to || from || shiftDate(0);
+        if (range && !['week', 'month'].includes(range)) return reply.code(400).send({ error: 'O intervalo deve ser week ou month' });
+        if (range && (from || to)) return reply.code(400).send({ error: 'Use range ou from/to, não os dois' });
+        if (range === 'week') { dateFrom = shiftDate(-6); dateTo = shiftDate(0); }
+        if (range === 'month') { dateFrom = shiftDate(-30); dateTo = shiftDate(0); }
+        if (!validDate(dateFrom) || !validDate(dateTo)) return reply.code(400).send({ error: 'As datas devem estar no formato ISO YYYY-MM-DD e ser válidas' });
+        const start = new Date(`${dateFrom}T00:00:00Z`).getTime();
+        const end = new Date(`${dateTo}T00:00:00Z`).getTime();
+        const days = Math.round((end - start) / 86400000) + 1;
+        if (days < 1) return reply.code(400).send({ error: 'A data inicial deve ser anterior ou igual à data final' });
+        if (days > 31) return reply.code(400).send({ error: 'O período máximo é de 31 dias' });
 
-        let dateFrom: string;
-        let dateTo: string;
-        if (range === 'week') {
-          const d = new Date(now);
-          d.setDate(d.getDate() - 7);
-          dateFrom = d.toISOString().split('T')[0];
-          dateTo = now.toISOString().split('T')[0];
-        } else if (range === 'month') {
-          const d = new Date(now);
-          d.setDate(d.getDate() - 30);
-          dateFrom = d.toISOString().split('T')[0];
-          dateTo = now.toISOString().split('T')[0];
-        } else {
-          dateFrom = now.toISOString().split('T')[0];
-          dateTo = dateFrom;
+        const entities: PerformanceEntity[] = ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'salao'];
+        for (let index = 0; index < days; index += 1) {
+          const currentDate = new Date(start);
+          currentDate.setUTCDate(currentDate.getUTCDate() + index);
+          const date = currentDate.toISOString().slice(0, 10);
+          const rows = await query<{ entity: string; weight_version_id: string | null }>(
+            `SELECT entity, weight_version_id FROM performance_scores WHERE date = $1 AND entity = ANY($2)`, [date, entities]
+          );
+          const complete = entities.every(entity => rows.some(row => row.entity === entity && row.weight_version_id));
+          if (!complete) await ensureScoresForDate(date);
         }
 
-        // Ensure today's scores are computed
-        await ensureScoresForDate(now.toISOString().split('T')[0]);
-        if (dateFrom !== dateTo) {
-          // Compute missing historical dates
-          const cur = new Date(dateFrom);
-          const end = new Date(dateTo);
-          while (cur <= end) {
-            await ensureScoresForDate(cur.toISOString().split('T')[0]);
-            cur.setDate(cur.getDate() + 1);
-          }
-        }
-
-        const entities = ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'salao'];
-
-        // Current scores
-        const currentRows = await query<PerformanceScoreRow>(
-          `SELECT * FROM performance_scores
-           WHERE date = $1 AND entity = ANY($2)`,
-          [dateTo, entities]
+        const scoreRows = await query<PerformanceScoreRow>(
+          `SELECT * FROM performance_scores WHERE date >= $1 AND date <= $2 AND entity = ANY($3) ORDER BY date, entity`,
+          [dateFrom, dateTo, entities]
         );
-
-        const current: Record<string, any> = {};
-        for (const row of currentRows) {
-          current[row.entity] = {
-            entity: row.entity,
-            final_score: row.final_score,
-            base_score: row.base_score,
-            total_demands: row.total_demands,
-            sla_breaches: row.sla_breaches,
-            sla_breach_deduction: row.sla_breach_deduction,
-            cancellations: row.cancellations,
-            cancellation_deduction: row.cancellation_deduction,
-            stockouts: row.stockouts,
-            stockout_deduction: row.stockout_deduction,
-            slow_items: row.slow_items,
-            slow_item_deduction: row.slow_item_deduction,
-            detractors: buildDetractors(row),
-          };
-        }
-
-        // Detractor dates for the current date (used to show individual occurrences)
-        const detractorDates: Record<string, any[]> = {};
+        const current: Record<string, EntityScore> = {};
+        const historyMap = new Map<string, { date: string; [entity: string]: number | string }>();
+        const averages: Record<string, EntityScore> = {};
         for (const entity of entities) {
-          try {
-            detractorDates[entity] = await getDetractorDates(entity, dateFrom, dateTo);
-          } catch (e) {
-            detractorDates[entity] = [];
+          const rows = scoreRows.filter(row => row.entity === entity);
+          const latest = rows[rows.length - 1];
+          if (!latest) continue;
+          const totalDeduction = rows.reduce((sum, row) => sum + Number(row.sla_breach_deduction) + Number(row.cancellation_deduction) + Number(row.stockout_deduction) + Number(row.slow_item_deduction), 0);
+          const average: EntityScore = { ...latest, entity: entity as PerformanceEntity, final_score: Number((rows.reduce((sum, row) => sum + Number(row.final_score), 0) / rows.length).toFixed(1)), total_demands: rows.reduce((sum, row) => sum + Number(row.total_demands), 0), detractors: buildDetractors({ ...latest, final_score: Number((5 - totalDeduction).toFixed(1)) }) };
+          averages[entity] = { ...average, entity: entity as PerformanceEntity };
+          current[entity] = { ...latest, entity, detractors: buildDetractors(latest) };
+          for (const row of rows) {
+            const date = String(row.date).slice(0, 10);
+            if (!historyMap.has(date)) historyMap.set(date, { date });
+            historyMap.get(date)![entity] = Number(row.final_score);
           }
         }
-
-        // History for trend
-        let history: any[] = [];
-        if (dateFrom !== dateTo) {
-          const historyRows = await query<PerformanceScoreRow>(
-            `SELECT * FROM performance_scores
-             WHERE date >= $1 AND date <= $2 AND entity = ANY($3)
-             ORDER BY date, entity`,
-            [dateFrom, dateTo, entities]
-          );
-
-          const dayMap = new Map<string, Record<string, any>>();
-          for (const row of historyRows) {
-            const rawDate: any = row.date;
-            const day = rawDate instanceof Date
-              ? rawDate.toISOString().split('T')[0]
-              : String(rawDate).split('T')[0];
-            if (!dayMap.has(day)) dayMap.set(day, { date: day });
-            dayMap.get(day)![row.entity] = Number(row.final_score);
-          }
-          history = Array.from(dayMap.values()).sort((a, b) =>
-            String(a.date).localeCompare(String(b.date))
-          );
+        const operational: Record<string, EntityPerformance> = {};
+        for (const entity of entities) {
+          const details = await getPerformanceDetails(entity, dateFrom, dateTo);
+          const rows = scoreRows.filter(row => row.entity === entity);
+          const operationalScore = Math.max(0, Number((5 - details.total_deduction).toFixed(1)));
+          operational[entity] = { entity, operational_score: operationalScore, daily_average_score: rows.length ? Number((rows.reduce((sum, row) => sum + Number(row.final_score), 0) / rows.length).toFixed(1)) : 5, total_demands: details.total_demands, open_demands: details.open_demands, total_deduction: details.total_deduction, criteria: details.criteria, occurrences: details.occurrences, weight_version: details.weight_versions.length === 1 ? details.weight_versions[0] : null };
         }
-
-        // Period averages (for week/month)
-        let averages: Record<string, any> = {};
-        if (dateFrom !== dateTo) {
-          const avgRows = await query<{
-            entity: string; avg_score: string; total_demands: string;
-            sla_breaches: string; cancellations: string; stockouts: string; slow_items: string;
-          }>(
-            `SELECT entity,
-               ROUND(AVG(final_score)::numeric, 1) AS avg_score,
-               SUM(total_demands)::int AS total_demands,
-               SUM(sla_breaches)::int AS sla_breaches,
-               SUM(cancellations)::int AS cancellations,
-               SUM(stockouts)::int AS stockouts,
-               SUM(slow_items)::int AS slow_items
-             FROM performance_scores
-             WHERE date >= $1 AND date <= $2 AND entity = ANY($3)
-             GROUP BY entity`,
-            [dateFrom, dateTo, entities]
-          );
-          for (const row of avgRows) {
-            averages[row.entity] = {
-              entity: row.entity,
-              final_score: parseFloat(row.avg_score),
-              total_demands: parseInt(row.total_demands),
-              sla_breaches: parseInt(row.sla_breaches),
-              cancellations: parseInt(row.cancellations),
-              stockouts: parseInt(row.stockouts),
-              slow_items: parseInt(row.slow_items),
-            };
-          }
-        }
-
-        return { current, history, averages, detractor_dates: detractorDates };
-      } catch (error: any) {
-        const msg = error && typeof error === 'object' ? (error.message || String(error)) : String(error);
+        const versions = new Map<string, PerformanceWeightVersion>();
+        Object.values(operational).forEach(item => { if (item.weight_version) versions.set(item.weight_version.id, item.weight_version); });
+        const response: PerformanceResponse = { current, history: Array.from(historyMap.values()).sort((a, b) => a.date.localeCompare(b.date)), averages, operational, detractor_dates: Object.fromEntries(entities.map(entity => [entity, operational[entity].occurrences])), date_from: dateFrom, date_to: dateTo, weight_versions: Array.from(versions.values()) };
+        return response;
+      } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
         request.log.error(error);
         reply.code(500).send({ error: 'Erro ao buscar performance: ' + msg });
       }

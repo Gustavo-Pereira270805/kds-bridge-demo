@@ -331,7 +331,7 @@ export interface PerformanceDetractor {
 }
 
 export interface EntityScore {
-  entity: string;
+  entity: PerformanceEntity;
   final_score: number;
   base_score: number;
   total_demands: number;
@@ -376,7 +376,8 @@ export interface PerformanceCriterionSummary {
   count: number;
   eligible_base: number;
   rate: number;
-  weight: number;
+  weight: number | null;
+  weights?: { weight_version_id: string; weight: number }[];
   deduction: number;
 }
 
@@ -398,6 +399,8 @@ export interface EntityPerformance {
   operational_score: number;
   daily_average_score: number;
   total_demands: number;
+  open_demands: number;
+  total_deduction: number;
   criteria: PerformanceCriterionSummary[];
   occurrences: PerformanceOccurrence[];
   weight_version?: PerformanceWeightVersion | null;
@@ -416,8 +419,11 @@ export interface PerformanceAverage {
 export interface PerformanceResponse {
   current: Record<string, EntityScore>;
   history: { date: string; [entity: string]: number | string }[];
-  averages?: Record<string, PerformanceAverage>;
+  averages?: Record<string, EntityScore>;
   operational?: Record<string, EntityPerformance>;
   validity?: PerformanceWeightVersion[];
   detractor_dates?: Record<string, PerformanceOccurrence[]>;
+  date_from?: string;
+  date_to?: string;
+  weight_versions?: PerformanceWeightVersion[];
 }
