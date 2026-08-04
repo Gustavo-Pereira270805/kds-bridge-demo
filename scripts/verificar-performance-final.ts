@@ -208,6 +208,7 @@ assert.ok(analyticsSource.includes('COUNT(*) FILTER (WHERE sla_breached_cozinha 
 assert.ok(analyticsSource.includes('COUNT(*) FILTER (WHERE sla_breached_salao = true AND ready_at IS NOT NULL AND retrieved_at IS NOT NULL)'), 'série deve alinhar estouros de salão');
 const trendSection = analyticsSource.slice(analyticsSource.indexOf("'3.Trend'"), analyticsSource.indexOf("'4.SpeedByHour'"));
 const productSection = analyticsSource.slice(analyticsSource.indexOf("'7.SlaByProduct'"), analyticsSource.indexOf("'8.CancelReasons'"));
+const kpiSection = analyticsSource.slice(analyticsSource.indexOf("'1.KPIs'"), analyticsSource.indexOf("// ── 2. Produtos"));
 const indicatorSection = analyticsSource.slice(analyticsSource.indexOf("'15b.DayIndicators'"), analyticsSource.indexOf("const indicatorsByDay"));
 assert.ok(trendSection.includes("sla_breached_cozinha = true AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha')"), 'trend deve excluir cancelados dos estouros de cozinha');
 assert.ok(trendSection.includes("sla_breached_salao = true AND ready_at IS NOT NULL AND retrieved_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha')"), 'trend deve excluir cancelados dos estouros de salão');
@@ -216,6 +217,9 @@ assert.ok(productSection.includes("sla_breached_cozinha = true AND sla_minutes I
 assert.ok(productSection.includes("sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha')"), 'SLA por produto deve excluir cancelados do denominador');
 assert.ok(indicatorSection.includes("COUNT(*) FILTER (WHERE sla_breached_cozinha = true AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))"), 'indicador diário deve excluir cancelados do numerador');
 assert.ok(indicatorSection.includes("COUNT(*) FILTER (WHERE sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))"), 'indicador diário deve excluir cancelados do denominador');
+assert.ok(kpiSection.includes("AVG(EXTRACT(EPOCH FROM (ready_at - created_at)) / 60) FILTER (WHERE ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))"), 'média de cozinha deve usar a população operacional sem cancelados');
+assert.ok(kpiSection.includes("AVG(EXTRACT(EPOCH FROM (retrieved_at - ready_at)) / 60) FILTER (WHERE retrieved_at IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))"), 'média de retirada deve usar a população operacional sem cancelados');
+assert.ok(indicatorSection.includes("AVG(EXTRACT(EPOCH FROM (ready_at - created_at)) / 60) FILTER (WHERE ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))"), 'indicador diário deve alinhar a média à população de SLA');
 const breachSection = analyticsSource.slice(analyticsSource.indexOf("'/sla-breaches'"), analyticsSource.indexOf("'/cancellations'"));
 assert.ok(breachSection.includes("responsible !== 'cozinha' && responsible !== 'salao'"), 'responsible deve aceitar somente cozinha ou salao');
 assert.ok(breachSection.includes("responsible deve ser cozinha ou salao"), 'responsible inválido deve ter mensagem pt-BR');

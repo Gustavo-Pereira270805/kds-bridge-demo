@@ -20,6 +20,7 @@ Foi alterado o fluxo de exportação em `src/views/dashboard.html` e o contrato 
 - A exportação diária não chama `buildContent`; usa somente o relatório exportável e nunca injeta `undefined`.
 - O PDF consolidado valida `state.lastData` antes de construir e capturar um container temporário independente, usando somente `task6ReportHtml` e sem depender de `#content` ou de `contentEl.innerHTML`.
 - O payload do dashboard expõe `dentro_sla_cozinha`, `base_sla_cozinha`, `pct_dentro_sla_cozinha`, `dentro_sla_salao`, `base_sla_salao` e `pct_dentro_sla_salao`; as populações exigem os timestamps aplicáveis, excluem anulados e cancelados e não incluem demandas abertas.
+- As médias operacionais de cozinha, retirada e os indicadores diários excluem cancelados e anulados e ignoram demandas abertas sem os timestamps aplicáveis, alinhando sua população à do SLA.
 - `pct_dentro_sla` permanece somente como alias legado explicitamente equivalente à cozinha; novos consumidores e exportações usam os campos nomeados.
 - Os endpoints relativos tipam `days` e `responsible` conforme aceitos e mantêm a validação de `days` entre 1 e 366.
 - O PDF exibe, por critério e versão, peso, contagem e desconto; o Excel mantém esses dados em campos separados ou detalhados.

@@ -21,6 +21,7 @@
 - O endpoint de dashboard registra o erro detalhado apenas no log e responde mensagem fixa em pt-BR; pesos aceitam somente valores numéricos entre 0 e 5.
 - A vigência dos pesos é definida pela data civil UTC de `valid_from`; `valid_to` é exclusivo. A alteração vale a partir da data operacional UTC correspondente.
 - O histórico de performance contém todas as datas solicitadas, usando `null` para score ausente ou consolidação incompleta; `current` da Cozinha Geral só usa uma data com as três estações.
+- As médias operacionais de cozinha, retirada e indicadores diários usam a mesma população do SLA: exigem os timestamps aplicáveis e excluem demandas canceladas e anuladas.
 
 ## Verificações
 

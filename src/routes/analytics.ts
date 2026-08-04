@@ -389,8 +389,8 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
             COUNT(*) FILTER (WHERE stockout_reported = true)::int AS urgentes_rotura,
              COUNT(*) FILTER (WHERE sla_breached_cozinha = false AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::int AS dentro_sla_cozinha,
              COUNT(*) FILTER (WHERE sla_breached_salao = false AND ready_at IS NOT NULL AND retrieved_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::int AS dentro_sla_salao,
-             ROUND(AVG(EXTRACT(EPOCH FROM (ready_at - created_at)) / 60) FILTER (WHERE ready_at IS NOT NULL), 1) AS avg_cooking_min,
-             ROUND(AVG(EXTRACT(EPOCH FROM (retrieved_at - ready_at)) / 60) FILTER (WHERE retrieved_at IS NOT NULL), 1) AS avg_pickup_min
+              ROUND(AVG(EXTRACT(EPOCH FROM (ready_at - created_at)) / 60) FILTER (WHERE ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha')), 1) AS avg_cooking_min,
+              ROUND(AVG(EXTRACT(EPOCH FROM (retrieved_at - ready_at)) / 60) FILTER (WHERE retrieved_at IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha')), 1) AS avg_pickup_min
           FROM demands
           WHERE ${dateFilter} AND status != 'annulled' ${stationFilter}`,
           baseParams
@@ -623,7 +623,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
             urgent_pct: string | null;
           }>('15b.DayIndicators',
              `SELECT ${DATA_OPERACIONAL_SQL} AS day,
-              ROUND(AVG(EXTRACT(EPOCH FROM (ready_at - created_at)) / 60)::numeric, 1) AS avg_time_min,
+               ROUND(AVG(EXTRACT(EPOCH FROM (ready_at - created_at)) / 60) FILTER (WHERE ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::numeric, 1) AS avg_time_min,
                 ROUND(100.0 * COUNT(*) FILTER (WHERE sla_breached_cozinha = true AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))
                   / NULLIF(COUNT(*) FILTER (WHERE sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha')), 0), 1) AS sla_pct,
               ROUND(100.0 * COUNT(*) FILTER (WHERE status IN ('cancelled_salao','cancelled_cozinha'))
