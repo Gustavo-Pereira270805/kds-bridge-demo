@@ -15,6 +15,9 @@
 - A rota usa a agregação oficial do serviço para `operational_score` e `daily_average_score`; aliases `averages` agregam todos os contadores e descontos do intervalo.
 - Scores diários só são preservados quando as cinco entidades têm `weight_version_id` igual à versão aplicável à data.
 - Versões são carregadas uma vez por intervalo e reutilizadas no enriquecimento das ocorrências, sem consulta individual por ocorrência.
+- A vigência é comparada pela data civil UTC: `valid_from` inclui a data civil do timestamp e `valid_to` exclui sua data civil. A mesma regra é usada na consulta e no cache.
+- Cada critério lista todas as versões aplicáveis ao intervalo, com peso, contagem e desconto por versão; versões sem ocorrências permanecem com contagem e desconto zero.
+- Para `cozinha_geral`, `operational_score` permanece a nota agregada de todos os eventos e `daily_average_score` é calculada pela média simples das três estações em cada dia e depois no intervalo.
 
 ## Validação
 
@@ -27,6 +30,7 @@
 | `from > to` | HTTP 400. |
 | Intervalo acima de 31 dias | HTTP 400. |
 | Dia atual, com versão vigente | HTTP 200, 5 entidades em `operational` e 1 versão em `weight_versions`. |
+| Teste de regressão da média diária da Cozinha Geral | Passou: média das estações preservada separadamente da nota operacional. |
 | `npx tsc --noEmit` | Passou. |
 | `npm run build` | Passou. |
 | `git diff --check` | Passou, com avisos de normalização LF/CRLF do Git. |
@@ -38,5 +42,5 @@
 ## Preocupações
 
 - O banco de teste não possui versão de pesos para datas históricas usadas nos cenários manuais; por isso não foi possível validar respostas 200 de 3 e 31 dias nem um período com múltiplas versões ponta a ponta.
-- A resposta multi-versão foi coberta no contrato, preservação global/por entidade e montagem de `weights` por critério; falta uma massa histórica com duas versões para validação HTTP 200.
+- A resposta multi-versão foi coberta no contrato, preservação global/por entidade e montagem de `weights` por critério. Ainda falta uma massa histórica com duas versões para validação HTTP 200 ponta a ponta.
 - O servidor já apresentava problemas independentes desta tarefa em logs de schema de `theme`; eles não foram alterados por escopo.

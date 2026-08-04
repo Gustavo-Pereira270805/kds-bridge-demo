@@ -82,9 +82,9 @@ export async function getWeightVersionForDate(dateStr: string): Promise<Performa
   await ensureWeightVersion();
   const [version] = await query<PerformanceWeightVersion>(
     `SELECT * FROM performance_weight_versions
-     WHERE valid_from <= ($1::date + INTERVAL '1 day')
-       AND (valid_to IS NULL OR valid_to > $1::date)
-     ORDER BY valid_from DESC LIMIT 1`,
+      WHERE (valid_from AT TIME ZONE 'UTC')::date <= $1::date
+        AND (valid_to IS NULL OR (valid_to AT TIME ZONE 'UTC')::date > $1::date)
+      ORDER BY valid_from DESC LIMIT 1`,
     [dateStr]
   );
   if (!version) throw new Error('Não foi encontrada uma versão de pesos para a data');
@@ -100,10 +100,13 @@ export async function getWeightVersions(): Promise<PerformanceWeightVersion[]> {
 export type PerformanceWeightCache = Map<string, PerformanceWeightVersion>;
 
 function versionForDate(dateStr: string, versions: PerformanceWeightVersion[]): PerformanceWeightVersion {
-  const date = new Date(`${dateStr}T00:00:00Z`).getTime();
+  const civilDate = (value: string): string => {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? value.slice(0, 10) : parsed.toISOString().slice(0, 10);
+  };
   const version = versions
-    .filter(candidate => new Date(candidate.valid_from).getTime() <= date + 86400000
-      && (!candidate.valid_to || new Date(candidate.valid_to).getTime() > date))
+    .filter(candidate => civilDate(candidate.valid_from) <= dateStr
+      && (!candidate.valid_to || civilDate(candidate.valid_to) > dateStr))
     .sort((a, b) => new Date(b.valid_from).getTime() - new Date(a.valid_from).getTime())[0];
   if (!version) throw new Error('Não foi encontrada uma versão de pesos para a data');
   return version;
@@ -595,7 +598,7 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
   }
   const counts = new Map<string, number>();
   const deductions = new Map<string, number>();
-  const criterionWeights = new Map<string, Map<string, number>>();
+  const criterionWeights = new Map<string, Map<string, { weight: number; count: number; deduction: number }>>();
   for (const occurrence of occurrences) {
     const criterion = occurrence.type === 'Estouro de SLA'
       ? (entity === 'salao' ? 'sla_breach_salao' : 'sla_breach_cozinha')
@@ -608,7 +611,11 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
     deductions.set(criterion, (deductions.get(criterion) || 0) + occurrence.deduction);
     if (occurrence.weight_version_id) {
       if (!criterionWeights.has(criterion)) criterionWeights.set(criterion, new Map());
-      criterionWeights.get(criterion)!.set(occurrence.weight_version_id, occurrence.weight);
+      const version = criterionWeights.get(criterion)!;
+      const current = version.get(occurrence.weight_version_id) || { weight: occurrence.weight, count: 0, deduction: 0 };
+      current.count += 1;
+      current.deduction += occurrence.deduction;
+      version.set(occurrence.weight_version_id, current);
     }
   }
   const latest = cache.get(dateTo)!;
@@ -624,16 +631,16 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
     slow_item_deduction: deductions.get(entity === 'salao' ? 'slow_pickup_salao' : 'slow_item_cozinha') || 0,
   } as PerformanceScoreRow, latest, entity !== 'salao', bases);
   for (const criterion of criteria) {
-    const weights = criterionWeights.get(criterion.criterion);
-    const versionWeights = Array.from(weights?.entries() || []).map(([weight_version_id, weight]) => ({ weight_version_id, weight }));
-    if (versionWeights.length === 0) {
-      criterion.weights = Array.from(versions.values()).map(version => ({
+    const observedWeights = criterionWeights.get(criterion.criterion) || new Map();
+    criterion.weights = Array.from(versions.values()).map(version => {
+      const observed = observedWeights.get(version.id);
+      return {
         weight_version_id: version.id,
         weight: criterion.criterion === 'stockout_cozinha' ? 0 : getCriterionWeight(criterion.criterion, version),
-      }));
-    } else {
-      criterion.weights = versionWeights;
-    }
+        count: observed?.count || 0,
+        deduction: observed?.deduction || 0,
+      };
+    });
     criterion.weight = criterion.weights.length === 1 ? criterion.weights[0].weight : null;
   }
   const [openRow] = await query<{ count: string }>(
@@ -662,10 +669,17 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
 export function aggregatePerformance(
   entity: PerformanceEntity,
   rows: PerformanceScoreRow[],
-  details: PerformanceDetails
+  details: PerformanceDetails,
+  dailyAverageRows: PerformanceScoreRow[] = rows
 ): EntityPerformance {
-  const dailyAverage = rows.length
-    ? round1(rows.reduce((sum, row) => sum + Number(row.final_score), 0) / rows.length)
+  const dailyAverages = new Map<string, number[]>();
+  for (const row of dailyAverageRows) {
+    if (!dailyAverages.has(row.date)) dailyAverages.set(row.date, []);
+    dailyAverages.get(row.date)!.push(Number(row.final_score));
+  }
+  const dailyAverage = dailyAverages.size
+    ? round1(Array.from(dailyAverages.values()).reduce((sum, scores) =>
+      sum + scores.reduce((dailySum, score) => dailySum + score, 0) / scores.length, 0) / dailyAverages.size)
     : 5;
   const criteria = details.criteria.map(criterion => ({
     ...criterion,

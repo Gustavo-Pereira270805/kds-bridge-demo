@@ -742,7 +742,10 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         for (const entity of entities) {
           const details = await getPerformanceDetails(entity, dateFrom, dateTo, weightCache);
           const rows = scoreRows.filter(row => row.entity === entity);
-          operational[entity] = aggregatePerformance(entity as PerformanceEntity, rows, details);
+          const dailyAverageRows = entity === 'cozinha_geral'
+            ? scoreRows.filter(row => ['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria'].includes(row.entity))
+            : rows;
+          operational[entity] = aggregatePerformance(entity as PerformanceEntity, rows, details, dailyAverageRows);
         }
         const versions = new Map<string, PerformanceWeightVersion>();
         Object.values(operational).forEach(item => item.weight_versions.forEach(version => versions.set(version.id, version)));

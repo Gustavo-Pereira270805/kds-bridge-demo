@@ -377,7 +377,7 @@ export interface PerformanceCriterionSummary {
   eligible_base: number;
   rate: number;
   weight: number | null;
-  weights?: { weight_version_id: string; weight: number }[];
+  weights?: { weight_version_id: string; weight: number; count: number; deduction: number }[];
   multi_version?: boolean;
   deduction: number;
 }
