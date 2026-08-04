@@ -184,8 +184,21 @@ for (let index = 0; index < relativeEndpoints.length; index += 1) {
     analyticsSource.indexOf(`'/${endpoint}'`),
     analyticsSource.indexOf(`'/${nextEndpoint}'`),
   );
-  assert.ok(section.includes("created_at >= NOW() - INTERVAL '1 day' * $1"), `${endpoint} deve usar janela móvel`);
+  assert.ok(section.includes("CURRENT_TIMESTAMP AT TIME ZONE 'UTC'") && section.includes("INTERVAL '1 day' * $1"), `${endpoint} deve usar janela móvel UTC`);
 }
+assert.ok(analyticsSource.includes('function validarDiasRelativos'), 'endpoints relativos devem validar days');
+assert.ok(analyticsSource.includes("CURRENT_TIMESTAMP AT TIME ZONE 'UTC'"), 'janelas móveis devem explicitar UTC');
+assert.ok(analyticsSource.includes('sla_minutes IS NOT NULL AND ready_at IS NOT NULL'), 'analytics deve filtrar SLA de cozinha pela base elegível');
+assert.ok(analyticsSource.includes('ready_at IS NOT NULL AND retrieved_at IS NOT NULL'), 'analytics deve filtrar SLA de salão pela base elegível');
+assert.ok(analyticsSource.includes('base_sla_cozinha'), 'KPIs devem expor a base elegível de cozinha');
+assert.ok(analyticsSource.includes('base_sla_salao'), 'KPIs devem expor a base elegível de salão');
+assert.ok(analyticsSource.includes('pct_dentro_sla_cozinha'), 'KPI de SLA deve nomear a população de cozinha');
+assert.ok(analyticsSource.includes('COUNT(*) FILTER (WHERE sla_breached_cozinha = false AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL)'), 'dentro SLA deve contar somente cozinha elegível');
+assert.ok(analyticsSource.includes('NULLIF(COUNT(*) FILTER (WHERE sla_minutes IS NOT NULL AND ready_at IS NOT NULL), 0)'), 'percentual SLA deve usar denominador elegível');
+assert.ok(analyticsSource.includes('UNION ALL'), 'estouros deve separar responsáveis sem priorizar uma flag');
+assert.ok(analyticsSource.includes('COUNT(*) FILTER (WHERE sla_breached_cozinha = true AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL)'), 'série deve alinhar estouros de cozinha');
+assert.ok(analyticsSource.includes('COUNT(*) FILTER (WHERE sla_breached_salao = true AND ready_at IS NOT NULL AND retrieved_at IS NOT NULL)'), 'série deve alinhar estouros de salão');
+assert.ok(analyticsSource.includes('FROM demands WHERE ${dateFilter} AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL'), 'SLA por produto deve restringir a base de cozinha');
 assert.ok((analyticsSource.match(/AT TIME ZONE 'UTC'/g) || []).length >= 8, 'analytics deve agrupar horários explicitamente em UTC');
 assert.ok(!analyticsSource.includes("AT TIME ZONE 'America/Sao_Paulo'"), 'analytics não pode usar fuso legado');
 assert.ok(analyticsSource.includes("dateFrom = deslocarDataUtc(dateTo, -6)"), 'semana deve ter 7 dias inclusivos');
