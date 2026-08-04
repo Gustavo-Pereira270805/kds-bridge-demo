@@ -179,6 +179,11 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     '/sla-breaches',
     async (request, reply) => {
       try {
+        const { responsible } = request.query;
+        if (responsible !== undefined && responsible !== 'cozinha' && responsible !== 'salao') {
+          return reply.code(400).send({ error: 'responsible deve ser cozinha ou salao' });
+        }
+
         let days: number;
         try {
           days = validarDiasRelativos(request.query.days);
@@ -195,22 +200,26 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
             COUNT(*)::int AS total_estouros,
             ROUND(AVG(COALESCE(sla_breach_minutes_cozinha, sla_breach_minutes_salao)), 1) AS media_min_excedidos
            FROM demands
-           WHERE sla_breached_cozinha = true
-             AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL
-             AND created_at AT TIME ZONE 'UTC' >= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '1 day' * $1
-             AND status != 'annulled'
-           GROUP BY 1
+            WHERE sla_breached_cozinha = true
+              AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL
+              AND created_at AT TIME ZONE 'UTC' >= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '1 day' * $1
+              AND status != 'annulled'
+              AND status NOT IN ('cancelled_salao','cancelled_cozinha')
+              AND ($2::text IS NULL OR $2 = 'cozinha')
+            GROUP BY 1
            UNION ALL
            SELECT 'Salão' AS responsavel,
              COUNT(*)::int AS total_estouros,
              ROUND(AVG(sla_breach_minutes_salao), 1) AS media_min_excedidos
            FROM demands
-           WHERE sla_breached_salao = true
-             AND ready_at IS NOT NULL AND retrieved_at IS NOT NULL
-             AND created_at AT TIME ZONE 'UTC' >= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '1 day' * $1
-             AND status != 'annulled'
-           GROUP BY 1`,
-          [days]
+            WHERE sla_breached_salao = true
+              AND ready_at IS NOT NULL AND retrieved_at IS NOT NULL
+              AND created_at AT TIME ZONE 'UTC' >= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '1 day' * $1
+              AND status != 'annulled'
+              AND status NOT IN ('cancelled_salao','cancelled_cozinha')
+              AND ($2::text IS NULL OR $2 = 'salao')
+            GROUP BY 1`,
+           [days, responsible ?? null]
         );
 
         return rows;
@@ -416,7 +425,8 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
              ? Math.round((parseInt(totals?.dentro_sla_cozinha || '0', 10) / parseInt(totals?.base_sla_cozinha || '0', 10)) * 1000) / 10
              : 0,
            sla_semantics: {
-             pct_dentro_sla: 'pct_dentro_sla é compatibilidade legada equivalente à cozinha; novos consumidores devem usar pct_dentro_sla_cozinha ou pct_dentro_sla_salao.',
+              pct_dentro_sla: 'pct_dentro_sla é compatibilidade legada equivalente à cozinha; novos consumidores devem usar pct_dentro_sla_cozinha ou pct_dentro_sla_salao.',
+              dentro_sla: 'dentro_sla é compatibilidade legada equivalente a dentro_sla_cozinha; novos consumidores devem usar dentro_sla_cozinha ou dentro_sla_salao.',
              cozinha: 'dentro_sla_cozinha / base_sla_cozinha; elegíveis com sla_minutes e ready_at, excluindo anulados e cancelados.',
              salao: 'dentro_sla_salao / base_sla_salao; elegíveis com ready_at e retrieved_at, excluindo anulados e cancelados.',
            },
@@ -449,8 +459,8 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
             COUNT(*) FILTER (WHERE status = 'retrieved')::int AS entregues,
             COUNT(*) FILTER (WHERE status IN ('cancelled_salao','cancelled_cozinha'))::int AS cancelados,
             COUNT(*) FILTER (WHERE stockout_reported = true)::int AS roturas,
-             COUNT(*) FILTER (WHERE sla_breached_cozinha = true AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL)::int AS atrasos_cozinha,
-             COUNT(*) FILTER (WHERE sla_breached_salao = true AND ready_at IS NOT NULL AND retrieved_at IS NOT NULL)::int AS atrasos_salao
+             COUNT(*) FILTER (WHERE sla_breached_cozinha = true AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::int AS atrasos_cozinha,
+             COUNT(*) FILTER (WHERE sla_breached_salao = true AND ready_at IS NOT NULL AND retrieved_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::int AS atrasos_salao
             FROM demands WHERE ${dateFilter} AND status != 'annulled' ${stationFilter} GROUP BY ${DATA_OPERACIONAL_SQL} ORDER BY day`,
           baseParams
         ) : [];
@@ -496,10 +506,10 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         // ── 7. SLA por produto (Pareto) ──
         const slaByProduct = await safeQuery<SlaByProductRow>('7.SlaByProduct',
           `SELECT product_name, COUNT(*)::int AS total,
-             COUNT(*) FILTER (WHERE sla_breached_cozinha = true AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL)::int AS breached,
-             ROUND((COUNT(*) FILTER (WHERE sla_breached_cozinha = false AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL)::numeric / NULLIF(COUNT(*) FILTER (WHERE sla_minutes IS NOT NULL AND ready_at IS NOT NULL),0)) * 100, 1) AS pct_ok,
-             ROUND(COALESCE(AVG(sla_breach_minutes_cozinha) FILTER (WHERE sla_breached_cozinha = true AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL), 0)::numeric, 1) AS avg_overage_min
-            FROM demands WHERE ${dateFilter} AND status != 'annulled' AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL ${stationFilter}
+              COUNT(*) FILTER (WHERE sla_breached_cozinha = true AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::int AS breached,
+              ROUND((COUNT(*) FILTER (WHERE sla_breached_cozinha = false AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::numeric / NULLIF(COUNT(*) FILTER (WHERE sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha')),0)) * 100, 1) AS pct_ok,
+              ROUND(COALESCE(AVG(sla_breach_minutes_cozinha) FILTER (WHERE sla_breached_cozinha = true AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha')), 0)::numeric, 1) AS avg_overage_min
+             FROM demands WHERE ${dateFilter} AND status != 'annulled' AND status NOT IN ('cancelled_salao','cancelled_cozinha') AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL ${stationFilter}
            GROUP BY product_name ORDER BY breached DESC, total DESC`,
           baseParams
         );
@@ -614,8 +624,8 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           }>('15b.DayIndicators',
              `SELECT ${DATA_OPERACIONAL_SQL} AS day,
               ROUND(AVG(EXTRACT(EPOCH FROM (ready_at - created_at)) / 60)::numeric, 1) AS avg_time_min,
-               ROUND(100.0 * COUNT(*) FILTER (WHERE sla_breached_cozinha = true AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL)
-                 / NULLIF(COUNT(*) FILTER (WHERE sla_minutes IS NOT NULL AND ready_at IS NOT NULL), 0), 1) AS sla_pct,
+                ROUND(100.0 * COUNT(*) FILTER (WHERE sla_breached_cozinha = true AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))
+                  / NULLIF(COUNT(*) FILTER (WHERE sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha')), 0), 1) AS sla_pct,
               ROUND(100.0 * COUNT(*) FILTER (WHERE status IN ('cancelled_salao','cancelled_cozinha'))
                 / NULLIF(COUNT(*), 0), 1) AS cancel_rate,
               COUNT(*) FILTER (WHERE stockout_reported = true)::int AS stockouts,
