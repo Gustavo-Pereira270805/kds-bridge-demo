@@ -28,3 +28,19 @@ Implementação concluída no backend, sem alteração no dashboard.
 - Não há framework de testes no projeto; a verificação isolada foi removida após a execução e não foi adicionada ao produto.
 - O cálculo real depende do banco Supabase e não foi executado contra dados de produção neste ambiente.
 - O endpoint legado continua aceitando aliases para consumidores atuais, mas novos consumidores devem usar os sete nomes de pesos e os endpoints de versão.
+
+## Rodada de correção da revisão
+
+- Cozinha Geral agora calcula a nota operacional pela soma dos descontos sobre todas as demandas das três estações; a média simples das notas das estações permanece em `daily_average_score`.
+- Bases elegíveis passaram a ser específicas por critério e estão disponíveis por `getCriterionEligibleBases` para uso dos consumidores do serviço.
+- Ocorrências resolvem a versão vigente pela data da própria ocorrência e retornam `weight_version_id`.
+- Descontos mantêm precisão durante a soma; somente a nota final é arredondada para uma casa decimal.
+- Garantia inicial e PUT usam `pg_advisory_xact_lock` dentro de transação para evitar corrida na versão aberta.
+- PUT rejeita campos novos ausentes, inválidos, infinitos ou negativos com HTTP 400; aliases antigos não fazem parte do contrato tipado do PUT.
+- Erros de banco no carregamento de ocorrências continuam sendo propagados; zerado na cozinha é representado explicitamente com peso e desconto zero.
+
+## Testes da correção
+
+- `npx ts-node --transpile-only .tmp-task-2-review-test.ts`: passou para bases elegíveis, agregação operacional ponderada e média simples separada.
+- `npx ts-node --transpile-only .tmp-task-2-review-contract.ts`: passou para locks transacionais, versão por ocorrência, precisão, contrato do PUT e propagação de erros.
+- `npx tsc --noEmit`: passou.

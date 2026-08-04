@@ -3,8 +3,7 @@ import { query, pool } from '../db/client';
 import { DailyMenu, Demand, Menu, Product } from '../types';
 import { runCleanup } from '../services/cleanup.service';
 import { logDemandEvent } from '../services/demand-events.service';
-import { computeDailyScores } from '../services/performance.service';
-import { ensureWeightVersion, getWeightVersions, PESOS_PADRAO } from '../services/performance.service';
+import { computeDailyScores, ensureWeightVersion, getWeightVersions, PESOS_PADRAO } from '../services/performance.service';
 import { recomputeStationQueue } from '../services/queue.service';
 
 export default async function adminRoutes(fastify: FastifyInstance) {
@@ -466,30 +465,30 @@ export default async function adminRoutes(fastify: FastifyInstance) {
 
   // PUT: Atualiza a configuração de pesos de desempenho
   fastify.put<{
-    Body: Partial<typeof PESOS_PADRAO> & {
-      sla_breach?: number;
-      cancellation?: number;
-      slow_item?: number;
-    }
+    Body: Partial<typeof PESOS_PADRAO>
   }>('/settings/weights', async (request, reply) => {
     const body = request.body || {};
     const pesos = {
-      sla_breach_cozinha: body.sla_breach_cozinha ?? body.sla_breach,
+      sla_breach_cozinha: body.sla_breach_cozinha,
       sla_breach_salao: body.sla_breach_salao,
-      cancellation_cozinha: body.cancellation_cozinha ?? body.cancellation,
+      cancellation_cozinha: body.cancellation_cozinha,
       cancellation_salao: body.cancellation_salao,
       stockout_salao: body.stockout_salao,
-      slow_item_cozinha: body.slow_item_cozinha ?? body.slow_item,
+      slow_item_cozinha: body.slow_item_cozinha,
       slow_pickup_salao: body.slow_pickup_salao,
     };
-    const faltantes = Object.entries(pesos).filter(([, value]) => typeof value !== 'number' || !Number.isFinite(value) || value < 0);
+    const faltantes = Object.keys(pesos).filter(key => {
+      const value = pesos[key as keyof typeof pesos];
+      return typeof value !== 'number' || !Number.isFinite(value) || value < 0;
+    });
     if (faltantes.length > 0) {
-      return reply.code(400).send({ error: 'Todos os pesos devem ser números finitos e não negativos' });
+      return reply.code(400).send({ error: `Pesos ausentes ou inválidos: ${faltantes.join(', ')}` });
     }
 
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended('performance_weight_versions', 0))`);
       const [open] = (await client.query(
         `SELECT id FROM performance_weight_versions WHERE valid_to IS NULL
          ORDER BY valid_from DESC LIMIT 1 FOR UPDATE`
