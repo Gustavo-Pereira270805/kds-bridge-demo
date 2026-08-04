@@ -1302,14 +1302,20 @@ if (document.readyState === 'loading') {
         return h + '</div>';
     }
 
+    function addUtcDays(date, days) {
+        var result = new Date(date);
+        result.setUTCDate(result.getUTCDate() + days);
+        return result;
+    }
+
     function getPerformanceDates() {
         var f = state.filter || {};
         var cursor = new Date(), from, to;
         if (f.from) return { from: f.from, to: f.to || f.from };
-        if (f.range === 'yesterday') cursor.setDate(cursor.getDate() - 1);
+        if (f.range === 'yesterday') cursor = addUtcDays(cursor, -1);
         to = cursor.toISOString().split('T')[0];
-        if (f.range === 'week') cursor.setDate(cursor.getDate() - 6);
-        else if (f.range === 'month') cursor.setDate(cursor.getDate() - 30);
+        if (f.range === 'week') cursor = addUtcDays(cursor, -6);
+        else if (f.range === 'month') cursor = addUtcDays(cursor, -30);
         from = cursor.toISOString().split('T')[0];
         return { from: from, to: to };
     }
@@ -1407,10 +1413,10 @@ if (document.readyState === 'loading') {
     function getExportDates() {
         var f = state.filter;
         var now = new Date();
-        if (f.range === 'yesterday') now.setDate(now.getDate() - 1);
+        if (f.range === 'yesterday') now = addUtcDays(now, -1);
         if (f.range === 'today' || f.range === 'yesterday') { var s = now.toISOString().split('T')[0]; return { from: s, to: s }; }
-        if (f.range === 'week') { var to = now.toISOString().split('T')[0]; now.setDate(now.getDate() - 6); return { from: now.toISOString().split('T')[0], to: to }; }
-        if (f.range === 'month') { var to = now.toISOString().split('T')[0]; now.setDate(now.getDate() - 29); return { from: now.toISOString().split('T')[0], to: to }; }
+        if (f.range === 'week') { var to = now.toISOString().split('T')[0]; now = addUtcDays(now, -6); return { from: now.toISOString().split('T')[0], to: to }; }
+        if (f.range === 'month') { var to = now.toISOString().split('T')[0]; now = addUtcDays(now, -29); return { from: now.toISOString().split('T')[0], to: to }; }
         return { from: f.from, to: f.to || f.from };
     }
 
@@ -1567,7 +1573,7 @@ if (document.readyState === 'loading') {
             document.getElementById('dateFrom').value = '';
             document.getElementById('dateTo').value = '';
             if (range === 'yesterday') {
-                var y = new Date(); y.setDate(y.getDate() - 1);
+                var y = addUtcDays(new Date(), -1);
                 loadDashboard({ from: y.toISOString().split('T')[0], to: y.toISOString().split('T')[0] });
             } else {
                 loadDashboard({ range: range });

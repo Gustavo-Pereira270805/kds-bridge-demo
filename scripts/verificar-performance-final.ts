@@ -96,5 +96,7 @@ assert.ok(new Date('2026-08-02T23:59:59.999Z') < janela.inicio, 'borda externa d
 
 assert.ok((dashboardSource.match(/setUTCDate\(d\.getUTCDate\(\) \+ 1\)/g) || []).length >= 2, 'exportações devem iterar dias em UTC');
 assert.ok(dashboardSource.includes('cursor.setUTCDate(cursor.getUTCDate() + 1)'), 'dias exportáveis devem usar aritmética UTC');
+assert.ok(dashboardSource.includes('function addUtcDays(date, days)'), 'dashboard deve centralizar deslocamentos relativos em UTC');
+assert.ok(!dashboardSource.includes('.setDate('), 'dashboard não pode usar aritmética de data local');
 
 console.log('Verificações isoladas de performance: OK');
