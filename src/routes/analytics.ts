@@ -29,8 +29,6 @@ import {
 import { createPerformanceWeightCache, ensureValidScoresForDate, aggregatePerformance, aggregateScoreAlias, getPerformanceDetails } from '../services/performance.service';
 import { DATA_OPERACIONAL_SQL } from '../services/operational-date.service';
 
-const DATA_UTC_ATUAL_SQL = "(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date";
-
 // v2.5 (§5.6) — indicadores diários embutidos em cada dia do week_comparison;
 // a data fica no objeto externo, então `day` é omitida do sub-objeto
 type DayIndicatorValues = Omit<DayIndicators, 'day'>;
@@ -97,8 +95,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
             EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC')::int AS hora,
             COUNT(*)::int AS total
            FROM demands
-            WHERE ${DATA_OPERACIONAL_SQL} >= ${DATA_UTC_ATUAL_SQL} - ($1::int - 1)
-              AND ${DATA_OPERACIONAL_SQL} <= ${DATA_UTC_ATUAL_SQL}
+           WHERE created_at >= NOW() - INTERVAL '1 day' * $1
              AND status != 'annulled'
            GROUP BY 1 ORDER BY 1`,
           [days]
@@ -125,8 +122,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
             ROUND(AVG(EXTRACT(EPOCH FROM (ready_at - created_at)) / 60), 1) AS tempo_medio_min
            FROM demands
            WHERE status IN ('ready', 'retrieved')
-              AND ${DATA_OPERACIONAL_SQL} >= ${DATA_UTC_ATUAL_SQL} - ($1::int - 1)
-              AND ${DATA_OPERACIONAL_SQL} <= ${DATA_UTC_ATUAL_SQL}
+              AND created_at >= NOW() - INTERVAL '1 day' * $1
            GROUP BY product_name
            ORDER BY total_demandas DESC
            LIMIT 10`,
@@ -186,8 +182,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
             ROUND(AVG(COALESCE(sla_breach_minutes_cozinha, sla_breach_minutes_salao)), 1) AS media_min_excedidos
           FROM demands
           WHERE (sla_breached_cozinha OR sla_breached_salao)
-             AND ${DATA_OPERACIONAL_SQL} >= ${DATA_UTC_ATUAL_SQL} - ($1::int - 1)
-             AND ${DATA_OPERACIONAL_SQL} <= ${DATA_UTC_ATUAL_SQL}
+             AND created_at >= NOW() - INTERVAL '1 day' * $1
             AND status != 'annulled'
           GROUP BY 1`,
           [days]
@@ -217,8 +212,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
             cancel_reason
           FROM demands
           WHERE status IN ('cancelled_salao', 'cancelled_cozinha')
-             AND ${DATA_OPERACIONAL_SQL} >= ${DATA_UTC_ATUAL_SQL} - ($1::int - 1)
-             AND ${DATA_OPERACIONAL_SQL} <= ${DATA_UTC_ATUAL_SQL}
+             AND created_at >= NOW() - INTERVAL '1 day' * $1
           GROUP BY status, cancel_reason
           ORDER BY total DESC`,
           [days]
@@ -245,8 +239,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           `SELECT product_name, COUNT(*)::int AS total_roturas
           FROM demands
           WHERE stockout_reported = true
-             AND ${DATA_OPERACIONAL_SQL} >= ${DATA_UTC_ATUAL_SQL} - ($1::int - 1)
-             AND ${DATA_OPERACIONAL_SQL} <= ${DATA_UTC_ATUAL_SQL}
+             AND created_at >= NOW() - INTERVAL '1 day' * $1
             AND status != 'annulled'
           GROUP BY product_name
           ORDER BY total_roturas DESC`,
@@ -284,12 +277,12 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           }
         } else if (range === 'week') {
           const d = new Date(now);
-          d.setDate(d.getDate() - 7);
+          d.setUTCDate(d.getUTCDate() - 7);
           dateFrom = d.toISOString().split('T')[0];
           dateTo = now.toISOString().split('T')[0];
         } else if (range === 'month') {
           const d = new Date(now);
-          d.setDate(d.getDate() - 30);
+          d.setUTCDate(d.getUTCDate() - 30);
           dateFrom = d.toISOString().split('T')[0];
           dateTo = now.toISOString().split('T')[0];
         } else {
@@ -543,7 +536,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         let weekComparison: WeekComparisonDayWithIndicators[] = [];
         if (range === 'week' || range === 'month') {
           const prevStart = new Date(dateFrom);
-          prevStart.setDate(prevStart.getDate() - rangeNum);
+          prevStart.setUTCDate(prevStart.getUTCDate() - rangeNum);
           const prevStartStr = prevStart.toISOString().split('T')[0];
           const compParams: unknown[] = [dateFrom, dateTo, prevStartStr, dateFrom, rangeNum];
           // §5.4 — nesta query station_id entra como $6 (após os 4 filtros de data + rangeNum)

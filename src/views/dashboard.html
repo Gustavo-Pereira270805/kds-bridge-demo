@@ -1703,7 +1703,7 @@ if (document.readyState === 'loading') {
                 var fromD = new Date(from + 'T00:00:00');
                 var toD = new Date(to + 'T00:00:00');
                 var days = [];
-                for (var d = new Date(fromD); d <= toD; d.setDate(d.getDate() + 1)) { days.push(new Date(d)); }
+                for (var d = new Date(fromD); d <= toD; d.setUTCDate(d.getUTCDate() + 1)) { days.push(new Date(d)); }
                 var firstPage = true;
                 for (var i = 0; i < days.length; i++) {
                     if (exportProgress) exportProgress.textContent = 'Gerando p\u00E1gina ' + (i + 1) + ' de ' + days.length + '...';
@@ -1757,7 +1757,7 @@ if (document.readyState === 'loading') {
                 var fromD = new Date(from + 'T00:00:00');
                 var toD = new Date(to + 'T00:00:00');
                 var days = [];
-                for (var d = new Date(fromD); d <= toD; d.setDate(d.getDate() + 1)) { days.push(new Date(d)); }
+                for (var d = new Date(fromD); d <= toD; d.setUTCDate(d.getUTCDate() + 1)) { days.push(new Date(d)); }
                 if (days.length > 31) { showToast('Por dia limitado a 31 dias.', 'warn'); state.exporting = false; if (exportProgress) exportProgress.style.display = 'none'; return; }
                 var sheetsAdded = 0;
                 for (var i = 0; i < days.length; i++) {
@@ -1816,7 +1816,7 @@ if (document.readyState === 'loading') {
     // Exportação da Tarefa 6: contrato único de performance operacional.
     function task6ExportDays(from, to) {
         var days = [], cursor = new Date(from + 'T00:00:00'), end = new Date(to + 'T00:00:00');
-        for (; cursor <= end; cursor.setDate(cursor.getDate() + 1)) days.push(cursor.toISOString().split('T')[0]);
+        for (; cursor <= end; cursor.setUTCDate(cursor.getUTCDate() + 1)) days.push(cursor.toISOString().split('T')[0]);
         return days;
     }
 

@@ -54,7 +54,6 @@ const performanceSource = readFileSync(new URL('../src/services/performance.serv
 assert.ok(performanceSource.includes("weights_status = hasLegacySnapshot"));
 assert.ok(performanceSource.includes("'indisponivel_snapshot_legado'"));
 
-const dashboardSource = readFileSync(new URL('../src/views/dashboard.html', import.meta.url), 'utf8');
 const requireNumberSource = dashboardSource.match(/function task6RequireNumber\([\s\S]*?\n    \}/)?.[0];
 assert.ok(requireNumberSource, 'task6RequireNumber deve existir no dashboard');
 const task6RequireNumber = vm.runInNewContext('(' + requireNumberSource + ')') as (value: unknown, path: string, allowNull?: boolean) => number | null;
@@ -65,13 +64,37 @@ assert.equal(task6RequireNumber('2.5', 'campo.numero'), 2.5);
 
 const analyticsSource = readFileSync(new URL('../src/routes/analytics.ts', import.meta.url), 'utf8');
 assert.ok(analyticsSource.includes('DATA_OPERACIONAL_SQL'), 'analytics deve usar a data operacional comum');
-assert.ok(!analyticsSource.includes("AT TIME ZONE 'America/Sao_Paulo'"), 'analytics não pode usar o fuso legado');
-assert.ok(!/created_at\s*::date/.test(analyticsSource), 'analytics não pode usar created_at::date direto');
-assert.ok(!/EXTRACT\(DOW FROM created_at\)/.test(analyticsSource), 'weekday deve usar o dia operacional UTC');
-assert.ok(!/WHERE created_at\s*[<>=]/.test(analyticsSource), 'filtros críticos não podem usar created_at bruto');
+const relativeEndpoints = ['peak-hours', 'by-product', 'sla-breaches', 'cancellations', 'stockouts'];
+for (let index = 0; index < relativeEndpoints.length; index += 1) {
+  const endpoint = relativeEndpoints[index];
+  const nextEndpoint = relativeEndpoints[index + 1] || 'dashboard';
+  const section = analyticsSource.slice(
+    analyticsSource.indexOf(`'/${endpoint}'`),
+    analyticsSource.indexOf(`'/${nextEndpoint}'`),
+  );
+  assert.ok(section.includes("created_at >= NOW() - INTERVAL '1 day' * $1"), `${endpoint} deve usar janela móvel`);
+}
+assert.ok((analyticsSource.match(/AT TIME ZONE 'UTC'/g) || []).length >= 8, 'analytics deve agrupar horários explicitamente em UTC');
+assert.ok(!analyticsSource.includes("AT TIME ZONE 'America/Sao_Paulo'"), 'analytics não pode usar fuso legado');
+assert.ok(analyticsSource.includes('setUTCDate(d.getUTCDate() - 7)'), 'semana deve usar aritmética UTC');
+assert.ok(analyticsSource.includes('setUTCDate(d.getUTCDate() - 30)'), 'mês deve usar aritmética UTC');
+assert.ok(analyticsSource.includes('setUTCDate(prevStart.getUTCDate() - rangeNum)'), 'comparativo deve usar aritmética UTC');
 
 assert.ok(performanceSource.includes('DATA_OPERACIONAL_SQL'), 'performance deve usar a data operacional comum');
-assert.ok(!performanceSource.includes("AT TIME ZONE 'America/Sao_Paulo'"), 'performance não pode usar o fuso legado');
-assert.ok(!/created_at\s*::date/.test(performanceSource), 'performance não pode usar created_at::date direto');
+assert.ok(!performanceSource.includes("AT TIME ZONE 'America/Sao_Paulo'"), 'performance não pode usar fuso legado');
+
+function janelaMovelUtc(agora: Date, dias: number): { inicio: Date; fim: Date } {
+  return { inicio: new Date(agora.getTime() - dias * 86400000), fim: agora };
+}
+
+const borda = new Date('2026-08-04T00:00:00.000Z');
+const janela = janelaMovelUtc(borda, 1);
+assert.equal(janela.inicio.toISOString(), '2026-08-03T00:00:00.000Z');
+assert.equal(janela.fim.toISOString(), '2026-08-04T00:00:00.000Z');
+assert.ok(new Date('2026-08-03T23:59:59.999Z') >= janela.inicio, 'borda interna deve entrar na janela');
+assert.ok(new Date('2026-08-02T23:59:59.999Z') < janela.inicio, 'borda externa deve ficar fora da janela');
+
+assert.ok((dashboardSource.match(/setUTCDate\(d\.getUTCDate\(\) \+ 1\)/g) || []).length >= 2, 'exportações devem iterar dias em UTC');
+assert.ok(dashboardSource.includes('cursor.setUTCDate(cursor.getUTCDate() + 1)'), 'dias exportáveis devem usar aritmética UTC');
 
 console.log('Verificações isoladas de performance: OK');

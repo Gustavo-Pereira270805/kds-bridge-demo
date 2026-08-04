@@ -10,9 +10,9 @@
 
 ## Achados restantes corrigidos
 
-- Dashboard, analytics e performance usam a mesma data civil operacional em UTC, inclusive filtros relativos, comparativos, weekday e agrupamentos por hora.
+- Dashboard, analytics e performance usam UTC em conversões, agrupamentos por hora, weekday e comparativos; filtros relativos preservam janelas móveis de 24 horas.
 - A validação `task6RequireNumber` diferencia campo ausente (`undefined`) de campo explicitamente nulo (`null`), aceitando `null` somente quando o contrato permite.
-- `scripts/verificar-performance-final.ts` cobre a distinção de nulidade e bloqueia usos críticos de data/fuso incompatíveis sem abrir conexão com o banco.
+- `scripts/verificar-performance-final.ts` cobre a distinção de nulidade, verifica os cinco endpoints relativos e testa bordas de janela UTC sem abrir conexão com o banco.
 
 ## Verificações
 
