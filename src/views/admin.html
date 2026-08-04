@@ -499,6 +499,13 @@ function showWeightsFeedback(message, ok) {
     feedback.style.color = ok ? 'var(--c-accent-warm)' : 'var(--c-danger)';
 }
 
+function showWeightsSaving() {
+    var feedback = document.getElementById('weightsFeedback');
+    feedback.textContent = 'Salvando nova versão...';
+    feedback.setAttribute('data-state', 'salvando');
+    feedback.style.color = 'var(--c-text-secondary)';
+}
+
 function showWeightsLoading() {
     var feedback = document.getElementById('weightsFeedback');
     feedback.textContent = 'Carregando pesos...';
@@ -539,7 +546,7 @@ document.getElementById('weightsForm').addEventListener('submit', function(event
     }
     var button = document.getElementById('saveWeightsButton');
     button.disabled = true;
-    showWeightsFeedback('Salvando nova versão...', true);
+    showWeightsSaving();
     api('/api/v1/admin/settings/weights', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

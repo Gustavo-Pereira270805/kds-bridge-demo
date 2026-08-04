@@ -20,6 +20,7 @@ Implementação concluída somente no painel administrativo. O cálculo de perfo
 - Campos vazios agora são rejeitados explicitamente antes de `Number()`; nenhum valor vazio é convertido implicitamente em zero.
 - A versão vigente e cada versão histórica exibem início, fim e os sete valores.
 - Feedback de carregamento, sucesso e erro permanece visível no painel e também usa toast; falhas não são silenciosas. O recarregamento após salvar preserva a mensagem de sucesso.
+- Durante o envio, a mensagem `Salvando nova versão...` usa o estado `salvando`, separado do estado de sucesso.
 - Valores da API são inseridos por `textContent` e nós DOM, sem interpolação de dados externos em `innerHTML`.
 - O texto informa que novas versões valem para novas apurações e não recalculam notas históricas.
 
