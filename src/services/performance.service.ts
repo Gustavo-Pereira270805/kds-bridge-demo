@@ -50,14 +50,24 @@ export function calcularNotasCozinhaGeral(stations: { entity: PerformanceEntity;
   };
 }
 
-export function consolidacaoGeralValida(rows: Pick<PerformanceScoreRow, 'entity' | 'final_score'>[]): boolean {
+export function consolidacaoGeralValida(
+  rows: Pick<PerformanceScoreRow, 'entity' | 'final_score' | 'weight_version_id'>[],
+  generalRow?: Pick<PerformanceScoreRow, 'entity' | 'final_score' | 'weight_version_id'>
+): boolean {
   const expectedEntities = new Set<PerformanceEntity>(['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria']);
   const stationRows = rows.filter(row => expectedEntities.has(row.entity as PerformanceEntity));
   const stationEntities = new Set(stationRows.map(row => row.entity));
-  return stationRows.length === 3
-    && stationEntities.size === 3
-    && Array.from(expectedEntities).every(entity => stationRows.some(row => row.entity === entity))
-    && stationRows.every(row => scoreValido(row.final_score) !== null);
+  if (stationRows.length !== 3 || stationEntities.size !== 3) return false;
+  if (!Array.from(expectedEntities).every(entity => stationRows.some(row => row.entity === entity))) return false;
+  if (!stationRows.every(row => scoreValido(row.final_score) !== null)) return false;
+
+  const versions = stationRows.map(row => row.weight_version_id ?? null);
+  const allLegacy = versions.every(version => version === null);
+  const allVersioned = versions.every(version => version !== null && version === versions[0]);
+  if (!allLegacy && !allVersioned) return false;
+  if (!generalRow) return true;
+  if (generalRow.entity !== 'cozinha_geral' || scoreValido(generalRow.final_score) === null) return false;
+  return generalRow.weight_version_id === (allLegacy ? null : versions[0]);
 }
 
 export const PESOS_PADRAO: PerformanceWeights = {
@@ -177,7 +187,7 @@ async function upsertScore(
    slaBreaches: number, slaDed: number | null,
    cancellations: number, cancelDed: number | null,
    stockouts: number, stockDed: number | null,
-   slowItems: number, slowDed: number | null, weightVersionId: string
+   slowItems: number, slowDed: number | null, weightVersionId: string | null
 ): Promise<void> {
   await query(
     `INSERT INTO performance_scores (entity, date, base_score, final_score, total_demands,
@@ -329,11 +339,14 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
        stock: sum.stock + Number(row.stockouts), stockDed: sum.stockDed === null || row.stockout_deduction === null ? null : sum.stockDed + row.stockout_deduction,
        slow: sum.slow + Number(row.slow_items), slowDed: sum.slowDed === null || row.slow_item_deduction === null ? null : sum.slowDed + row.slow_item_deduction,
      }), { total: 0, sla: 0, slaDed: 0 as number | null, cancel: 0, cancelDed: 0 as number | null, stock: 0, stockDed: 0 as number | null, slow: 0, slowDed: 0 as number | null });
-     if (aggregate.operational_score !== null && aggregate.daily_average_complete) {
-       await upsertScore('cozinha_geral', dateStr,
-          aggregate.operational_score, agg.total, agg.sla, agg.slaDed,
-          agg.cancel, agg.cancelDed, agg.stock, agg.stockDed, agg.slow, agg.slowDed, version.id);
-     }
+      if (aggregate.operational_score !== null && aggregate.daily_average_complete) {
+        const generalWeightVersionId = stationRows.every(row => row.weight_version_id === null)
+          ? null
+          : version.id;
+        await upsertScore('cozinha_geral', dateStr,
+           aggregate.operational_score, agg.total, agg.sla, agg.slaDed,
+           agg.cancel, agg.cancelDed, agg.stock, agg.stockDed, agg.slow, agg.slowDed, generalWeightVersionId);
+      }
   }
 }
 
@@ -409,8 +422,7 @@ export async function ensureValidScoresForDate(dateStr: string, cache: Performan
   const expectedVersion = cache.get(dateStr);
   const stationRows = rows.filter(row => row.entity !== 'cozinha_geral');
   const generalRows = rows.filter(row => row.entity === 'cozinha_geral');
-  const validGeneral = consolidacaoGeralValida(stationRows)
-    && generalRows.some(row => scoreValido(row.final_score) !== null);
+  const validGeneral = generalRows.some(row => consolidacaoGeralValida(stationRows, row));
   const valid = Boolean(expectedVersion)
     && entities.filter(entity => entity !== 'cozinha_geral').every(entity => rows.some(row =>
       row.entity === entity && (row.weight_version_id === expectedVersion!.id || row.weight_version_id === null)))

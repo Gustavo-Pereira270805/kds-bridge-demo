@@ -135,11 +135,31 @@ const criticalArraysSource = dashboardSource.match(/function task6ValidateCritic
 assert.ok(criticalArraysSource, 'task6ValidateCriticalArrays deve existir');
 const task6ValidateCriticalArrays = vm.runInNewContext(`(function(task6RequireNumber) { ${criticalArraysSource}; return task6ValidateCriticalArrays; })`)(task6RequireNumber) as (data: unknown) => void;
 assert.throws(() => task6ValidateCriticalArrays({ speed_by_hour: [null] }), /item nulo ou inválido em dashboard\.speed_by_hour\[0\]/);
+const performanceValidationSource = dashboardSource.match(/function task6ValidatePerformancePayload\([\s\S]*?\n    \}/)?.[0];
+assert.ok(performanceValidationSource, 'task6ValidatePerformancePayload deve existir');
+const task6ValidatePerformancePayload = vm.runInNewContext(`(function(task6RequireNumber) { ${performanceValidationSource}; return task6ValidatePerformancePayload; })`)(task6RequireNumber) as (data: unknown) => void;
+const validPerformancePayload = { operational: { salao: {
+  operational_score: 5, total_demands: 1, open_demands: 0, total_deduction: 0,
+  daily_average_score: 5, daily_average_complete: true, legacy_unversioned: false,
+  criteria: [], occurrences: [], weight_versions: [],
+} } };
+task6ValidatePerformancePayload(validPerformancePayload);
+assert.throws(() => task6ValidatePerformancePayload({ operational: { salao: { ...validPerformancePayload.operational.salao, occurrences: undefined } } }), /ocorrências/);
 assert.equal(consolidacaoGeralValida([
   { entity: 'cozinha_quente_a', final_score: 5 },
   { entity: 'cozinha_quente_b', final_score: 5 },
   { entity: 'cozinha_fria', final_score: 5 },
 ]), true);
+assert.equal((consolidacaoGeralValida as any)([
+  { entity: 'cozinha_quente_a', final_score: 5, weight_version_id: 'v1' },
+  { entity: 'cozinha_quente_b', final_score: 5, weight_version_id: null },
+  { entity: 'cozinha_fria', final_score: 5, weight_version_id: 'v1' },
+]), false);
+assert.equal((consolidacaoGeralValida as any)([
+  { entity: 'cozinha_quente_a', final_score: 5, weight_version_id: 'v1' },
+  { entity: 'cozinha_quente_b', final_score: 5, weight_version_id: 'v1' },
+  { entity: 'cozinha_fria', final_score: 5, weight_version_id: 'v1' },
+], { entity: 'cozinha_geral', final_score: 5, weight_version_id: 'v2' }), false);
 assert.equal(consolidacaoGeralValida([
   { entity: 'cozinha_quente_a', final_score: 5 },
   { entity: 'cozinha_quente_b', final_score: null },
@@ -148,6 +168,8 @@ assert.equal(consolidacaoGeralValida([
 
 const analyticsSource = readFileSync(new URL('../src/routes/analytics.ts', import.meta.url), 'utf8');
 assert.ok(analyticsSource.includes('DATA_OPERACIONAL_SQL'), 'analytics deve usar a data operacional comum');
+assert.ok(analyticsSource.includes('scoreRowsValidos'), 'analytics deve filtrar linhas históricas inválidas sem apagá-las');
+assert.ok(analyticsSource.includes('historyMap.get(date)![entity]'), 'histórico deve manter o contrato de datas completas');
 const relativeEndpoints = ['peak-hours', 'by-product', 'sla-breaches', 'cancellations', 'stockouts'];
 for (let index = 0; index < relativeEndpoints.length; index += 1) {
   const endpoint = relativeEndpoints[index];

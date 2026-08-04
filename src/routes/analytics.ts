@@ -724,8 +724,12 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         );
          const validGeneralDates = new Set(
            Array.from(new Set(scoreRows.filter(row => row.entity !== 'cozinha_geral').map(row => String(row.date).slice(0, 10))))
-             .filter(date => consolidacaoGeralValida(scoreRows.filter(row => row.entity !== 'cozinha_geral' && String(row.date).slice(0, 10) === date)))
-             .filter(date => scoreRows.some(row => row.entity === 'cozinha_geral' && String(row.date).slice(0, 10) === date && Number.isFinite(Number(row.final_score)) && row.final_score !== null))
+             .filter(date => {
+               const stationRows = scoreRows.filter(row => row.entity !== 'cozinha_geral' && String(row.date).slice(0, 10) === date);
+               return scoreRows
+                 .filter(row => row.entity === 'cozinha_geral' && String(row.date).slice(0, 10) === date)
+                 .some(generalRow => consolidacaoGeralValida(stationRows, generalRow));
+             })
          );
          const scoreRowsValidos = scoreRows.filter(row => row.entity !== 'cozinha_geral' || validGeneralDates.has(String(row.date).slice(0, 10)));
          const current: Record<string, EntityScore> = {};

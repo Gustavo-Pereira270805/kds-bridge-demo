@@ -1838,6 +1838,25 @@ if (document.readyState === 'loading') {
         else if (value && typeof value === 'object') Object.keys(value).forEach(function(key) { task6AssertFinite(value[key], path + '.' + key); });
     }
 
+    function task6ValidatePerformancePayload(performance) {
+        if (!performance || !performance.operational || typeof performance.operational !== 'object' || Array.isArray(performance.operational) || !Object.keys(performance.operational).length) throw new Error('Payload inválido: performance operacional ausente.');
+        Object.keys(performance.operational).forEach(function(entity) {
+            var item = performance.operational[entity];
+            if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error('Payload inválido: entidade de performance inválida em ' + entity + '.');
+            ['daily_average_complete', 'legacy_unversioned'].forEach(function(key) { if (typeof item[key] !== 'boolean') throw new Error('Payload inválido: status ausente em performance.operational.' + entity + '.' + key + '.'); });
+            ['criteria', 'occurrences', 'weight_versions'].forEach(function(key) { if (!Array.isArray(item[key])) throw new Error('Payload inválido: ' + key + ' ausentes em performance.operational.' + entity + '.'); });
+            item.criteria.forEach(function(criterion, index) {
+                if (!criterion || typeof criterion !== 'object' || typeof criterion.criterion !== 'string' || typeof criterion.weights_status !== 'string') throw new Error('Payload inválido: critério inválido em performance.operational.' + entity + '.criteria[' + index + '].');
+                if (criterion.weights !== undefined && !Array.isArray(criterion.weights)) throw new Error('Payload inválido: pesos inválidos em performance.operational.' + entity + '.criteria[' + index + '].');
+            });
+            item.occurrences.forEach(function(occurrence, index) {
+                ['entity', 'station', 'type', 'date', 'demand_id', 'product_name', 'detail'].forEach(function(key) { if (occurrence === null || occurrence === undefined || typeof occurrence[key] !== 'string') throw new Error('Payload inválido: ocorrência inválida em performance.operational.' + entity + '.occurrences[' + index + '].' + key + '.'); });
+                ['weight', 'deduction'].forEach(function(key) { task6RequireNumber(occurrence[key], 'performance.operational.' + entity + '.occurrences[' + index + '].' + key, true); });
+                if (occurrence.weight_version_id !== null && occurrence.weight_version_id !== undefined && typeof occurrence.weight_version_id !== 'string') throw new Error('Payload inválido: versão inválida em performance.operational.' + entity + '.occurrences[' + index + '].weight_version_id.');
+            });
+        });
+    }
+
     function task6RequireNumber(value, path, allowNull) {
         if (value === undefined) throw new Error('Payload inválido: campo ausente em ' + path + '.');
         if (value === null) {
@@ -1899,7 +1918,7 @@ if (document.readyState === 'loading') {
         var response = await fetch(query);
         if (!response.ok) throw new Error('Não foi possível carregar a performance do período (' + response.status + ').');
         var performance = await response.json();
-        if (!performance.operational || !Object.keys(performance.operational).length) throw new Error('A performance oficial não foi retornada. O relatório não foi gerado.');
+        task6ValidatePerformancePayload(performance);
         task6AssertFinite(performance, 'performance');
         Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; ['operational_score', 'total_demands'].forEach(function(key) { task6RequireNumber(item[key], 'performance.operational.' + entity + '.' + key, true); }); task6RequireNumber(item.open_demands, 'performance.operational.' + entity + '.open_demands'); task6RequireNumber(item.total_deduction, 'performance.operational.' + entity + '.total_deduction', true); task6RequireNumber(item.daily_average_score, 'performance.operational.' + entity + '.daily_average_score', true); (item.criteria || []).forEach(function(c, index) { task6RequireNumber(c.count, 'performance.operational.' + entity + '.criteria[' + index + '].count'); task6RequireNumber(c.eligible_base, 'performance.operational.' + entity + '.criteria[' + index + '].eligible_base', true); task6RequireNumber(c.rate, 'performance.operational.' + entity + '.criteria[' + index + '].rate', true); task6RequireNumber(c.deduction, 'performance.operational.' + entity + '.criteria[' + index + '].deduction', true); (c.weights || []).forEach(function(w, weightIndex) { ['weight', 'count', 'deduction'].forEach(function(key) { task6RequireNumber(w[key], 'performance.operational.' + entity + '.criteria[' + index + '].weights[' + weightIndex + '].' + key); }); }); }); (item.occurrences || []).forEach(function(o, index) { ['weight', 'deduction'].forEach(function(key) { task6RequireNumber(o[key], 'performance.operational.' + entity + '.occurrences[' + index + '].' + key, true); }); }); });
         return performance;
