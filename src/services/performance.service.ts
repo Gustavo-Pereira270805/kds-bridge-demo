@@ -234,7 +234,7 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
     const slaBreaches = await safeCount(
       `SELECT COUNT(*)::int AS cnt FROM demands
        WHERE kitchen_station_id = $1 AND ${DATA_OPERACIONAL_SQL} = $2 AND sla_breached_cozinha = true
-         AND status != 'annulled'`,
+          AND status != 'annulled' AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL`,
       [sid, dateStr]
     );
     const cancellations = await safeCount(
@@ -277,7 +277,8 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
 
   // -- Salão --
   const sSla = await safeCount(
-    `SELECT COUNT(*)::int AS cnt FROM demands WHERE ${DATA_OPERACIONAL_SQL} = $1 AND sla_breached_salao = true AND status != 'annulled'`,
+    `SELECT COUNT(*)::int AS cnt FROM demands WHERE ${DATA_OPERACIONAL_SQL} = $1 AND sla_breached_salao = true AND status != 'annulled'
+      AND ready_at IS NOT NULL AND retrieved_at IS NOT NULL`,
     [dateStr]
   );
   const sCancel = await safeCount(
@@ -487,8 +488,8 @@ export async function getCriterionEligibleBases(entity: string, dateStr: string,
   }>(
     `SELECT
        COUNT(*)::int AS total_demands,
-       COUNT(*) FILTER (WHERE sla_minutes IS NOT NULL)::int AS sla_cozinha,
-       COUNT(*)::int AS sla_salao,
+        COUNT(*) FILTER (WHERE sla_minutes IS NOT NULL AND ready_at IS NOT NULL)::int AS sla_cozinha,
+        COUNT(*) FILTER (WHERE ready_at IS NOT NULL AND retrieved_at IS NOT NULL)::int AS sla_salao,
        COUNT(*) FILTER (WHERE ready_at IS NOT NULL AND sla_minutes IS NOT NULL)::int AS slow_cozinha,
        COUNT(*) FILTER (WHERE ready_at IS NOT NULL AND retrieved_at IS NOT NULL)::int AS slow_salao
      FROM demands
@@ -521,7 +522,8 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
     const slaRows = await query<{ id: string; product_name: string; created_at: string; sla_breach_minutes_cozinha: number }>(
        `SELECT d.id, d.product_name, d.created_at, d.sla_breach_minutes_cozinha
         FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
-        WHERE ks.code = $1 AND ${DATA_OPERACIONAL_D_SQL} >= $2 AND ${DATA_OPERACIONAL_D_SQL} <= $3 AND d.sla_breached_cozinha = true AND d.status != 'annulled'`,
+         WHERE ks.code = $1 AND ${DATA_OPERACIONAL_D_SQL} >= $2 AND ${DATA_OPERACIONAL_D_SQL} <= $3 AND d.sla_breached_cozinha = true AND d.status != 'annulled'
+          AND d.sla_minutes IS NOT NULL AND d.ready_at IS NOT NULL`,
       [selectedStationCode, dateFrom, dateTo]
     );
     slaRows.forEach(r => results.push({
@@ -572,7 +574,8 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
   if (entity === 'salao') {
     const sSlaRows = await query<{ id: string; product_name: string; created_at: string; sla_breach_minutes_salao: number }>(
       `SELECT id, product_name, created_at, sla_breach_minutes_salao
-        FROM demands WHERE ${DATA_OPERACIONAL_SQL} >= $1 AND ${DATA_OPERACIONAL_SQL} <= $2 AND sla_breached_salao = true AND status != 'annulled'`,
+         FROM demands WHERE ${DATA_OPERACIONAL_SQL} >= $1 AND ${DATA_OPERACIONAL_SQL} <= $2 AND sla_breached_salao = true AND status != 'annulled'
+          AND ready_at IS NOT NULL AND retrieved_at IS NOT NULL`,
       [dateFrom, dateTo]
     );
     sSlaRows.forEach(r => results.push({

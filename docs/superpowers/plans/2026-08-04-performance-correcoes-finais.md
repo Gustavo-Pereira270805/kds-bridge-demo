@@ -3,6 +3,7 @@
 - Pesos administrativos exigem usuário autenticado com papel `admin` ou `gerente`, lido exclusivamente do claim confiável `app_metadata.role` do usuário Supabase; `user_metadata.role` e `role` top-level não concedem privilégio.
 - Snapshots legados são associados por data, entidade e estação; `cozinha_geral` não invalida ocorrências versionadas de estações diferentes.
 - Bases sem denominador defensável retornam `null` com `eligible_base_status`; `stockout_cozinha` não usa `total_demands` sintético.
+- Denominadores de SLA excluem demandas abertas sem timestamps aplicáveis: cozinha exige `sla_minutes` e `ready_at`; salão exige `ready_at` e `retrieved_at`. `total_demands` mantém todas as demandas não anuladas, inclusive `pending`.
 - Pesos possuem constraints idempotentes `>= 0 AND <= 5` na migration e no seed inline.
 - Datas operacionais usam UTC explicitamente via `DATA_OPERACIONAL_SQL` e helpers de data.
 - `cozinha_geral` só é persistida e exibida quando as três estações estão presentes.

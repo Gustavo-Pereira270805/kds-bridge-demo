@@ -194,6 +194,10 @@ assert.ok(analyticsSource.includes('setUTCDate(prevStart.getUTCDate() - rangeNum
 
 assert.ok(performanceSource.includes('DATA_OPERACIONAL_SQL'), 'performance deve usar a data operacional comum');
 assert.ok(!performanceSource.includes("AT TIME ZONE 'America/Sao_Paulo'"), 'performance não pode usar fuso legado');
+assert.ok(performanceSource.includes('sla_minutes IS NOT NULL AND ready_at IS NOT NULL'), 'SLA cozinha deve excluir demanda aberta sem pronto');
+assert.ok(performanceSource.includes('ready_at IS NOT NULL AND retrieved_at IS NOT NULL'), 'SLA salão deve exigir retirada aplicável');
+assert.ok(performanceSource.includes("COUNT(*)::int AS total_demands"), 'total geral deve manter demandas abertas');
+assert.ok(performanceSource.includes("status IN ('pending', 'ready')"), 'script deve preservar a população de demandas abertas');
 
 function janelaMovelUtc(agora: Date, dias: number): { inicio: Date; fim: Date } {
   return { inicio: new Date(agora.getTime() - dias * 86400000), fim: agora };

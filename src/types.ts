@@ -81,6 +81,8 @@ export interface DailyMenuEffective {
   origin: 'base' | 'manual_add';
 }
 
+// `pending` e `ready` são demandas abertas; elas permanecem no total geral,
+// mas só entram em bases de SLA quando os timestamps exigidos estão presentes.
 export type DemandStatus =
   | 'pending'
   | 'ready'
@@ -375,6 +377,7 @@ export interface PerformanceCriterionSummary {
   criterion: string;
   count: number;
   eligible_base: number | null;
+  // O total geral inclui demandas abertas; bases de SLA só incluem demandas aplicáveis.
   eligible_base_status: 'aplicavel' | 'indisponivel_sem_denominador' | 'incompleta_cozinha_geral';
   rate: number | null;
   weight: number | null;
