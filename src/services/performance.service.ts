@@ -406,12 +406,12 @@ function getCriterionWeight(criterion: string, weights: PerformanceWeights): num
   throw new Error(`Critério de desempenho desconhecido: ${criterion}`);
 }
 
-export async function getCriterionEligibleBases(entity: string, dateStr: string): Promise<Record<string, number>> {
+export async function getCriterionEligibleBases(entity: string, dateStr: string, stationCode?: string): Promise<Record<string, number>> {
   const isGeneral = entity === 'cozinha_geral';
   const stationFilter = entity === 'salao' ? '' : 'AND kitchen_station_id IN (SELECT id FROM kitchen_stations WHERE code = ANY($2))';
   const stationCodes = isGeneral
-    ? ['quente_a', 'quente_b', 'fria']
-    : [entityFromStationCode(entity.replace('cozinha_', ''))];
+    ? (stationCode ? [stationCode] : ['quente_a', 'quente_b', 'fria'])
+    : [stationCode || entityFromStationCode(entity.replace('cozinha_', ''))];
   const params = entity === 'salao' ? [dateStr] : [dateStr, stationCodes];
   const [row] = await query<{
     total_demands: string;
@@ -444,18 +444,18 @@ export async function getCriterionEligibleBases(entity: string, dateStr: string)
   };
 }
 
-export async function getDetractorDates(entity: string, dateFrom: string, dateTo: string, weightCache?: PerformanceWeightCache): Promise<PerformanceOccurrence[]> {
+export async function getDetractorDates(entity: string, dateFrom: string, dateTo: string, weightCache?: PerformanceWeightCache, stationCode?: string): Promise<PerformanceOccurrence[]> {
   const results: OcorrenciaBruta[] = [];
 
   if (entity === 'cozinha_quente_a' || entity === 'cozinha_quente_b' || entity === 'cozinha_fria') {
-    const stationCode = entity === 'cozinha_quente_a' ? 'quente_a'
-      : entity === 'cozinha_quente_b' ? 'quente_b' : 'fria';
+    const selectedStationCode = stationCode || (entity === 'cozinha_quente_a' ? 'quente_a'
+      : entity === 'cozinha_quente_b' ? 'quente_b' : 'fria');
 
     const slaRows = await query<{ id: string; product_name: string; created_at: string; sla_breach_minutes_cozinha: number }>(
       `SELECT d.id, d.product_name, d.created_at, d.sla_breach_minutes_cozinha
        FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
        WHERE ks.code = $1 AND d.created_at::date >= $2 AND d.created_at::date <= $3 AND d.sla_breached_cozinha = true AND d.status != 'annulled'`,
-      [stationCode, dateFrom, dateTo]
+      [selectedStationCode, dateFrom, dateTo]
     );
     slaRows.forEach(r => results.push({
       type: 'Estouro de SLA',
@@ -468,7 +468,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
       `SELECT d.id, d.product_name, d.created_at, d.cancel_reason
        FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
        WHERE ks.code = $1 AND d.created_at::date >= $2 AND d.created_at::date <= $3 AND d.status = 'cancelled_cozinha'`,
-      [stationCode, dateFrom, dateTo]
+      [selectedStationCode, dateFrom, dateTo]
     );
     cancelRows.forEach(r => results.push({
       type: 'Cancelamento', date: (r.created_at as any) instanceof Date ? (r.created_at as any).toISOString() : String(r.created_at),
@@ -480,7 +480,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
       `SELECT d.id, d.product_name, d.created_at
        FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
        WHERE ks.code = $1 AND d.created_at::date >= $2 AND d.created_at::date <= $3 AND d.stockout_reported = true AND d.status != 'annulled'`,
-      [stationCode, dateFrom, dateTo]
+      [selectedStationCode, dateFrom, dateTo]
     );
     stockRows.forEach(r => results.push({
       type: 'Zerado', date: (r.created_at as any) instanceof Date ? (r.created_at as any).toISOString() : String(r.created_at),
@@ -493,7 +493,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
        WHERE ks.code = $1 AND d.created_at::date >= $2 AND d.created_at::date <= $3 AND d.status != 'annulled'
          AND d.ready_at IS NOT NULL AND d.sla_minutes IS NOT NULL
          AND EXTRACT(EPOCH FROM (d.ready_at - d.created_at))/60 > d.sla_minutes * 1.5`,
-      [stationCode, dateFrom, dateTo]
+      [selectedStationCode, dateFrom, dateTo]
     );
     slowRows.forEach(r => results.push({
       type: 'Item lento', date: (r.created_at as any) instanceof Date ? (r.created_at as any).toISOString() : String(r.created_at),
@@ -555,11 +555,11 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
   }
 
   if (entity === 'cozinha_geral') {
-    const stationCodes = ['quente_a', 'quente_b', 'fria'];
+    const stationCodes = stationCode ? [stationCode] : ['quente_a', 'quente_b', 'fria'];
     for (const code of stationCodes) {
       const subResults = await getDetractorDates(
         code === 'quente_a' ? 'cozinha_quente_a' : code === 'quente_b' ? 'cozinha_quente_b' : 'cozinha_fria',
-        dateFrom, dateTo, weightCache
+        dateFrom, dateTo, weightCache, code
       );
       results.push(...subResults);
     }
@@ -582,16 +582,16 @@ export interface PerformanceDetails {
   total_deduction: number;
 }
 
-export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom: string, dateTo: string, weightCache?: PerformanceWeightCache): Promise<PerformanceDetails> {
+export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom: string, dateTo: string, weightCache?: PerformanceWeightCache, stationCode?: string): Promise<PerformanceDetails> {
   const cache = weightCache || await createPerformanceWeightCache(dateFrom, dateTo);
-  const occurrences = await getDetractorDates(entity, dateFrom, dateTo, cache);
+  const occurrences = await getDetractorDates(entity, dateFrom, dateTo, cache, stationCode);
   const bases: Record<string, number> = {};
   const versions = new Map<string, PerformanceWeightVersion>();
   const from = new Date(`${dateFrom}T00:00:00Z`);
   const to = new Date(`${dateTo}T00:00:00Z`);
   for (const date = new Date(from); date <= to; date.setUTCDate(date.getUTCDate() + 1)) {
     const dateStr = date.toISOString().slice(0, 10);
-    const dailyBases = await getCriterionEligibleBases(entity, dateStr);
+    const dailyBases = await getCriterionEligibleBases(entity, dateStr, stationCode);
     for (const [criterion, base] of Object.entries(dailyBases)) bases[criterion] = (bases[criterion] || 0) + base;
     const version = cache.get(dateStr)!;
     versions.set(version.id, version);
@@ -652,8 +652,8 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
          ? "AND kitchen_station_id IN (SELECT id FROM kitchen_stations WHERE code = ANY($3))"
          : "AND kitchen_station_id = (SELECT id FROM kitchen_stations WHERE code = $3)"}`,
     entity === 'salao' ? [dateFrom, dateTo] : entity === 'cozinha_geral'
-      ? [dateFrom, dateTo, ['quente_a', 'quente_b', 'fria']]
-      : [dateFrom, dateTo, entityFromStationCode(entity.replace('cozinha_', ''))]
+      ? [dateFrom, dateTo, stationCode ? [stationCode] : ['quente_a', 'quente_b', 'fria']]
+      : [dateFrom, dateTo, stationCode || entityFromStationCode(entity.replace('cozinha_', ''))]
   );
   return {
     entity,

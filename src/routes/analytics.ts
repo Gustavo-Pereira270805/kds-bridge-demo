@@ -680,11 +680,11 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
   );
 
   // ── Performance / Notas de Desempenho ──
-  fastify.get<{ Querystring: { range?: string; from?: string; to?: string } }>(
+  fastify.get<{ Querystring: { range?: string; from?: string; to?: string; station_id?: string } }>(
     '/performance',
     async (request, reply) => {
       try {
-        const { range, from, to } = request.query;
+        const { range, from, to, station_id: stationId } = request.query;
         const today = new Date();
         const isoDate = /^\d{4}-\d{2}-\d{2}$/;
         const validDate = (value: string): boolean => {
@@ -710,7 +710,18 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         if (days < 1) return reply.code(400).send({ error: 'A data inicial deve ser anterior ou igual à data final' });
         if (days > 31) return reply.code(400).send({ error: 'O período máximo é de 31 dias' });
 
-        const entities: PerformanceEntity[] = ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'salao'];
+        let stationCode: string | undefined;
+        if (stationId) {
+          const [station] = await query<{ code: string }>('SELECT code FROM kitchen_stations WHERE id = $1', [stationId]);
+          if (!station) return reply.code(400).send({ error: 'Estação selecionada não encontrada' });
+          if (!['quente_a', 'quente_b', 'fria'].includes(station.code)) return reply.code(400).send({ error: 'A performance aceita apenas estações de cozinha' });
+          stationCode = station.code;
+        }
+        const allEntities: PerformanceEntity[] = ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'salao'];
+        const selectedEntity = stationCode === 'quente_a' ? 'cozinha_quente_a'
+          : stationCode === 'quente_b' ? 'cozinha_quente_b'
+            : stationCode === 'fria' ? 'cozinha_fria' : undefined;
+        const entities: PerformanceEntity[] = selectedEntity ? [selectedEntity] : allEntities;
         const weightCache = await createPerformanceWeightCache(dateFrom, dateTo);
         for (let index = 0; index < days; index += 1) {
           const currentDate = new Date(start);
@@ -740,7 +751,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         }
         const operational: Record<string, EntityPerformance> = {};
         for (const entity of entities) {
-          const details = await getPerformanceDetails(entity, dateFrom, dateTo, weightCache);
+          const details = await getPerformanceDetails(entity, dateFrom, dateTo, weightCache, stationCode);
           const rows = scoreRows.filter(row => row.entity === entity);
           const dailyAverageRows = entity === 'cozinha_geral'
             ? scoreRows.filter(row => ['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria'].includes(row.entity))
