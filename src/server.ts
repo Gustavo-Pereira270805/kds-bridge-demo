@@ -149,6 +149,7 @@ async function seedDatabase() {
       );
 
       // Mantém a persistência das versões de pesos alinhada à migration versionada.
+      await client.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
       await client.query(
         `CREATE TABLE IF NOT EXISTS performance_weight_versions (
            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -184,6 +185,7 @@ async function seedDatabase() {
            IF NOT EXISTS (
              SELECT 1 FROM pg_constraint
              WHERE conname = 'performance_scores_weight_version_id_fkey'
+               AND conrelid = 'performance_scores'::regclass
            ) THEN
              ALTER TABLE performance_scores
                ADD CONSTRAINT performance_scores_weight_version_id_fkey

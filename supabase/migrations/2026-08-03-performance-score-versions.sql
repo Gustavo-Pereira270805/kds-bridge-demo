@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE IF NOT EXISTS performance_weight_versions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   sla_breach_cozinha numeric NOT NULL,
@@ -29,6 +31,7 @@ BEGIN
     SELECT 1
     FROM pg_constraint
     WHERE conname = 'performance_scores_weight_version_id_fkey'
+      AND conrelid = 'performance_scores'::regclass
   ) THEN
     ALTER TABLE performance_scores
       ADD CONSTRAINT performance_scores_weight_version_id_fkey

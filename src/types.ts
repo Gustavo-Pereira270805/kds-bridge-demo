@@ -402,10 +402,21 @@ export interface EntityPerformance {
   weight_version?: PerformanceWeightVersion | null;
 }
 
+export interface PerformanceAverage {
+  entity: PerformanceEntity;
+  final_score: number;
+  total_demands: number;
+  sla_breaches: number;
+  cancellations: number;
+  stockouts: number;
+  slow_items: number;
+}
+
 export interface PerformanceResponse {
   current: Record<string, EntityScore>;
   history: { date: string; [entity: string]: number | string }[];
-  averages?: Record<string, number>;
+  averages?: Record<string, PerformanceAverage>;
   operational?: Record<string, EntityPerformance>;
   validity?: PerformanceWeightVersion[];
+  detractor_dates?: Record<string, PerformanceOccurrence[]>;
 }
