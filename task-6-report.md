@@ -18,7 +18,7 @@ Foi alterado o fluxo de exportação em `src/views/dashboard.html` e o contrato 
 - Payloads são validados quanto a números finitos antes da formatação/exportação.
 - A paginação PDF captura sempre a última fatia, inclusive quando ela tem menos de 150 pixels.
 - A exportação diária não chama `buildContent`; usa somente o relatório exportável e nunca injeta `undefined`.
-- O PDF consolidado valida `state.lastData` antes de construir e capturar o container temporário, sem alterar o DOM principal.
+- O PDF consolidado valida `state.lastData` antes de construir e capturar um container temporário independente, usando somente `task6ReportHtml` e sem depender de `#content` ou de `contentEl.innerHTML`.
 - O PDF exibe, por critério e versão, peso, contagem e desconto; o Excel mantém esses dados em campos separados ou detalhados.
 
 ## Validações
@@ -27,6 +27,7 @@ Foi alterado o fluxo de exportação em `src/views/dashboard.html` e o contrato 
 - `npm run build`: passou, código de saída 0.
 - `git diff --check`: passou; apenas aviso normal de conversão LF/CRLF do Git.
 - Revisão estrutural: existe uma única definição ativa de `exportPDF` e `exportExcel`; não há chamada de `buildContent` no fluxo diário.
+- O caminho consolidado e o diário não usam `buildContent`, `#content` nem `contentEl.innerHTML`; ambos capturam containers temporários baseados nos dados oficiais.
 - Exportações com servidor real: registrar disponibilidade e resultado abaixo.
 
 ## Resultado

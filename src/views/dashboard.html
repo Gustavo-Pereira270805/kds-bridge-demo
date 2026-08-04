@@ -1726,14 +1726,13 @@ if (document.readyState === 'loading') {
                 }
             } else {
                 if (exportProgress) exportProgress.textContent = 'Capturando dashboard...';
-                var contentEl = document.getElementById('content');
                 if (!state.lastData) throw new Error('Payload inválido: dados consolidados ausentes.');
                 task6AssertFinite(state.lastData, 'dashboard consolidado');
                 task6ValidateDashboardNumbers(state.lastData);
                 var performance = await task6FetchPerformance(from, to);
                 temp = document.createElement('div');
                 temp.style.cssText = 'position:absolute;left:-9999px;width:900px;background:white;font-family:Inter,sans-serif;padding:20px;';
-                temp.innerHTML = contentEl.innerHTML + task6ReportHtml(state.lastData, performance, task6DateLabel(from) + ' a ' + task6DateLabel(to));
+                temp.innerHTML = task6ReportHtml(state.lastData, performance, task6DateLabel(from) + ' a ' + task6DateLabel(to));
                 document.body.appendChild(temp);
                 var canvas = await html2canvas(temp, { scale: 1.5, useCORS: true, backgroundColor: '#f4f4f5' });
                 document.body.removeChild(temp); temp = null;
