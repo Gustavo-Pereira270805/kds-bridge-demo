@@ -259,6 +259,9 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       try {
         const { range, from, to, station_id } = request.query;
+        if (range !== undefined && !['today', 'yesterday', 'week', 'month'].includes(range)) {
+          return reply.code(400).send({ error: 'O intervalo deve ser today, yesterday, week ou month' });
+        }
 
         let dateFrom: string;
         let dateTo: string;
@@ -673,6 +676,9 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       try {
         const { range, from, to, station_id: stationId } = request.query;
+        if (range !== undefined && !['week', 'month'].includes(range)) {
+          return reply.code(400).send({ error: 'O intervalo deve ser week ou month' });
+        }
         const today = new Date();
         const shiftDate = (days: number): string => {
           const date = new Date(today);

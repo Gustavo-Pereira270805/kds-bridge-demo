@@ -1,6 +1,6 @@
 # Correções finais de performance
 
-- Pesos administrativos exigem usuário autenticado com papel `admin` ou `gerente`, lido dos claims reais `app_metadata.role`, `user_metadata.role` ou `role` do usuário Supabase.
+- Pesos administrativos exigem usuário autenticado com papel `admin` ou `gerente`, lido exclusivamente do claim confiável `app_metadata.role` do usuário Supabase; `user_metadata.role` e `role` top-level não concedem privilégio.
 - Snapshots legados são associados por data, entidade e estação; `cozinha_geral` não invalida ocorrências versionadas de estações diferentes.
 - Bases sem denominador defensável retornam `null` com `eligible_base_status`; `stockout_cozinha` não usa `total_demands` sintético.
 - Pesos possuem constraints idempotentes `>= 0 AND <= 5` na migration e no seed inline.

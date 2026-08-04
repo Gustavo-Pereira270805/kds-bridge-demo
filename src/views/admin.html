@@ -297,6 +297,7 @@
     <!-- Painel: Critérios de Avaliação (Pesos de Performance) -->
     <div class="panel" id="panel-weights">
         <h2>Critérios de Avaliação (Pesos da Nota de Performance)</h2>
+        <p class="hint">As vigências de pesos usam a data civil em UTC. O fim da vigência é exclusivo; alterações passam a valer na data operacional UTC informada.</p>
         <p style="color:var(--c-text-secondary); font-size:14px; margin-bottom: 24px;">
              Ajuste o impacto (penalidade) de cada tipo de evento no cálculo automático da nota diária do restaurante. Os valores alteram novas apurações e não recalculam notas históricas.
        </p>
@@ -312,7 +313,7 @@
         <div id="currentWeights" style="color:var(--c-text-secondary);">Carregando versão vigente...</div>
         <h3 style="margin-top:24px;">Histórico de versões</h3>
         <div style="overflow-x:auto;"><table id="weightsHistoryTable">
-            <thead><tr><th>Início da vigência</th><th>Fim da vigência</th><th>SLA cozinha</th><th>SLA salão</th><th>Cancel. cozinha</th><th>Cancel. salão</th><th>Zerado salão</th><th>Preparo lento cozinha</th><th>Retirada lenta salão</th></tr></thead>
+            <thead><tr><th>Início da vigência (UTC)</th><th>Fim da vigência (UTC, exclusivo)</th><th>SLA cozinha</th><th>SLA salão</th><th>Cancel. cozinha</th><th>Cancel. salão</th><th>Zerado salão</th><th>Preparo lento cozinha</th><th>Retirada lenta salão</th></tr></thead>
             <tbody><tr><td colspan="9">Carregando histórico...</td></tr></tbody>
         </table></div>
    </div>

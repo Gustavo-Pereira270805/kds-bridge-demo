@@ -1,9 +1,18 @@
 import assert from 'node:assert/strict';
-import { buildCriterionSummaries, calcularNotasCozinhaGeral, aggregateScoreAlias } from '../src/services/performance.service';
+import { buildCriterionSummaries, calcularNotasCozinhaGeral, aggregatePerformance, aggregateScoreAlias } from '../src/services/performance.service';
 import { validarIntervaloInclusivo } from '../src/services/operational-date.service';
 import { PerformanceScoreRow } from '../src/types';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+
+function scoreRow(overrides: Partial<PerformanceScoreRow> = {}): PerformanceScoreRow {
+  return {
+    id: 'score-1', entity: 'salao', date: '2026-08-04', base_score: 5, final_score: 4,
+    total_demands: 1, sla_breaches: 0, sla_breach_deduction: 0,
+    cancellations: 0, cancellation_deduction: 0, stockouts: 0, stockout_deduction: 0,
+    slow_items: 0, slow_item_deduction: 0, ...overrides,
+  };
+}
 
 const incomplete = calcularNotasCozinhaGeral([
   { entity: 'cozinha_quente_a', total: 2, deduction: 1 },
@@ -59,6 +68,31 @@ const legacyStockout = buildCriterionSummaries({
   stockout_salao: 0.1, slow_item_cozinha: 0.1, slow_pickup_salao: 0.1,
 }, true, { stockout_cozinha: 10 }, { stockout_cozinha: 'indisponivel_snapshot_legado' });
 assert.equal(legacyStockout.find(item => item.criterion === 'stockout_cozinha')?.deduction, null);
+
+const nullScore = aggregateScoreAlias('salao', [scoreRow({ final_score: null })]);
+assert.equal(nullScore.final_score, null, 'alias não pode converter final_score nulo em zero');
+
+const nullOperational = aggregatePerformance('salao', [scoreRow({ final_score: null })], {
+  entity: 'salao', criteria: [], occurrences: [], weight_versions: [], total_demands: 1,
+  open_demands: 0, total_deduction: 0, legacy_unversioned: false,
+});
+assert.equal(nullOperational.operational_score, null, 'operacional não pode inventar nota para score nulo');
+assert.equal(nullOperational.daily_average_score, null, 'média diária não pode converter score nulo em zero');
+
+const incompleteGeneral = aggregatePerformance('cozinha_geral', [
+  scoreRow({ entity: 'cozinha_quente_a', final_score: 4 }),
+  scoreRow({ id: 'score-2', entity: 'cozinha_quente_b', final_score: null }),
+  scoreRow({ id: 'score-3', entity: 'cozinha_fria', final_score: 4 }),
+], {
+  entity: 'cozinha_geral', criteria: [], occurrences: [], weight_versions: [], total_demands: 3,
+  open_demands: 0, total_deduction: 0, legacy_unversioned: false,
+}, [
+  scoreRow({ entity: 'cozinha_quente_a', final_score: 4 }),
+  scoreRow({ id: 'score-2', entity: 'cozinha_quente_b', final_score: null }),
+  scoreRow({ id: 'score-3', entity: 'cozinha_fria', final_score: 4 }),
+]);
+assert.equal(incompleteGeneral.operational_score, null, 'cozinha geral incompleta não pode inventar nota');
+assert.equal(incompleteGeneral.daily_average_score, null, 'cozinha geral incompleta não pode inventar média');
 
 assert.equal(validarIntervaloInclusivo('2026-08-01', '2026-08-31'), null);
 assert.equal(validarIntervaloInclusivo('2026-08-01', '2026-09-01'), 'O período máximo é de 31 dias');
@@ -128,6 +162,8 @@ assert.ok(analyticsSource.includes("reply.code(500).send({ error: 'Erro ao busca
 assert.ok(!analyticsSource.includes("'Erro ao buscar dados do dashboard: ' + msg"), 'dashboard não deve concatenar mensagem crua');
 assert.ok(analyticsSource.includes('validarDataCalendario'), 'dashboard deve validar datas civis antes das queries');
 assert.ok(analyticsSource.includes('A data deve estar no formato ISO YYYY-MM-DD e ser válida'), 'dashboard deve usar erro fixo para data inválida');
+assert.ok(analyticsSource.includes("!['today', 'yesterday', 'week', 'month'].includes(range)"), 'dashboard deve rejeitar range desconhecido');
+assert.ok(analyticsSource.includes("O intervalo deve ser week ou month"), 'range inválido deve usar erro fixo');
 assert.ok(!analyticsSource.includes('schema: {'), 'pesos não devem ser rejeitados pelo schema antes da mensagem fixa');
 assert.ok(!readFileSync(new URL('../src/routes/admin.ts', import.meta.url), 'utf8').includes('sla_breach: version.sla_breach_cozinha'), 'contrato novo não deve expor alias ambíguo');
 assert.ok(readFileSync(new URL('../src/views/admin.html', import.meta.url), 'utf8').includes("input.max = '5'"), 'frontend deve limitar pesos a 5');
@@ -135,6 +171,10 @@ assert.ok(readFileSync(new URL('../src/services/performance.service.ts', import.
 assert.ok(performanceSource.includes('valid_to exclusivo'), 'vigência deve documentar data UTC e fim exclusivo');
 assert.ok(analyticsSource.includes('historyMap.set(date, { date, ...Object.fromEntries'), 'histórico deve preservar dias incompletos');
 assert.ok(dashboardSource.includes('function task6ExportDays(from, to)'), 'exportações devem compartilhar o iterador de dias');
+assert.ok(dashboardSource.includes('task6RequireNumber(kpis.tempo_medio_cozinha_min'), 'dashboard deve validar tempo médio de cozinha');
+assert.ok(dashboardSource.includes('task6RequireNumber(kpis.tempo_medio_retirada_min'), 'dashboard deve validar tempo médio de retirada');
+assert.ok(dashboardSource.includes('task6RequireNumber(item.operational_score'), 'exportação deve validar notas operacionais');
+assert.ok(!performanceSource.includes('Number(row.final_score)'), 'agregadores não podem converter score nulo sem guarda');
 assert.equal(janela.inicio.toISOString(), '2026-08-03T00:00:00.000Z');
 assert.equal(new Date('2026-08-04T00:00:00.000Z').getTime() - new Date('2026-08-03T00:00:00.000Z').getTime(), 86400000);
 

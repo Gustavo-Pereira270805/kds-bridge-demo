@@ -149,6 +149,12 @@ function round1(value: number): number {
   return Math.max(0, Math.round(value * 10) / 10);
 }
 
+function scoreValido(value: number | null): number | null {
+  if (value === null) return null;
+  const score = Number(value);
+  return Number.isFinite(score) ? score : null;
+}
+
 function entityFromStationCode(code: string): string {
   if (code === 'quente_a') return 'cozinha_quente_a';
   if (code === 'quente_b') return 'cozinha_quente_b';
@@ -303,7 +309,7 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
        deduction: [row.sla_breach_deduction, row.cancellation_deduction, row.stockout_deduction, row.slow_item_deduction]
          .some(value => value === null) ? null : (row.sla_breach_deduction as number) + (row.cancellation_deduction as number)
            + (row.stockout_deduction as number) + (row.slow_item_deduction as number),
-      final: Number(row.final_score),
+       final: scoreValido(row.final_score) ?? undefined,
     })));
     const agg = stationRows.reduce((sum, row) => ({
       total: sum.total + Number(row.total_demands),
@@ -759,33 +765,35 @@ export function aggregatePerformance(
   details: PerformanceDetails,
   dailyAverageRows: PerformanceScoreRow[] = rows
 ): EntityPerformance {
-  const dailyAverages = new Map<string, Map<string, number>>();
+  const dailyAverages = new Map<string, Map<string, number | null>>();
   for (const row of dailyAverageRows) {
-    if (!dailyAverages.has(row.date)) dailyAverages.set(row.date, new Map<string, number>());
-    dailyAverages.get(row.date)!.set(row.entity, Number(row.final_score));
+    if (!dailyAverages.has(row.date)) dailyAverages.set(row.date, new Map<string, number | null>());
+    dailyAverages.get(row.date)!.set(row.entity, scoreValido(row.final_score));
   }
   const expectedKitchenEntities = new Set<PerformanceEntity>(['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria']);
   const completeDailyAverages = entity === 'cozinha_geral'
     ? Array.from(dailyAverages.values()).filter(scores =>
       scores.size === expectedKitchenEntities.size
-      && Array.from(expectedKitchenEntities).every(expected => scores.has(expected)))
+      && Array.from(expectedKitchenEntities).every(expected => scores.has(expected) && scores.get(expected) !== null))
     : Array.from(dailyAverages.values());
   const dailyAverageComplete = entity !== 'cozinha_geral'
-    || (dailyAverages.size > 0 && completeDailyAverages.length === dailyAverages.size);
+    ? dailyAverages.size > 0 && Array.from(dailyAverages.values()).every(scores =>
+      Array.from(scores.values()).every(score => score !== null))
+    : dailyAverages.size > 0 && completeDailyAverages.length === dailyAverages.size;
   const dailyAverage = dailyAverageComplete && completeDailyAverages.length
-    ? round1(completeDailyAverages.reduce((sum, scores) =>
-      sum + Array.from(scores.values()).reduce((dailySum, score) => dailySum + score, 0) / scores.size, 0) / completeDailyAverages.length)
+    ? round1(completeDailyAverages.reduce<number>((sum, scores) =>
+    sum + Array.from(scores.values()).reduce<number>((dailySum, score) => dailySum + (score === null ? 0 : score), 0) / scores.size, 0) / completeDailyAverages.length)
     : null;
   const criteria = details.criteria.map(criterion => ({
     ...criterion,
     multi_version: (criterion.weights?.length || 0) > 1,
   }));
+  const hasInvalidScore = rows.length === 0 || rows.some(row => scoreValido(row.final_score) === null);
   const generalIncomplete = entity === 'cozinha_geral' && !dailyAverageComplete;
+  const operationalUnavailable = generalIncomplete || hasInvalidScore || details.legacy_unversioned;
   return {
     entity,
-    operational_score: generalIncomplete ? null : details.legacy_unversioned && rows.length
-      ? round1(rows.reduce((sum, row) => sum + Number(row.final_score), 0) / rows.length)
-      : details.total_deduction === null ? null : round1(5 - details.total_deduction),
+    operational_score: operationalUnavailable || details.total_deduction === null ? null : round1(5 - details.total_deduction),
     daily_average_score: dailyAverage,
     daily_average_complete: dailyAverageComplete,
     total_demands: generalIncomplete ? null : details.total_demands,
@@ -803,6 +811,7 @@ export function aggregateScoreAlias(entity: PerformanceEntity, rows: Performance
   const sum = (field: keyof PerformanceScoreRow): number => rows.reduce((total, row) => total + Number(row[field] || 0), 0);
   const deductionFields: (keyof PerformanceScoreRow)[] = ['sla_breach_deduction', 'cancellation_deduction', 'stockout_deduction', 'slow_item_deduction'];
   const hasUnknownDeduction = rows.some(row => deductionFields.some(field => row[field] === null));
+  const hasInvalidScore = rows.some(row => scoreValido(row.final_score) === null);
   const totalDeduction = hasUnknownDeduction ? null : deductionFields.reduce((total, field) => total + sum(field), 0);
   const latest = rows[rows.length - 1];
   if (entity === 'cozinha_geral') {
@@ -812,8 +821,11 @@ export function aggregateScoreAlias(entity: PerformanceEntity, rows: Performance
       const date = String(row.date).slice(0, 10);
       byDate.set(date, [...(byDate.get(date) || []), row]);
     });
-    const completeRows = Array.from(byDate.values()).filter(group => expected.every(item => group.some(row => row.entity === item)));
-    if (!rows.length || completeRows.length !== byDate.size) {
+    const completeRows = Array.from(byDate.values()).filter(group => expected.every(item => group.some(row => {
+      const score = row.entity === item ? scoreValido(row.final_score) : null;
+      return row.entity === item && score !== null;
+    })));
+    if (!rows.length || hasInvalidScore || completeRows.length !== byDate.size) {
       return {
         entity, final_score: null, base_score: null, total_demands: null,
         sla_breaches: 0, sla_breach_deduction: null, cancellations: 0,
@@ -825,7 +837,9 @@ export function aggregateScoreAlias(entity: PerformanceEntity, rows: Performance
   }
   return {
     entity,
-    final_score: rows.length && !hasUnknownDeduction ? round1(rows.reduce((total, row) => total + Number(row.final_score), 0) / rows.length) : null,
+    final_score: rows.length && !hasUnknownDeduction && !hasInvalidScore
+      ? round1(rows.reduce((total, row) => total + (scoreValido(row.final_score) as number), 0) / rows.length)
+      : null,
     base_score: latest ? Number(latest.base_score) : null,
     total_demands: sum('total_demands'),
     sla_breaches: sum('sla_breaches'),

@@ -1841,7 +1841,10 @@ if (document.readyState === 'loading') {
     function task6ValidateDashboardNumbers(data) {
         var kpis = data && data.kpis;
         if (!kpis) throw new Error('Payload inválido: KPIs ausentes.');
-        ['total_pedidos', 'pct_entregues', 'total_roturas', 'total_cancelados', 'pct_dentro_sla', 'atrasos_cozinha', 'atrasos_salao', 'urgentes_puros'].forEach(function(key) { task6RequireNumber(kpis[key], 'dashboard.kpis.' + key); });
+        ['total_pedidos', 'pct_entregues', 'total_roturas', 'total_cancelados', 'pct_dentro_sla', 'atrasos_cozinha', 'atrasos_salao', 'urgentes_puros', 'urgentes_rotura', 'dentro_sla', 'pct_urgentes', 'pct_cancelados', 'tempo_medio_cozinha_min', 'tempo_medio_retirada_min'].forEach(function(key) { task6RequireNumber(kpis[key], 'dashboard.kpis.' + key); });
+        [['trend', ['total', 'entregues', 'cancelados', 'roturas', 'atrasos_cozinha', 'atrasos_salao']], ['occupancy_by_shift', ['pct_ociosa']], ['produtos', ['total_qty', 'total_demandas']], ['replacements', ['total', 'replacements', 'replacement_pct']]].forEach(function(spec) {
+            (data[spec[0]] || []).forEach(function(row, index) { spec[1].forEach(function(key) { task6RequireNumber(row[key], 'dashboard.' + spec[0] + '[' + index + '].' + key); }); });
+        });
     }
 
     async function task6FetchPerformance(from, to) {
