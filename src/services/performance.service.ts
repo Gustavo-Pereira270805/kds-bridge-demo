@@ -3,7 +3,8 @@ import { PerformanceScoreRow, PerformanceDetractor, PerformanceWeights, Performa
 
 export interface NotaCozinhaGeral {
   operational_score: number;
-  daily_average_score: number;
+  daily_average_score: number | null;
+  daily_average_complete: boolean;
   total_demands: number;
   kitchen_stockout_weight: number;
 }
@@ -22,12 +23,14 @@ export function calcularNotasCozinhaGeral(stations: { total: number; deduction: 
   const total = stations.reduce((sum, station) => sum + station.total, 0);
   const deduction = stations.reduce((sum, station) => sum + station.deduction, 0);
   const operationalScore = round1(5 - deduction);
-  const dailyAverageScore = stations.length
+  const dailyAverageComplete = stations.length === 3;
+  const dailyAverageScore = dailyAverageComplete
     ? round1(stations.reduce((sum, station) => sum + (station.final ?? round1(5 - station.deduction)), 0) / stations.length)
-    : 5;
+    : null;
   return {
     operational_score: operationalScore,
     daily_average_score: dailyAverageScore,
+    daily_average_complete: dailyAverageComplete,
     total_demands: total,
     kitchen_stockout_weight: 0,
   };
@@ -162,7 +165,8 @@ async function upsertScore(
        stockout_deduction = EXCLUDED.stockout_deduction,
        slow_items = EXCLUDED.slow_items,
        slow_item_deduction = EXCLUDED.slow_item_deduction,
-       updated_at = now()`,
+        updated_at = now()
+      WHERE performance_scores.weight_version_id IS NOT NULL`,
      [entity, dateStr, finalScore, total,
       slaBreaches, slaDed, cancellations, cancelDed,
       stockouts, stockDed, slowItems, slowDed, weightVersionId]
@@ -320,7 +324,11 @@ export function buildDetractors(score: PerformanceScoreRow): PerformanceDetracto
     list.push({ label: 'Zerados', count: score.stockouts, deduction: score.stockout_deduction });
   }
   if (score.slow_items > 0) {
-    list.push({ label: 'Preparo/Retirada lenta', count: score.slow_items, deduction: score.slow_item_deduction });
+    list.push({
+      label: score.entity === 'salao' ? 'Retirada lenta' : 'Preparo lento',
+      count: score.slow_items,
+      deduction: score.slow_item_deduction,
+    });
   }
   list.sort((a, b) => b.deduction - a.deduction);
   return list;
@@ -365,7 +373,7 @@ export async function ensureValidScoresForDate(dateStr: string, cache: Performan
   );
   const expectedVersion = cache.get(dateStr);
   const valid = Boolean(expectedVersion) && entities.every(entity => rows.some(row =>
-    row.entity === entity && row.weight_version_id === expectedVersion!.id));
+    row.entity === entity && (row.weight_version_id === expectedVersion!.id || row.weight_version_id === null)));
   if (!valid) await computeDailyScores(dateStr);
 }
 
@@ -496,7 +504,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
       [selectedStationCode, dateFrom, dateTo]
     );
     slowRows.forEach(r => results.push({
-      type: 'Item lento', date: (r.created_at as any) instanceof Date ? (r.created_at as any).toISOString() : String(r.created_at),
+       type: 'Preparo lento', date: (r.created_at as any) instanceof Date ? (r.created_at as any).toISOString() : String(r.created_at),
       demand_id: r.id, product_name: r.product_name,
       detail: `SLA: ${r.sla_minutes} min`,
     }));
@@ -548,7 +556,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
       [dateFrom, dateTo, tolerance * 2]
     );
     sSlowRows.forEach(r => results.push({
-      type: 'Item lento', date: (r.created_at as any) instanceof Date ? (r.created_at as any).toISOString() : String(r.created_at),
+       type: 'Retirada lenta', date: (r.created_at as any) instanceof Date ? (r.created_at as any).toISOString() : String(r.created_at),
       demand_id: r.id, product_name: r.product_name,
       detail: `Retirada > ${tolerance * 2} min`,
     }));
@@ -580,11 +588,27 @@ export interface PerformanceDetails {
   total_demands: number;
   open_demands: number;
   total_deduction: number;
+  legacy_unversioned: boolean;
 }
 
 export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom: string, dateTo: string, weightCache?: PerformanceWeightCache, stationCode?: string): Promise<PerformanceDetails> {
   const cache = weightCache || await createPerformanceWeightCache(dateFrom, dateTo);
   const occurrences = await getDetractorDates(entity, dateFrom, dateTo, cache, stationCode);
+  const scoreRows = await query<{ date: string; weight_version_id: string | null }>(
+    `SELECT date, weight_version_id FROM performance_scores
+     WHERE date >= $1 AND date <= $2 AND entity = ANY($3)`,
+    [dateFrom, dateTo, entity === 'cozinha_geral'
+      ? ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria']
+      : [entity]]
+  );
+  const legacyDates = new Set(scoreRows.filter(row => row.weight_version_id === null).map(row => String(row.date).slice(0, 10)));
+  occurrences.forEach(occurrence => {
+    if (legacyDates.has(String(occurrence.date).slice(0, 10))) {
+      occurrence.weight = null;
+      occurrence.deduction = null;
+      occurrence.weight_version_id = null;
+    }
+  });
   const bases: Record<string, number> = {};
   const versions = new Map<string, PerformanceWeightVersion>();
   const from = new Date(`${dateFrom}T00:00:00Z`);
@@ -608,13 +632,13 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
           ? (entity === 'salao' ? 'stockout_salao' : 'stockout_cozinha')
           : (entity === 'salao' ? 'slow_pickup_salao' : 'slow_item_cozinha');
     counts.set(criterion, (counts.get(criterion) || 0) + 1);
-    deductions.set(criterion, (deductions.get(criterion) || 0) + occurrence.deduction);
+    deductions.set(criterion, (deductions.get(criterion) || 0) + (occurrence.deduction || 0));
     if (occurrence.weight_version_id) {
       if (!criterionWeights.has(criterion)) criterionWeights.set(criterion, new Map());
       const version = criterionWeights.get(criterion)!;
-      const current = version.get(occurrence.weight_version_id) || { weight: occurrence.weight, count: 0, deduction: 0 };
+      const current = version.get(occurrence.weight_version_id) || { weight: occurrence.weight || 0, count: 0, deduction: 0 };
       current.count += 1;
-      current.deduction += occurrence.deduction;
+      current.deduction += occurrence.deduction || 0;
       version.set(occurrence.weight_version_id, current);
     }
   }
@@ -662,7 +686,8 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
     weight_versions: Array.from(versions.values()),
     total_demands: bases.total_demands || 0,
     open_demands: Number(openRow?.count || 0),
-    total_deduction: round1(occurrences.reduce((sum, occurrence) => sum + occurrence.deduction, 0)),
+    total_deduction: round1(occurrences.reduce((sum, occurrence) => sum + (occurrence.deduction || 0), 0)),
+    legacy_unversioned: scoreRows.some(row => row.weight_version_id === null),
   };
 }
 
@@ -677,18 +702,26 @@ export function aggregatePerformance(
     if (!dailyAverages.has(row.date)) dailyAverages.set(row.date, []);
     dailyAverages.get(row.date)!.push(Number(row.final_score));
   }
-  const dailyAverage = dailyAverages.size
-    ? round1(Array.from(dailyAverages.values()).reduce((sum, scores) =>
-      sum + scores.reduce((dailySum, score) => dailySum + score, 0) / scores.length, 0) / dailyAverages.size)
-    : 5;
+  const completeDailyAverages = entity === 'cozinha_geral'
+    ? Array.from(dailyAverages.values()).filter(scores => scores.length === 3)
+    : Array.from(dailyAverages.values());
+  const dailyAverageComplete = entity !== 'cozinha_geral'
+    || (dailyAverages.size > 0 && completeDailyAverages.length === dailyAverages.size);
+  const dailyAverage = dailyAverageComplete && completeDailyAverages.length
+    ? round1(completeDailyAverages.reduce((sum, scores) =>
+      sum + scores.reduce((dailySum, score) => dailySum + score, 0) / scores.length, 0) / completeDailyAverages.length)
+    : null;
   const criteria = details.criteria.map(criterion => ({
     ...criterion,
     multi_version: (criterion.weights?.length || 0) > 1,
   }));
   return {
     entity,
-    operational_score: round1(5 - details.total_deduction),
+    operational_score: details.legacy_unversioned && rows.length
+      ? round1(rows.reduce((sum, row) => sum + Number(row.final_score), 0) / rows.length)
+      : round1(5 - details.total_deduction),
     daily_average_score: dailyAverage,
+    daily_average_complete: dailyAverageComplete,
     total_demands: details.total_demands,
     open_demands: details.open_demands,
     total_deduction: details.total_deduction,
@@ -696,6 +729,7 @@ export function aggregatePerformance(
     occurrences: details.occurrences,
     weight_versions: details.weight_versions,
     weight_version: details.weight_versions.length === 1 ? details.weight_versions[0] : null,
+    legacy_unversioned: details.legacy_unversioned,
   };
 }
 

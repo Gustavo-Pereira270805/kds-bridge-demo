@@ -5,6 +5,7 @@ import { runCleanup } from '../services/cleanup.service';
 import { logDemandEvent } from '../services/demand-events.service';
 import { computeDailyScores, ensureWeightVersion, getWeightVersions, PESOS_PADRAO } from '../services/performance.service';
 import { recomputeStationQueue } from '../services/queue.service';
+import { requireAuth } from '../middleware/auth';
 
 export default async function adminRoutes(fastify: FastifyInstance) {
   // Produtos: criar
@@ -429,7 +430,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
   });
 
   // GET: Configuração dos Pesos de Desempenho
-  fastify.get('/settings/weights', async (request, reply) => {
+  fastify.get('/settings/weights', { preHandler: requireAuth }, async (request, reply) => {
     try {
       const version = await ensureWeightVersion();
       return {
@@ -445,7 +446,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.get('/settings/weights/current', async (request, reply) => {
+  fastify.get('/settings/weights/current', { preHandler: requireAuth }, async (request, reply) => {
     try {
       return await ensureWeightVersion();
     } catch (error) {
@@ -454,7 +455,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.get('/settings/weights/history', async (request, reply) => {
+  fastify.get('/settings/weights/history', { preHandler: requireAuth }, async (request, reply) => {
     try {
       return await getWeightVersions();
     } catch (error) {
@@ -466,7 +467,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
   // PUT: Atualiza a configuração de pesos de desempenho
   fastify.put<{
     Body: Partial<typeof PESOS_PADRAO>
-  }>('/settings/weights', async (request, reply) => {
+  }>('/settings/weights', { preHandler: requireAuth }, async (request, reply) => {
     const body = request.body || {};
     const pesos = {
       sla_breach_cozinha: body.sla_breach_cozinha,

@@ -54,3 +54,10 @@ Implementação concluída em `src/views/dashboard.html`.
 - O fallback de `criterion` também passa por escape HTML antes da inserção em `innerHTML`.
 - O `catch` síncrono de performance usa a mesma mensagem fixa em pt-BR do `catch` assíncrono.
 - A guarda de `perf` e `operational` ocorre antes de qualquer acesso a `perf.operational`.
+
+## Correções finais de contrato
+
+- Scores legados com `weight_version_id` nulo são preservados: a validação não os recalcula com pesos vigentes e apenas cria scores ausentes. O detalhamento expõe `legacy_unversioned: true` quando o histórico não tem snapshot de pesos, sem inventar uma versão histórica.
+- A média diária simples de `Cozinha Geral` só é válida quando as três estações (`quente_a`, `quente_b` e `fria`) estão presentes no dia. Caso contrário, o contrato retorna `daily_average_score: null` e `daily_average_complete: false`.
+- Ocorrências lentas usam tipos distintos: `Preparo lento` para cozinha e `Retirada lenta` para salão. O mesmo campo `type` é consumido pelo dashboard, PDF e Excel.
+- O identificador `weight_version_id` é escapado antes da renderização HTML do detalhamento.

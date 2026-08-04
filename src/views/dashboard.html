@@ -1245,14 +1245,14 @@ if (document.readyState === 'loading') {
             var s = source[order[i]];
             if(!s) continue;
             var sc = Number(s.operational_score);
-            var daily = Number(s.daily_average_score);
+            var daily = s.daily_average_score === null ? null : Number(s.daily_average_score);
             var cls = scoreClass(sc);
             h += '<div class="score-card" data-entity="'+order[i]+'" title="Clique para ver detalhamento">';
             h += '<div class="score-entity">'+labels[order[i]]+'</div>';
             h += '<div class="score-value '+cls+'">'+sc.toFixed(1)+'</div>';
             h += '<div class="score-stars '+cls+'">'+perfStars(sc)+'</div>';
             h += '<div class="score-sub">Nota operacional</div>';
-            h += '<div class="score-sub">'+(order[i] === 'cozinha_geral' ? 'Média simples das estações' : 'Média diária')+': '+daily.toFixed(1)+' · '+(Number(s.total_demands)||0)+' demandas</div>';
+            h += '<div class="score-sub">'+(order[i] === 'cozinha_geral' ? 'Média simples das estações' : 'Média diária')+': '+(daily === null ? 'incompleta' : daily.toFixed(1))+' · '+(Number(s.total_demands)||0)+' demandas</div>';
             h += '</div>';
         }
         return h + '</div>';
@@ -1271,12 +1271,12 @@ if (document.readyState === 'loading') {
             var bars = '<div style="overflow-x:auto;"><table class="criteria-table"><thead><tr><th>Critério</th><th>Contagem</th><th>Base elegível</th><th>Taxa</th><th>Peso / desconto</th></tr></thead><tbody>';
             criteria.forEach(function(c) {
                 var weights = c.weights || [];
-                var weightText = weights.length ? weights.map(function(w) { return Number(w.weight).toFixed(2) + ' (' + String(w.weight_version_id).substring(0, 8) + ')'; }).join('<br>') : (c.weight === null ? 'Várias versões' : Number(c.weight || 0).toFixed(2));
+                var weightText = weights.length ? weights.map(function(w) { return Number(w.weight).toFixed(2) + ' (' + escapePerfHtml(String(w.weight_version_id || '').substring(0, 8)) + ')'; }).join('<br>') : (c.weight === null ? 'Várias versões' : Number(c.weight || 0).toFixed(2));
                 var criterionLabels = { sla_breach_cozinha:'Preparo lento / SLA cozinha', sla_breach_salao:'Retirada lenta / SLA salão', cancellation_cozinha:'Cancelamento cozinha', cancellation_salao:'Cancelamento salão', stockout_cozinha:'Zerado informativo (cozinha)', stockout_salao:'Zerado salão', slow_item_cozinha:'Preparo lento', slow_pickup_salao:'Retirada lenta' };
                 bars += '<tr><td>'+ escapePerfHtml(criterionLabels[c.criterion] || c.criterion) +'</td><td>'+Number(c.count || 0)+'</td><td>'+Number(c.eligible_base || 0)+'</td><td>'+(Number(c.rate || 0) * 100).toFixed(1)+'%</td><td>'+weightText+'<br>Desconto: '+Number(c.deduction || 0).toFixed(2)+'</td></tr>';
             });
             bars += '</tbody></table></div>';
-            var sc = Number(s.operational_score), daily = Number(s.daily_average_score);
+            var sc = Number(s.operational_score), daily = s.daily_average_score === null ? null : Number(s.daily_average_score);
             var datesList = s.occurrences || [];
             if (datesList.length > 0) {
                 bars += '<div style="margin-top:8px;border-top:1px solid var(--c-border-light);padding-top:8px;">' +
@@ -1292,11 +1292,11 @@ if (document.readyState === 'loading') {
                         '<td style="padding:3px 4px;">' + escapePerfHtml(occ.product_name || '-') + '</td>' +
                         '<td style="padding:3px 4px;color:var(--c-text-muted);">' + escapePerfHtml(occ.detail) + '</td>' +
                         '<td style="padding:3px 4px;">' + escapePerfHtml(occ.station || (order[i] === 'cozinha_geral' ? 'Cozinha' : '-')) + '</td>' +
-                        '<td style="padding:3px 4px;">' + Number(occ.weight || 0).toFixed(2) + ' / -' + Number(occ.deduction || 0).toFixed(2) + '<br><small>' + escapePerfHtml(String(occ.weight_version_id || '').substring(0, 8)) + '</small></td></tr>';
+                         '<td style="padding:3px 4px;">' + (occ.weight === null ? 'snapshot indisponível' : Number(occ.weight || 0).toFixed(2) + ' / -' + Number(occ.deduction || 0).toFixed(2)) + '<br><small>' + escapePerfHtml(String(occ.weight_version_id || '').substring(0, 8)) + '</small></td></tr>';
                 });
                 bars += '</tbody></table></div></div>';
             }
-            h += '<div class="panel score-detail-panel" data-entity="'+order[i]+'" style="display:none;"><div class="section-title">Detalhamento - '+labels[order[i]]+' <span style="font-size:12px;font-weight:400;color:#9ca3af;">(Operacional: '+sc.toFixed(1)+' · Média diária: '+daily.toFixed(1)+' · Abertas: '+Number(s.open_demands || 0)+' · Desconto: '+Number(s.total_deduction || 0).toFixed(2)+')</span></div><div style="max-height:420px;overflow-y:auto;">'+bars+'</div></div>';
+            h += '<div class="panel score-detail-panel" data-entity="'+order[i]+'" style="display:none;"><div class="section-title">Detalhamento - '+labels[order[i]]+' <span style="font-size:12px;font-weight:400;color:#9ca3af;">(Operacional: '+sc.toFixed(1)+' · Média diária: '+(daily === null ? 'incompleta' : daily.toFixed(1))+(s.legacy_unversioned ? ' · histórico legado sem snapshot de pesos' : '')+' · Abertas: '+Number(s.open_demands || 0)+' · Desconto: '+Number(s.total_deduction || 0).toFixed(2)+')</span></div><div style="max-height:420px;overflow-y:auto;">'+bars+'</div></div>';
         }
         return h + '</div>';
     }
@@ -1845,7 +1845,7 @@ if (document.readyState === 'loading') {
         var performance = await response.json();
         if (!performance.operational || !Object.keys(performance.operational).length) throw new Error('A performance oficial não foi retornada. O relatório não foi gerado.');
         task6AssertFinite(performance, 'performance');
-        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; ['operational_score', 'daily_average_score', 'total_demands', 'open_demands', 'total_deduction'].forEach(function(key) { task6RequireNumber(item[key], 'performance.operational.' + entity + '.' + key); }); (item.criteria || []).forEach(function(c, index) { ['count', 'eligible_base', 'rate', 'deduction'].forEach(function(key) { task6RequireNumber(c[key], 'performance.operational.' + entity + '.criteria[' + index + '].' + key); }); (c.weights || []).forEach(function(w, weightIndex) { ['weight', 'count', 'deduction'].forEach(function(key) { task6RequireNumber(w[key], 'performance.operational.' + entity + '.criteria[' + index + '].weights[' + weightIndex + '].' + key); }); }); }); (item.occurrences || []).forEach(function(o, index) { ['weight', 'deduction'].forEach(function(key) { task6RequireNumber(o[key], 'performance.operational.' + entity + '.occurrences[' + index + '].' + key); }); }); });
+        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; ['operational_score', 'total_demands', 'open_demands', 'total_deduction'].forEach(function(key) { task6RequireNumber(item[key], 'performance.operational.' + entity + '.' + key); }); if (item.daily_average_score !== null) task6RequireNumber(item.daily_average_score, 'performance.operational.' + entity + '.daily_average_score'); (item.criteria || []).forEach(function(c, index) { ['count', 'eligible_base', 'rate', 'deduction'].forEach(function(key) { task6RequireNumber(c[key], 'performance.operational.' + entity + '.criteria[' + index + '].' + key); }); (c.weights || []).forEach(function(w, weightIndex) { ['weight', 'count', 'deduction'].forEach(function(key) { task6RequireNumber(w[key], 'performance.operational.' + entity + '.criteria[' + index + '].weights[' + weightIndex + '].' + key); }); }); }); (item.occurrences || []).forEach(function(o, index) { ['weight', 'deduction'].forEach(function(key) { task6RequireNumber(o[key], 'performance.operational.' + entity + '.occurrences[' + index + '].' + key); }); }); });
         return performance;
     }
 
@@ -1868,7 +1868,7 @@ if (document.readyState === 'loading') {
         html += '<h2 style="font-size:16px;border-bottom:2px solid #1d3557;padding-bottom:5px;">Resumo</h2><table style="width:100%;border-collapse:collapse;font-size:12px;"><tbody>';
         [['Pedidos', k.total_pedidos], ['Entregues (%)', k.pct_entregues], ['Cancelados', k.total_cancelados], ['Zerados', k.total_roturas], ['SLA (%)', k.pct_dentro_sla], ['Atrasos cozinha', k.atrasos_cozinha], ['Atrasos salão', k.atrasos_salao], ['Urgentes', k.urgentes_puros]].forEach(function(row) { html += '<tr><td style="padding:4px;border-bottom:1px solid #e4e4e7;">' + escapePerfHtml(row[0]) + '</td><td style="padding:4px;border-bottom:1px solid #e4e4e7;font-weight:bold;">' + escapePerfHtml(row[1]) + '</td></tr>'; });
         html += '</tbody></table><h2 style="font-size:16px;border-bottom:2px solid #1d3557;padding-bottom:5px;margin-top:18px;">Notas operacionais</h2>';
-        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; html += '<h3 style="font-size:14px;margin:12px 0 4px;">' + escapePerfHtml(labels[entity] || entity) + ' | Nota: ' + Number(item.operational_score || 0).toFixed(1) + ' | Média diária: ' + Number(item.daily_average_score || 0).toFixed(1) + ' | Demandas: ' + Number(item.total_demands || 0) + '</h3><table style="width:100%;border-collapse:collapse;font-size:10px;"><thead><tr style="background:#e5e7eb;"><th>Critério</th><th>Contagem</th><th>Base</th><th>Taxa</th><th>Peso / desconto</th></tr></thead><tbody>'; (item.criteria || []).forEach(function(c) { var weights = (c.weights || []).map(function(w) { return escapePerfHtml(w.weight_version_id) + ': peso ' + Number(w.weight).toFixed(2) + ', contagem ' + Number(w.count) + ', desconto -' + Number(w.deduction).toFixed(2); }).join('; '); html += '<tr><td>' + escapePerfHtml(c.criterion) + '</td><td>' + Number(c.count || 0) + '</td><td>' + Number(c.eligible_base || 0) + '</td><td>' + (Number(c.rate || 0) * 100).toFixed(1) + '%</td><td>' + (weights || 'peso ' + Number(c.weight || 0).toFixed(2)) + ', desconto -' + Number(c.deduction || 0).toFixed(2) + '</td></tr>'; }); html += '</tbody></table>'; });
+        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; html += '<h3 style="font-size:14px;margin:12px 0 4px;">' + escapePerfHtml(labels[entity] || entity) + ' | Nota: ' + Number(item.operational_score || 0).toFixed(1) + ' | Média diária: ' + (item.daily_average_score === null ? 'incompleta' : Number(item.daily_average_score).toFixed(1)) + (item.legacy_unversioned ? ' | histórico legado sem snapshot de pesos' : '') + ' | Demandas: ' + Number(item.total_demands || 0) + '</h3><table style="width:100%;border-collapse:collapse;font-size:10px;"><thead><tr style="background:#e5e7eb;"><th>Critério</th><th>Contagem</th><th>Base</th><th>Taxa</th><th>Peso / desconto</th></tr></thead><tbody>'; (item.criteria || []).forEach(function(c) { var weights = (c.weights || []).map(function(w) { return escapePerfHtml(w.weight_version_id) + ': peso ' + Number(w.weight).toFixed(2) + ', contagem ' + Number(w.count) + ', desconto -' + Number(w.deduction).toFixed(2); }).join('; '); html += '<tr><td>' + escapePerfHtml(c.criterion) + '</td><td>' + Number(c.count || 0) + '</td><td>' + Number(c.eligible_base || 0) + '</td><td>' + (Number(c.rate || 0) * 100).toFixed(1) + '%</td><td>' + (weights || 'peso ' + Number(c.weight || 0).toFixed(2)) + ', desconto -' + Number(c.deduction || 0).toFixed(2) + '</td></tr>'; }); html += '</tbody></table>'; });
         html += '<h2 style="font-size:16px;border-bottom:2px solid #1d3557;padding-bottom:5px;margin-top:18px;">Vigências dos pesos</h2><table style="width:100%;border-collapse:collapse;font-size:10px;"><thead><tr style="background:#e5e7eb;"><th>Versão</th><th>Vigência inicial</th><th>Vigência final</th></tr></thead><tbody>';
         (performance.weight_versions || []).forEach(function(v) { html += '<tr><td>' + escapePerfHtml(v.id) + '</td><td>' + escapePerfHtml(v.valid_from) + '</td><td>' + escapePerfHtml(v.valid_to || 'Em vigor') + '</td></tr>'; });
         html += '</tbody></table><h2 style="font-size:16px;border-bottom:2px solid #1d3557;padding-bottom:5px;margin-top:18px;">Ocorrências reais</h2><table style="width:100%;border-collapse:collapse;font-size:9px;"><thead><tr style="background:#e5e7eb;"><th>Entidade</th><th>Estação de origem</th><th>Tipo</th><th>Data/hora</th><th>Demand ID</th><th>Produto</th><th>Detalhe</th><th>Peso</th><th>Desconto</th><th>Versão do peso</th></tr></thead><tbody>';
@@ -1878,7 +1878,7 @@ if (document.readyState === 'loading') {
 
     function task6PerformanceRows(performance) {
         var labels = { cozinha_geral:'Cozinha Geral', cozinha_quente_a:'Quente A', cozinha_quente_b:'Quente B', cozinha_fria:'Fria', salao:'Salão' }, rows = [];
-        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; rows.push({ Entidade: labels[entity] || entity, 'Nota operacional': Number(item.operational_score || 0), 'Média diária': Number(item.daily_average_score || 0), Demandas: Number(item.total_demands || 0), 'Demandas abertas': Number(item.open_demands || 0), 'Desconto total': Number(item.total_deduction || 0) }); });
+        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; rows.push({ Entidade: labels[entity] || entity, 'Nota operacional': Number(item.operational_score || 0), 'Média diária': item.daily_average_score, 'Média completa': item.daily_average_complete, 'Histórico legado sem snapshot': item.legacy_unversioned, Demandas: Number(item.total_demands || 0), 'Demandas abertas': Number(item.open_demands || 0), 'Desconto total': Number(item.total_deduction || 0) }); });
         return rows;
     }
 

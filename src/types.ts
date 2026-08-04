@@ -390,15 +390,16 @@ export interface PerformanceOccurrence {
   demand_id: string;
   product_name: string;
   detail: string;
-  weight: number;
-  deduction: number;
-  weight_version_id: string;
+  weight: number | null;
+  deduction: number | null;
+  weight_version_id: string | null;
 }
 
 export interface EntityPerformance {
   entity: PerformanceEntity;
   operational_score: number;
-  daily_average_score: number;
+  daily_average_score: number | null;
+  daily_average_complete: boolean;
   total_demands: number;
   open_demands: number;
   total_deduction: number;
@@ -406,6 +407,7 @@ export interface EntityPerformance {
   occurrences: PerformanceOccurrence[];
   weight_versions: PerformanceWeightVersion[];
   weight_version?: PerformanceWeightVersion | null;
+  legacy_unversioned: boolean;
 }
 
 export interface PerformanceAverage {
