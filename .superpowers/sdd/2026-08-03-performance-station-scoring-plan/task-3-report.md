@@ -11,6 +11,10 @@
 - O detalhamento agora expõe `total_demands`, `open_demands`, `total_deduction`, bases elegíveis, descontos, ocorrências e pesos por versão quando necessário.
 - Erros de banco continuam como HTTP 500 e são registrados; falhas de ocorrências não são convertidas em listas vazias.
 - Nenhuma alteração foi feita no dashboard.
+- `EntityPerformance` agora preserva `weight_versions` por entidade; critérios multi-versão expõem `weights` agrupados por `weight_version_id` e `multi_version`.
+- A rota usa a agregação oficial do serviço para `operational_score` e `daily_average_score`; aliases `averages` agregam todos os contadores e descontos do intervalo.
+- Scores diários só são preservados quando as cinco entidades têm `weight_version_id` igual à versão aplicável à data.
+- Versões são carregadas uma vez por intervalo e reutilizadas no enriquecimento das ocorrências, sem consulta individual por ocorrência.
 
 ## Validação
 
@@ -26,9 +30,13 @@
 | `npx tsc --noEmit` | Passou. |
 | `npm run build` | Passou. |
 | `git diff --check` | Passou, com avisos de normalização LF/CRLF do Git. |
+| Data inválida via HTTP | HTTP 400. |
+| `from > to` via HTTP | HTTP 400. |
+| Período acima de 31 dias via HTTP | HTTP 400. |
+| Dia único sem versão histórica disponível | HTTP 500, com erro preservado e registrado. |
 
 ## Preocupações
 
-- O banco de teste não possui versão de pesos para datas históricas usadas nos cenários manuais; por isso não foi possível validar respostas 200 de 3 e 31 dias nem um período com múltiplas versões.
-- A resposta multi-versão foi coberta no contrato e na montagem de `weights` por critério, mas precisa de dados históricos com duas versões para validação ponta a ponta.
+- O banco de teste não possui versão de pesos para datas históricas usadas nos cenários manuais; por isso não foi possível validar respostas 200 de 3 e 31 dias nem um período com múltiplas versões ponta a ponta.
+- A resposta multi-versão foi coberta no contrato, preservação global/por entidade e montagem de `weights` por critério; falta uma massa histórica com duas versões para validação HTTP 200.
 - O servidor já apresentava problemas independentes desta tarefa em logs de schema de `theme`; eles não foram alterados por escopo.

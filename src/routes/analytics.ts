@@ -26,7 +26,7 @@ import {
   PerformanceEntity,
   PerformanceWeightVersion,
 } from '../types';
-import { ensureScoresForDate, buildDetractors, getPerformanceDetails } from '../services/performance.service';
+import { createPerformanceWeightCache, ensureValidScoresForDate, aggregatePerformance, aggregateScoreAlias, getPerformanceDetails } from '../services/performance.service';
 
 // v2.5 (§5.6) — indicadores diários embutidos em cada dia do week_comparison;
 // a data fica no objeto externo, então `day` é omitida do sub-objeto
@@ -711,15 +711,12 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         if (days > 31) return reply.code(400).send({ error: 'O período máximo é de 31 dias' });
 
         const entities: PerformanceEntity[] = ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'salao'];
+        const weightCache = await createPerformanceWeightCache(dateFrom, dateTo);
         for (let index = 0; index < days; index += 1) {
           const currentDate = new Date(start);
           currentDate.setUTCDate(currentDate.getUTCDate() + index);
           const date = currentDate.toISOString().slice(0, 10);
-          const rows = await query<{ entity: string; weight_version_id: string | null }>(
-            `SELECT entity, weight_version_id FROM performance_scores WHERE date = $1 AND entity = ANY($2)`, [date, entities]
-          );
-          const complete = entities.every(entity => rows.some(row => row.entity === entity && row.weight_version_id));
-          if (!complete) await ensureScoresForDate(date);
+          await ensureValidScoresForDate(date, weightCache);
         }
 
         const scoreRows = await query<PerformanceScoreRow>(
@@ -731,12 +728,10 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         const averages: Record<string, EntityScore> = {};
         for (const entity of entities) {
           const rows = scoreRows.filter(row => row.entity === entity);
+          if (!rows.length) continue;
           const latest = rows[rows.length - 1];
-          if (!latest) continue;
-          const totalDeduction = rows.reduce((sum, row) => sum + Number(row.sla_breach_deduction) + Number(row.cancellation_deduction) + Number(row.stockout_deduction) + Number(row.slow_item_deduction), 0);
-          const average: EntityScore = { ...latest, entity: entity as PerformanceEntity, final_score: Number((rows.reduce((sum, row) => sum + Number(row.final_score), 0) / rows.length).toFixed(1)), total_demands: rows.reduce((sum, row) => sum + Number(row.total_demands), 0), detractors: buildDetractors({ ...latest, final_score: Number((5 - totalDeduction).toFixed(1)) }) };
-          averages[entity] = { ...average, entity: entity as PerformanceEntity };
-          current[entity] = { ...latest, entity, detractors: buildDetractors(latest) };
+          averages[entity] = aggregateScoreAlias(entity as PerformanceEntity, rows);
+          current[entity] = { ...aggregateScoreAlias(entity as PerformanceEntity, [latest]), entity: entity as PerformanceEntity };
           for (const row of rows) {
             const date = String(row.date).slice(0, 10);
             if (!historyMap.has(date)) historyMap.set(date, { date });
@@ -745,13 +740,12 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         }
         const operational: Record<string, EntityPerformance> = {};
         for (const entity of entities) {
-          const details = await getPerformanceDetails(entity, dateFrom, dateTo);
+          const details = await getPerformanceDetails(entity, dateFrom, dateTo, weightCache);
           const rows = scoreRows.filter(row => row.entity === entity);
-          const operationalScore = Math.max(0, Number((5 - details.total_deduction).toFixed(1)));
-          operational[entity] = { entity, operational_score: operationalScore, daily_average_score: rows.length ? Number((rows.reduce((sum, row) => sum + Number(row.final_score), 0) / rows.length).toFixed(1)) : 5, total_demands: details.total_demands, open_demands: details.open_demands, total_deduction: details.total_deduction, criteria: details.criteria, occurrences: details.occurrences, weight_version: details.weight_versions.length === 1 ? details.weight_versions[0] : null };
+          operational[entity] = aggregatePerformance(entity as PerformanceEntity, rows, details);
         }
         const versions = new Map<string, PerformanceWeightVersion>();
-        Object.values(operational).forEach(item => { if (item.weight_version) versions.set(item.weight_version.id, item.weight_version); });
+        Object.values(operational).forEach(item => item.weight_versions.forEach(version => versions.set(version.id, version)));
         const response: PerformanceResponse = { current, history: Array.from(historyMap.values()).sort((a, b) => a.date.localeCompare(b.date)), averages, operational, detractor_dates: Object.fromEntries(entities.map(entity => [entity, operational[entity].occurrences])), date_from: dateFrom, date_to: dateTo, weight_versions: Array.from(versions.values()) };
         return response;
       } catch (error: unknown) {

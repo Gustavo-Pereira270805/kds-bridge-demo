@@ -378,6 +378,7 @@ export interface PerformanceCriterionSummary {
   rate: number;
   weight: number | null;
   weights?: { weight_version_id: string; weight: number }[];
+  multi_version?: boolean;
   deduction: number;
 }
 
@@ -403,6 +404,7 @@ export interface EntityPerformance {
   total_deduction: number;
   criteria: PerformanceCriterionSummary[];
   occurrences: PerformanceOccurrence[];
+  weight_versions: PerformanceWeightVersion[];
   weight_version?: PerformanceWeightVersion | null;
 }
 

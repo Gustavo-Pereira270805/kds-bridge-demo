@@ -1,5 +1,5 @@
 import { query, pool } from '../db/client';
-import { PerformanceScoreRow, PerformanceDetractor, PerformanceWeights, PerformanceWeightVersion, PerformanceOccurrence, PerformanceCriterionSummary, PerformanceEntity } from '../types';
+import { PerformanceScoreRow, PerformanceDetractor, PerformanceWeights, PerformanceWeightVersion, PerformanceOccurrence, PerformanceCriterionSummary, PerformanceEntity, EntityPerformance, EntityScore } from '../types';
 
 export interface NotaCozinhaGeral {
   operational_score: number;
@@ -95,6 +95,34 @@ export async function getWeightVersions(): Promise<PerformanceWeightVersion[]> {
   return query<PerformanceWeightVersion>(
     `SELECT * FROM performance_weight_versions ORDER BY valid_from DESC`
   );
+}
+
+export type PerformanceWeightCache = Map<string, PerformanceWeightVersion>;
+
+function versionForDate(dateStr: string, versions: PerformanceWeightVersion[]): PerformanceWeightVersion {
+  const date = new Date(`${dateStr}T00:00:00Z`).getTime();
+  const version = versions
+    .filter(candidate => new Date(candidate.valid_from).getTime() <= date + 86400000
+      && (!candidate.valid_to || new Date(candidate.valid_to).getTime() > date))
+    .sort((a, b) => new Date(b.valid_from).getTime() - new Date(a.valid_from).getTime())[0];
+  if (!version) throw new Error('Não foi encontrada uma versão de pesos para a data');
+  return version;
+}
+
+export async function createPerformanceWeightCache(dateFrom: string, dateTo: string): Promise<PerformanceWeightCache> {
+  await ensureWeightVersion();
+  const versions = await getWeightVersions();
+  const cache: PerformanceWeightCache = new Map();
+  for (const date = new Date(`${dateFrom}T00:00:00Z`); date <= new Date(`${dateTo}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + 1)) {
+    const dateStr = date.toISOString().slice(0, 10);
+    cache.set(dateStr, versionForDate(dateStr, versions));
+  }
+  return cache;
+}
+
+function cachedWeightVersion(dateStr: string, cache?: PerformanceWeightCache): Promise<PerformanceWeightVersion> {
+  if (cache?.has(dateStr)) return Promise.resolve(cache.get(dateStr)!);
+  return getWeightVersionForDate(dateStr);
 }
 
 function round1(value: number): number {
@@ -299,12 +327,13 @@ export type DetractorDate = PerformanceOccurrence;
 
 export async function enriquecerOcorrencias(
   entity: PerformanceEntity,
-  ocorrencias: OcorrenciaBruta[]
+  ocorrencias: OcorrenciaBruta[],
+  weightCache?: PerformanceWeightCache
 ): Promise<PerformanceOccurrence[]> {
   const isKitchen = entity !== 'salao';
   return Promise.all(ocorrencias.map(async occurrence => {
     const occurrenceDate = String(occurrence.date).slice(0, 10);
-    const version = await getWeightVersionForDate(occurrenceDate);
+    const version = await cachedWeightVersion(occurrenceDate, weightCache);
     const resultEntity = occurrence.entity || entity;
     const key = occurrence.type === 'Estouro de SLA'
       ? (isKitchen ? 'sla_breach_cozinha' : 'sla_breach_salao')
@@ -323,6 +352,18 @@ export async function enriquecerOcorrencias(
       weight_version_id: version.id,
     };
   }));
+}
+
+export async function ensureValidScoresForDate(dateStr: string, cache: PerformanceWeightCache): Promise<void> {
+  const entities: PerformanceEntity[] = ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'salao'];
+  const rows = await query<{ entity: PerformanceEntity; weight_version_id: string | null }>(
+    `SELECT entity, weight_version_id FROM performance_scores WHERE date = $1 AND entity = ANY($2)`,
+    [dateStr, entities]
+  );
+  const expectedVersion = cache.get(dateStr);
+  const valid = Boolean(expectedVersion) && entities.every(entity => rows.some(row =>
+    row.entity === entity && row.weight_version_id === expectedVersion!.id));
+  if (!valid) await computeDailyScores(dateStr);
 }
 
 export function buildCriterionSummaries(
@@ -400,7 +441,7 @@ export async function getCriterionEligibleBases(entity: string, dateStr: string)
   };
 }
 
-export async function getDetractorDates(entity: string, dateFrom: string, dateTo: string): Promise<PerformanceOccurrence[]> {
+export async function getDetractorDates(entity: string, dateFrom: string, dateTo: string, weightCache?: PerformanceWeightCache): Promise<PerformanceOccurrence[]> {
   const results: OcorrenciaBruta[] = [];
 
   if (entity === 'cozinha_quente_a' || entity === 'cozinha_quente_b' || entity === 'cozinha_fria') {
@@ -515,7 +556,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
     for (const code of stationCodes) {
       const subResults = await getDetractorDates(
         code === 'quente_a' ? 'cozinha_quente_a' : code === 'quente_b' ? 'cozinha_quente_b' : 'cozinha_fria',
-        dateFrom, dateTo
+        dateFrom, dateTo, weightCache
       );
       results.push(...subResults);
     }
@@ -525,7 +566,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
   if (!['salao', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'cozinha_geral'].includes(entity)) {
     throw new Error(`Entidade de desempenho desconhecida: ${entity}`);
   }
-  return enriquecerOcorrencias(entity as PerformanceEntity, results);
+  return enriquecerOcorrencias(entity as PerformanceEntity, results, weightCache);
 }
 
 export interface PerformanceDetails {
@@ -538,8 +579,9 @@ export interface PerformanceDetails {
   total_deduction: number;
 }
 
-export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom: string, dateTo: string): Promise<PerformanceDetails> {
-  const occurrences = await getDetractorDates(entity, dateFrom, dateTo);
+export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom: string, dateTo: string, weightCache?: PerformanceWeightCache): Promise<PerformanceDetails> {
+  const cache = weightCache || await createPerformanceWeightCache(dateFrom, dateTo);
+  const occurrences = await getDetractorDates(entity, dateFrom, dateTo, cache);
   const bases: Record<string, number> = {};
   const versions = new Map<string, PerformanceWeightVersion>();
   const from = new Date(`${dateFrom}T00:00:00Z`);
@@ -548,7 +590,7 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
     const dateStr = date.toISOString().slice(0, 10);
     const dailyBases = await getCriterionEligibleBases(entity, dateStr);
     for (const [criterion, base] of Object.entries(dailyBases)) bases[criterion] = (bases[criterion] || 0) + base;
-    const version = await getWeightVersionForDate(dateStr);
+    const version = cache.get(dateStr)!;
     versions.set(version.id, version);
   }
   const counts = new Map<string, number>();
@@ -569,7 +611,7 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
       criterionWeights.get(criterion)!.set(occurrence.weight_version_id, occurrence.weight);
     }
   }
-  const latest = await getWeightVersionForDate(dateTo);
+  const latest = cache.get(dateTo)!;
   const criteria = buildCriterionSummaries({
     total_demands: bases.total_demands || 0,
     sla_breaches: counts.get(entity === 'salao' ? 'sla_breach_salao' : 'sla_breach_cozinha') || 0,
@@ -614,5 +656,52 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
     total_demands: bases.total_demands || 0,
     open_demands: Number(openRow?.count || 0),
     total_deduction: round1(occurrences.reduce((sum, occurrence) => sum + occurrence.deduction, 0)),
+  };
+}
+
+export function aggregatePerformance(
+  entity: PerformanceEntity,
+  rows: PerformanceScoreRow[],
+  details: PerformanceDetails
+): EntityPerformance {
+  const dailyAverage = rows.length
+    ? round1(rows.reduce((sum, row) => sum + Number(row.final_score), 0) / rows.length)
+    : 5;
+  const criteria = details.criteria.map(criterion => ({
+    ...criterion,
+    multi_version: (criterion.weights?.length || 0) > 1,
+  }));
+  return {
+    entity,
+    operational_score: round1(5 - details.total_deduction),
+    daily_average_score: dailyAverage,
+    total_demands: details.total_demands,
+    open_demands: details.open_demands,
+    total_deduction: details.total_deduction,
+    criteria,
+    occurrences: details.occurrences,
+    weight_versions: details.weight_versions,
+    weight_version: details.weight_versions.length === 1 ? details.weight_versions[0] : null,
+  };
+}
+
+export function aggregateScoreAlias(entity: PerformanceEntity, rows: PerformanceScoreRow[]): EntityScore {
+  const sum = (field: keyof PerformanceScoreRow): number => rows.reduce((total, row) => total + Number(row[field] || 0), 0);
+  const totalDeduction = sum('sla_breach_deduction') + sum('cancellation_deduction') + sum('stockout_deduction') + sum('slow_item_deduction');
+  const latest = rows[rows.length - 1];
+  return {
+    entity,
+    final_score: rows.length ? round1(rows.reduce((total, row) => total + Number(row.final_score), 0) / rows.length) : 5,
+    base_score: latest ? Number(latest.base_score) : 5,
+    total_demands: sum('total_demands'),
+    sla_breaches: sum('sla_breaches'),
+    sla_breach_deduction: sum('sla_breach_deduction'),
+    cancellations: sum('cancellations'),
+    cancellation_deduction: sum('cancellation_deduction'),
+    stockouts: sum('stockouts'),
+    stockout_deduction: sum('stockout_deduction'),
+    slow_items: sum('slow_items'),
+    slow_item_deduction: sum('slow_item_deduction'),
+    detractors: buildDetractors({ ...latest, entity, final_score: rows.length ? round1(5 - totalDeduction) : 5, total_demands: sum('total_demands') } as PerformanceScoreRow),
   };
 }
