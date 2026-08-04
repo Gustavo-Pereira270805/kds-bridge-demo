@@ -310,6 +310,7 @@ export interface PerformanceScoreRow {
   id: string;
   entity: string;
   date: string;
+  weight_version_id?: string | null;
   base_score: number;
   final_score: number;
   total_demands: number;
@@ -345,7 +346,66 @@ export interface EntityScore {
   detractors: PerformanceDetractor[];
 }
 
+export type PerformanceEntity =
+  | 'salao'
+  | 'cozinha_quente_a'
+  | 'cozinha_quente_b'
+  | 'cozinha_fria'
+  | 'cozinha_geral';
+
+export interface PerformanceWeights {
+  sla_breach_cozinha: number;
+  sla_breach_salao: number;
+  cancellation_cozinha: number;
+  cancellation_salao: number;
+  stockout_salao: number;
+  slow_item_cozinha: number;
+  slow_pickup_salao: number;
+}
+
+export interface PerformanceWeightVersion extends PerformanceWeights {
+  id: string;
+  valid_from: string;
+  valid_to: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface PerformanceCriterionSummary {
+  criterion: string;
+  count: number;
+  eligible_base: number;
+  rate: number;
+  weight: number;
+  deduction: number;
+}
+
+export interface PerformanceOccurrence {
+  entity: PerformanceEntity;
+  station: string | null;
+  type: string;
+  date: string;
+  demand_id: string;
+  product_name: string;
+  detail: string;
+  weight: number;
+  deduction: number;
+}
+
+export interface EntityPerformance {
+  entity: PerformanceEntity;
+  operational_score: number;
+  daily_average_score: number;
+  total_demands: number;
+  criteria: PerformanceCriterionSummary[];
+  occurrences: PerformanceOccurrence[];
+  weight_version?: PerformanceWeightVersion | null;
+}
+
 export interface PerformanceResponse {
   current: Record<string, EntityScore>;
   history: { date: string; [entity: string]: number | string }[];
+  averages?: Record<string, number>;
+  operational?: Record<string, EntityPerformance>;
+  validity?: PerformanceWeightVersion[];
 }
