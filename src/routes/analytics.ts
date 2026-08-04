@@ -722,11 +722,11 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           `SELECT * FROM performance_scores WHERE date >= $1 AND date <= $2 AND entity = ANY($3) ORDER BY date, entity`,
           [dateFrom, dateTo, entities]
         );
-         const validGeneralDates = new Set(
-           Array.from(new Set(scoreRows.filter(row => row.entity !== 'cozinha_geral').map(row => String(row.date).slice(0, 10))))
-             .filter(date => {
-               const stationRows = scoreRows.filter(row => row.entity !== 'cozinha_geral' && String(row.date).slice(0, 10) === date);
-               return scoreRows
+          const validGeneralDates = new Set(
+            Array.from(new Set(scoreRows.filter(row => row.entity === 'cozinha_geral').map(row => String(row.date).slice(0, 10))))
+              .filter(date => {
+                const stationRows = scoreRows.filter(row => row.entity !== 'cozinha_geral' && String(row.date).slice(0, 10) === date);
+                return scoreRows
                  .filter(row => row.entity === 'cozinha_geral' && String(row.date).slice(0, 10) === date)
                  .some(generalRow => consolidacaoGeralValida(stationRows, generalRow));
              })
@@ -741,30 +741,27 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
          const averages: Record<string, EntityScore> = {};
          for (const entity of entities) {
            const rows = scoreRowsValidos.filter(row => row.entity === entity);
-           const aliasRows = entity === 'cozinha_geral'
-              ? scoreRowsValidos.filter(row => validGeneralDates.has(String(row.date).slice(0, 10)) && ['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria'].includes(row.entity))
-             : rows;
-           const completeDates = entity === 'cozinha_geral'
-             ? Array.from(new Set(aliasRows.map(row => String(row.date).slice(0, 10))))
-               .filter(date => ['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria'].every(station =>
-                 aliasRows.some(row => String(row.date).slice(0, 10) === date && row.entity === station)))
-             : [];
-           const sortedCompleteDates = completeDates.sort();
-           const latestGeneralDate = sortedCompleteDates[sortedCompleteDates.length - 1];
-           const latest = entity === 'cozinha_geral'
-             ? (latestGeneralDate ? aliasRows.find(row => String(row.date).slice(0, 10) === latestGeneralDate) : undefined)
-             : rows[rows.length - 1];
-           averages[entity] = aggregateScoreAlias(entity as PerformanceEntity, aliasRows);
-           const currentRows = entity === 'cozinha_geral'
-             ? (latest ? aliasRows.filter(row => String(row.date).slice(0, 10) === String(latest.date).slice(0, 10)) : [])
-             : (latest ? [latest] : []);
-           current[entity] = { ...aggregateScoreAlias(entity as PerformanceEntity, currentRows), entity: entity as PerformanceEntity };
-           if (entity === 'cozinha_geral') {
-             const dates = Array.from(new Set(aliasRows.map(row => String(row.date).slice(0, 10))));
-             for (const date of dates) {
-               const dailyAlias = aggregateScoreAlias(entity, aliasRows.filter(row => String(row.date).slice(0, 10) === date));
+            const aliasRows = rows;
+            const completeDates = entity === 'cozinha_geral'
+              ? Array.from(new Set(rows.map(row => String(row.date).slice(0, 10))))
+                .filter(date => validGeneralDates.has(date))
+              : [];
+            const sortedCompleteDates = completeDates.sort();
+            const latestGeneralDate = sortedCompleteDates[sortedCompleteDates.length - 1];
+            const latest = entity === 'cozinha_geral'
+              ? (latestGeneralDate ? rows.find(row => String(row.date).slice(0, 10) === latestGeneralDate) : undefined)
+              : rows[rows.length - 1];
+            averages[entity] = aggregateScoreAlias(entity as PerformanceEntity, aliasRows);
+            const currentRows = entity === 'cozinha_geral'
+              ? (latest ? [latest] : [])
+              : (latest ? [latest] : []);
+            current[entity] = { ...aggregateScoreAlias(entity as PerformanceEntity, currentRows), entity: entity as PerformanceEntity };
+            if (entity === 'cozinha_geral') {
+              const dates = Array.from(new Set(rows.map(row => String(row.date).slice(0, 10))));
+              for (const date of dates) {
+                const dailyAlias = aggregateScoreAlias(entity, rows.filter(row => String(row.date).slice(0, 10) === date));
                 historyMap.get(date)![entity] = dailyAlias.final_score;
-             }
+              }
            } else {
              for (const row of rows) {
                const date = String(row.date).slice(0, 10);
@@ -776,10 +773,10 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         for (const entity of entities) {
           const details = await getPerformanceDetails(entity, dateFrom, dateTo, weightCache, stationCode);
            const rows = scoreRowsValidos.filter(row => row.entity === entity);
-           const dailyAverageRows = entity === 'cozinha_geral'
-             ? scoreRowsValidos.filter(row => ['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria'].includes(row.entity))
-             : rows;
-          operational[entity] = aggregatePerformance(entity as PerformanceEntity, rows, details, dailyAverageRows);
+            const dailyAverageRows = entity === 'cozinha_geral'
+              ? scoreRowsValidos.filter(row => ['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria'].includes(row.entity))
+              : rows;
+           operational[entity] = aggregatePerformance(entity as PerformanceEntity, rows, details, dailyAverageRows);
         }
         const versions = new Map<string, PerformanceWeightVersion>();
         Object.values(operational).forEach(item => item.weight_versions.forEach(version => versions.set(version.id, version)));

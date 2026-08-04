@@ -51,7 +51,7 @@ assert.equal(stockout?.rate, null);
 const partialAlias = aggregateScoreAlias('cozinha_geral', [
   { entity: 'cozinha_geral', final_score: 4, base_score: 5, total_demands: 2,
     sla_breaches: 1, sla_breach_deduction: 1, cancellations: 0, cancellation_deduction: 0,
-    stockouts: 0, stockout_deduction: 0, slow_items: 0, slow_item_deduction: 0 } as PerformanceScoreRow,
+    stockouts: 0, stockout_deduction: 0, slow_items: 0, slow_item_deduction: null } as PerformanceScoreRow,
 ]);
 assert.equal(partialAlias.final_score, null);
 assert.equal(partialAlias.total_demands, null);
@@ -59,6 +59,12 @@ assert.equal(partialAlias.sla_breach_deduction, null);
 assert.equal(partialAlias.cancellation_deduction, null);
 assert.equal(partialAlias.stockout_deduction, null);
 assert.equal(partialAlias.slow_item_deduction, null);
+
+const persistedGeneral = aggregateScoreAlias('cozinha_geral', [
+  scoreRow({ entity: 'cozinha_geral', final_score: 3.7, base_score: 5, total_demands: 6 }),
+]);
+assert.equal(persistedGeneral.final_score, 3.7, 'alias da cozinha geral deve preservar a linha operacional persistida');
+assert.notEqual(persistedGeneral.final_score, (4 + 5 + 5) / 3, 'nota operacional não pode virar média simples das estações');
 
 const legacyStockout = buildCriterionSummaries({
   total_demands: 10,
@@ -225,6 +231,9 @@ assert.ok(!performanceSource.includes('Number(row.final_score)'), 'agregadores n
 assert.ok(!performanceSource.includes('aggregate.operational_score!'), 'cozinha geral não pode persistir score com non-null assertion');
 assert.ok(performanceSource.includes('aggregate.operational_score !== null && aggregate.daily_average_complete'), 'cozinha geral deve persistir apenas consolidação completa');
 assert.ok(dashboardSource.includes('function task6DisplayNumber'), 'dashboard deve usar helper seguro para exibição numérica');
+const loadPerformanceSource = dashboardSource.match(/function loadPerformance\(\)[\s\S]*?\n    \}/)?.[0];
+assert.ok(loadPerformanceSource, 'loadPerformance deve existir');
+assert.ok(loadPerformanceSource.includes("station_id=' + encodeURIComponent(state.stationId)"), 'loadPerformance deve respeitar a estação selecionada');
 assert.ok(dashboardSource.includes('function task6ValidateCriticalArrays'), 'dashboard deve validar arrays críticos');
 assert.ok(dashboardSource.includes("'speed_by_hour'"), 'exportação deve validar velocidade');
 assert.ok(dashboardSource.includes("'week_comparison'"), 'exportação deve validar comparativos');

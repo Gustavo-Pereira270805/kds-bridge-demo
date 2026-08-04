@@ -1336,6 +1336,7 @@ if (document.readyState === 'loading') {
         var perfGrid = document.querySelector('#performance .bento-grid');
         var dates = getPerformanceDates();
         var perfUrl = '/api/v1/analytics/performance?from=' + encodeURIComponent(dates.from) + '&to=' + encodeURIComponent(dates.to);
+        if (state.stationId) perfUrl += '&station_id=' + encodeURIComponent(state.stationId);
         if (perfGrid) perfGrid.innerHTML = '<article class="panel" data-cols="12"><div class="panel-body loading">Carregando notas de performance...</div></article>';
         try {
             api(perfUrl).then(function(perf) {

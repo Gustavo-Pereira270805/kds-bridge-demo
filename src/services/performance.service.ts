@@ -846,6 +846,26 @@ export function aggregateScoreAlias(entity: PerformanceEntity, rows: Performance
   const totalDeduction = hasUnknownDeduction ? null : deductionFields.reduce((total, field) => total + sum(field), 0);
   const latest = rows[rows.length - 1];
   if (entity === 'cozinha_geral') {
+    // A linha geral persistida já contém a nota operacional agregada.
+    if (rows.every(row => row.entity === 'cozinha_geral')) {
+      return {
+        entity,
+        final_score: rows.length && !hasUnknownDeduction && !hasInvalidScore
+          ? round1(rows.reduce((total, row) => total + (scoreValido(row.final_score) as number), 0) / rows.length)
+          : null,
+        base_score: latest ? Number(latest.base_score) : null,
+        total_demands: rows.length ? sum('total_demands') : null,
+        sla_breaches: sum('sla_breaches'),
+        sla_breach_deduction: hasUnknownDeduction ? null : sum('sla_breach_deduction'),
+        cancellations: sum('cancellations'),
+        cancellation_deduction: hasUnknownDeduction ? null : sum('cancellation_deduction'),
+        stockouts: sum('stockouts'),
+        stockout_deduction: hasUnknownDeduction ? null : sum('stockout_deduction'),
+        slow_items: sum('slow_items'),
+        slow_item_deduction: hasUnknownDeduction ? null : sum('slow_item_deduction'),
+        detractors: latest && totalDeduction !== null ? buildDetractors({ ...latest, entity, final_score: latest.final_score, total_demands: sum('total_demands') } as PerformanceScoreRow) : [],
+      };
+    }
     const expected = ['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria'];
     const byDate = new Map<string, PerformanceScoreRow[]>();
     rows.forEach(row => {
