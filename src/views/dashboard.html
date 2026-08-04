@@ -1679,17 +1679,11 @@ if (document.readyState === 'loading') {
                 var scaleFactor = imgW / canvas.width;
                 var imgH = canvas.height * scaleFactor;
                 var pxPerPage = Math.max(1, Math.floor(pageAvailH / scaleFactor));
-                var minSlicePx = 150; // evita página final quase em branco
                 var sourceY = 0;
                 var isFirst = firstPage;
                 while (sourceY < canvas.height) {
                     var remaining = canvas.height - sourceY;
                     var sliceH = Math.min(remaining, pxPerPage);
-                    // Se a fatia final for muito pequena, junte-a à página anterior (não cria página nova)
-                    if (remaining < minSlicePx && !isFirst && sliceH > 0) {
-                        sourceY += sliceH;
-                        break;
-                    }
                     if (sliceH <= 0) break;
                     var sliceCanvas = document.createElement('canvas');
                     sliceCanvas.width = canvas.width;
@@ -1724,7 +1718,7 @@ if (document.readyState === 'loading') {
                     var dayPerformance = await task6FetchPerformance(ds, ds);
                     temp = document.createElement('div');
                     temp.style.cssText = 'position:absolute;left:-9999px;width:900px;background:white;font-family:Inter,sans-serif;padding:20px;';
-                    temp.innerHTML = '<div style="background:#1d3557;color:white;padding:12px 16px;border-radius:12px 12px 0 0;font-size:18px;font-weight:800;margin-bottom:12px;">' + dayLabel + '</div>' + buildContent(dayData) + task6ReportHtml(dayData, dayPerformance, dayLabel);
+                    temp.innerHTML = task6ReportHtml(dayData, dayPerformance, dayLabel);
                     document.body.appendChild(temp);
                     var canvas = await html2canvas(temp, { scale: 1.5, useCORS: true, backgroundColor: '#f4f4f5' });
                     document.body.removeChild(temp); temp = null;
@@ -1733,12 +1727,16 @@ if (document.readyState === 'loading') {
             } else {
                 if (exportProgress) exportProgress.textContent = 'Capturando dashboard...';
                 var contentEl = document.getElementById('content');
+                if (!state.lastData) throw new Error('Payload inválido: dados consolidados ausentes.');
+                task6AssertFinite(state.lastData, 'dashboard consolidado');
+                task6ValidateDashboardNumbers(state.lastData);
                 var performance = await task6FetchPerformance(from, to);
                 temp = document.createElement('div');
-                temp.innerHTML = task6ReportHtml(state.lastData, performance, task6DateLabel(from) + ' a ' + task6DateLabel(to));
-                contentEl.appendChild(temp);
-                var canvas = await html2canvas(contentEl, { scale: 1.5, useCORS: true, backgroundColor: '#f4f4f5' });
-                contentEl.removeChild(temp); temp = null;
+                temp.style.cssText = 'position:absolute;left:-9999px;width:900px;background:white;font-family:Inter,sans-serif;padding:20px;';
+                temp.innerHTML = contentEl.innerHTML + task6ReportHtml(state.lastData, performance, task6DateLabel(from) + ' a ' + task6DateLabel(to));
+                document.body.appendChild(temp);
+                var canvas = await html2canvas(temp, { scale: 1.5, useCORS: true, backgroundColor: '#f4f4f5' });
+                document.body.removeChild(temp); temp = null;
                 addCanvasToPdf(canvas, true);
             }
             pdf.save('dashboard_' + from + '_' + to + '.pdf');
@@ -1871,7 +1869,7 @@ if (document.readyState === 'loading') {
         html += '<h2 style="font-size:16px;border-bottom:2px solid #1d3557;padding-bottom:5px;">Resumo</h2><table style="width:100%;border-collapse:collapse;font-size:12px;"><tbody>';
         [['Pedidos', k.total_pedidos], ['Entregues (%)', k.pct_entregues], ['Cancelados', k.total_cancelados], ['Zerados', k.total_roturas], ['SLA (%)', k.pct_dentro_sla], ['Atrasos cozinha', k.atrasos_cozinha], ['Atrasos salão', k.atrasos_salao], ['Urgentes', k.urgentes_puros]].forEach(function(row) { html += '<tr><td style="padding:4px;border-bottom:1px solid #e4e4e7;">' + escapePerfHtml(row[0]) + '</td><td style="padding:4px;border-bottom:1px solid #e4e4e7;font-weight:bold;">' + escapePerfHtml(row[1]) + '</td></tr>'; });
         html += '</tbody></table><h2 style="font-size:16px;border-bottom:2px solid #1d3557;padding-bottom:5px;margin-top:18px;">Notas operacionais</h2>';
-        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; html += '<h3 style="font-size:14px;margin:12px 0 4px;">' + escapePerfHtml(labels[entity] || entity) + ' | Nota: ' + Number(item.operational_score || 0).toFixed(1) + ' | Média diária: ' + Number(item.daily_average_score || 0).toFixed(1) + ' | Demandas: ' + Number(item.total_demands || 0) + '</h3><table style="width:100%;border-collapse:collapse;font-size:10px;"><thead><tr style="background:#e5e7eb;"><th>Critério</th><th>Contagem</th><th>Base</th><th>Taxa</th><th>Peso / desconto</th></tr></thead><tbody>'; (item.criteria || []).forEach(function(c) { var weights = (c.weights || []).map(function(w) { return escapePerfHtml(w.weight_version_id) + ': ' + Number(w.weight).toFixed(2) + ' / -' + Number(w.deduction).toFixed(2); }).join('; '); html += '<tr><td>' + escapePerfHtml(c.criterion) + '</td><td>' + Number(c.count || 0) + '</td><td>' + Number(c.eligible_base || 0) + '</td><td>' + (Number(c.rate || 0) * 100).toFixed(1) + '%</td><td>' + (weights || Number(c.weight || 0).toFixed(2)) + ' / -' + Number(c.deduction || 0).toFixed(2) + '</td></tr>'; }); html += '</tbody></table>'; });
+        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; html += '<h3 style="font-size:14px;margin:12px 0 4px;">' + escapePerfHtml(labels[entity] || entity) + ' | Nota: ' + Number(item.operational_score || 0).toFixed(1) + ' | Média diária: ' + Number(item.daily_average_score || 0).toFixed(1) + ' | Demandas: ' + Number(item.total_demands || 0) + '</h3><table style="width:100%;border-collapse:collapse;font-size:10px;"><thead><tr style="background:#e5e7eb;"><th>Critério</th><th>Contagem</th><th>Base</th><th>Taxa</th><th>Peso / desconto</th></tr></thead><tbody>'; (item.criteria || []).forEach(function(c) { var weights = (c.weights || []).map(function(w) { return escapePerfHtml(w.weight_version_id) + ': peso ' + Number(w.weight).toFixed(2) + ', contagem ' + Number(w.count) + ', desconto -' + Number(w.deduction).toFixed(2); }).join('; '); html += '<tr><td>' + escapePerfHtml(c.criterion) + '</td><td>' + Number(c.count || 0) + '</td><td>' + Number(c.eligible_base || 0) + '</td><td>' + (Number(c.rate || 0) * 100).toFixed(1) + '%</td><td>' + (weights || 'peso ' + Number(c.weight || 0).toFixed(2)) + ', desconto -' + Number(c.deduction || 0).toFixed(2) + '</td></tr>'; }); html += '</tbody></table>'; });
         html += '<h2 style="font-size:16px;border-bottom:2px solid #1d3557;padding-bottom:5px;margin-top:18px;">Vigências dos pesos</h2><table style="width:100%;border-collapse:collapse;font-size:10px;"><thead><tr style="background:#e5e7eb;"><th>Versão</th><th>Vigência inicial</th><th>Vigência final</th></tr></thead><tbody>';
         (performance.weight_versions || []).forEach(function(v) { html += '<tr><td>' + escapePerfHtml(v.id) + '</td><td>' + escapePerfHtml(v.valid_from) + '</td><td>' + escapePerfHtml(v.valid_to || 'Em vigor') + '</td></tr>'; });
         html += '</tbody></table><h2 style="font-size:16px;border-bottom:2px solid #1d3557;padding-bottom:5px;margin-top:18px;">Ocorrências reais</h2><table style="width:100%;border-collapse:collapse;font-size:9px;"><thead><tr style="background:#e5e7eb;"><th>Entidade</th><th>Estação de origem</th><th>Tipo</th><th>Data/hora</th><th>Demand ID</th><th>Produto</th><th>Detalhe</th><th>Peso</th><th>Desconto</th><th>Versão do peso</th></tr></thead><tbody>';
