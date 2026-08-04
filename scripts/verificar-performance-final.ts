@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { buildCriterionSummaries, calcularNotasCozinhaGeral, aggregateScoreAlias } from '../src/services/performance.service';
 import { PerformanceScoreRow } from '../src/types';
+import { readFileSync } from 'node:fs';
 
 const incomplete = calcularNotasCozinhaGeral([
   { entity: 'cozinha_quente_a', total: 2, deduction: 1 },
@@ -33,7 +34,23 @@ const partialAlias = aggregateScoreAlias('cozinha_geral', [
     sla_breaches: 1, sla_breach_deduction: 1, cancellations: 0, cancellation_deduction: 0,
     stockouts: 0, stockout_deduction: 0, slow_items: 0, slow_item_deduction: 0 } as PerformanceScoreRow,
 ]);
-assert.equal(partialAlias.final_score, 5);
-assert.equal(partialAlias.total_demands, 0);
+assert.equal(partialAlias.final_score, null);
+assert.equal(partialAlias.total_demands, null);
+
+const authSource = readFileSync(new URL('../src/middleware/auth.ts', import.meta.url), 'utf8');
+assert.ok(!authSource.includes('user_metadata?.role'), 'user_metadata não pode conceder papel');
+assert.ok(authSource.includes('app_metadata?.role'), 'app_metadata deve ser a fonte do papel');
+
+const dashboardSource = readFileSync(new URL('../src/views/dashboard.html', import.meta.url), 'utf8');
+assert.ok(dashboardSource.includes("item.operational_score === null ? 'Indisponível'"));
+assert.ok(dashboardSource.includes("item.total_demands === null ? 'Indisponível'"));
+assert.ok(dashboardSource.includes("c.eligible_base === null ? 'Indisponível'"));
+assert.ok(dashboardSource.includes("c.rate === null ? 'Indisponível'"));
+assert.ok(!dashboardSource.includes('Number(item.operational_score || 0)'));
+assert.ok(!dashboardSource.includes('Number(item.total_demands || 0)'));
+
+const performanceSource = readFileSync(new URL('../src/services/performance.service.ts', import.meta.url), 'utf8');
+assert.ok(performanceSource.includes("weights_status = hasLegacySnapshot"));
+assert.ok(performanceSource.includes("'indisponivel_snapshot_legado'"));
 
 console.log('Verificações isoladas de performance: OK');

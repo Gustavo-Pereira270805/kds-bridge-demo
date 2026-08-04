@@ -332,9 +332,9 @@ export interface PerformanceDetractor {
 
 export interface EntityScore {
   entity: PerformanceEntity;
-  final_score: number;
-  base_score: number;
-  total_demands: number;
+  final_score: number | null;
+  base_score: number | null;
+  total_demands: number | null;
   sla_breaches: number;
   sla_breach_deduction: number;
   cancellations: number;

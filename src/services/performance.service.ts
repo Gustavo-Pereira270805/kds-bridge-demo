@@ -413,7 +413,7 @@ export function buildCriterionSummaries(
       : getCriterionWeight(criterion, weights);
     return {
       criterion, count, eligible_base: total, eligible_base_status: baseStatus,
-      rate: total ? count / total : null,
+      rate: total === null || total === 0 ? (total === 0 ? 0 : null) : count / total,
       weight, weights_status: 'aplicado', deduction: criterion === 'stockout_cozinha' ? 0 : deduction,
     };
   });
@@ -598,7 +598,7 @@ export interface PerformanceDetails {
   criteria: PerformanceCriterionSummary[];
   occurrences: PerformanceOccurrence[];
   weight_versions: PerformanceWeightVersion[];
-  total_demands: number;
+  total_demands: number | null;
   open_demands: number;
   total_deduction: number;
   legacy_unversioned: boolean;
@@ -672,7 +672,7 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
   }
   const latest = cache.get(dateTo)!;
   const criteria = buildCriterionSummaries({
-    total_demands: bases.total_demands || 0,
+    total_demands: bases.total_demands,
     sla_breaches: counts.get(entity === 'salao' ? 'sla_breach_salao' : 'sla_breach_cozinha') || 0,
     sla_breach_deduction: deductions.get(entity === 'salao' ? 'sla_breach_salao' : 'sla_breach_cozinha') || 0,
     cancellations: counts.get(entity === 'salao' ? 'cancellation_salao' : 'cancellation_cozinha') || 0,
@@ -684,9 +684,23 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
   } as PerformanceScoreRow, latest, entity !== 'salao', bases, baseStatuses);
   for (const criterion of criteria) {
     const observedWeights = criterionWeights.get(criterion.criterion) || new Map();
-    criterion.weights_status = scoreRows.some(row => row.weight_version_id === null)
+    const criterionOccurrenceKeys = new Set(occurrences
+      .filter(occurrence => {
+        const occurrenceCriterion = occurrence.type === 'Estouro de SLA'
+          ? (entity === 'salao' ? 'sla_breach_salao' : 'sla_breach_cozinha')
+          : occurrence.type === 'Cancelamento'
+            ? (entity === 'salao' ? 'cancellation_salao' : 'cancellation_cozinha')
+            : occurrence.type === 'Zerado'
+              ? (entity === 'salao' ? 'stockout_salao' : 'stockout_cozinha')
+              : (entity === 'salao' ? 'slow_pickup_salao' : 'slow_item_cozinha');
+        return occurrenceCriterion === criterion.criterion;
+      })
+      .map(occurrence => `${dataOperacional(occurrence.date)}:${occurrence.entity}:${occurrence.station || ''}:${criterion.criterion}`));
+    const hasLegacySnapshot = scoreRows.some(row => row.weight_version_id === null
+      && criterionOccurrenceKeys.has(`${dataOperacional(row.date)}:${row.entity}:${row.entity === 'salao' ? '' : row.entity.replace('cozinha_', '')}:${criterion.criterion}`));
+    criterion.weights_status = hasLegacySnapshot
       ? 'indisponivel_snapshot_legado'
-      : 'vigente_intervalo';
+      : (observedWeights.size > 0 ? 'aplicado' : 'vigente_intervalo');
     if (criterion.weights_status === 'indisponivel_snapshot_legado') {
       criterion.weights = [];
       criterion.weight = null;
@@ -720,7 +734,7 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
     criteria,
     occurrences,
     weight_versions: Array.from(versions.values()),
-    total_demands: bases.total_demands || 0,
+    total_demands: bases.total_demands,
     open_demands: Number(openRow?.count || 0),
     total_deduction: round1(occurrences.reduce((sum, occurrence) => sum + (occurrence.deduction || 0), 0)),
     legacy_unversioned: scoreRows.some(row => row.weight_version_id === null),
@@ -777,21 +791,28 @@ export function aggregateScoreAlias(entity: PerformanceEntity, rows: Performance
   const sum = (field: keyof PerformanceScoreRow): number => rows.reduce((total, row) => total + Number(row[field] || 0), 0);
   const totalDeduction = sum('sla_breach_deduction') + sum('cancellation_deduction') + sum('stockout_deduction') + sum('slow_item_deduction');
   const latest = rows[rows.length - 1];
-  if (entity === 'cozinha_geral' && rows.length > 0) {
-    const entities = new Set(rows.map(row => row.entity));
-    if (entities.size < 3 || !['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria'].every(item => entities.has(item))) {
+  if (entity === 'cozinha_geral') {
+    const expected = ['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria'];
+    const byDate = new Map<string, PerformanceScoreRow[]>();
+    rows.forEach(row => {
+      const date = String(row.date).slice(0, 10);
+      byDate.set(date, [...(byDate.get(date) || []), row]);
+    });
+    const completeRows = Array.from(byDate.values()).filter(group => expected.every(item => group.some(row => row.entity === item)));
+    if (!rows.length || completeRows.length !== byDate.size) {
       return {
-        entity, final_score: 5, base_score: 5, total_demands: 0,
+        entity, final_score: null, base_score: null, total_demands: null,
         sla_breaches: 0, sla_breach_deduction: 0, cancellations: 0,
         cancellation_deduction: 0, stockouts: 0, stockout_deduction: 0,
         slow_items: 0, slow_item_deduction: 0, detractors: [],
       };
     }
+    rows = completeRows.flat();
   }
   return {
     entity,
-    final_score: rows.length ? round1(rows.reduce((total, row) => total + Number(row.final_score), 0) / rows.length) : 5,
-    base_score: latest ? Number(latest.base_score) : 5,
+    final_score: rows.length ? round1(rows.reduce((total, row) => total + Number(row.final_score), 0) / rows.length) : null,
+    base_score: latest ? Number(latest.base_score) : null,
     total_demands: sum('total_demands'),
     sla_breaches: sum('sla_breaches'),
     sla_breach_deduction: sum('sla_breach_deduction'),
@@ -801,6 +822,6 @@ export function aggregateScoreAlias(entity: PerformanceEntity, rows: Performance
     stockout_deduction: sum('stockout_deduction'),
     slow_items: sum('slow_items'),
     slow_item_deduction: sum('slow_item_deduction'),
-    detractors: buildDetractors({ ...latest, entity, final_score: rows.length ? round1(5 - totalDeduction) : 5, total_demands: sum('total_demands') } as PerformanceScoreRow),
+    detractors: latest ? buildDetractors({ ...latest, entity, final_score: round1(5 - totalDeduction), total_demands: sum('total_demands') } as PerformanceScoreRow) : [],
   };
 }

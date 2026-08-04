@@ -6,7 +6,6 @@ declare module 'fastify' {
     user?: {
       id: string;
       email?: string;
-      role?: string;
       app_metadata: Record<string, unknown>;
       user_metadata: Record<string, unknown>;
     };
@@ -46,12 +45,10 @@ export async function requireAdminOrManager(
   await requireAuth(request, reply);
   if (reply.sent) return;
 
-  const roles = [
-    request.user?.app_metadata?.role,
-    request.user?.user_metadata?.role,
-    request.user?.role,
-  ];
-  const allowed = roles.some(role => role === 'admin' || role === 'gerente');
+  // O papel administrativo precisa vir do app_metadata confirmado pelo getUser.
+  // user_metadata é editável pelo usuário e nunca pode conceder privilégio.
+  const role = request.user?.app_metadata?.role;
+  const allowed = role === 'admin' || role === 'gerente';
   if (!allowed) {
     reply.code(403).send({ error: 'Usuário autenticado sem permissão administrativa' });
   }

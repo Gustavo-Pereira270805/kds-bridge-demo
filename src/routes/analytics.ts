@@ -27,6 +27,7 @@ import {
   PerformanceWeightVersion,
 } from '../types';
 import { createPerformanceWeightCache, ensureValidScoresForDate, aggregatePerformance, aggregateScoreAlias, getPerformanceDetails } from '../services/performance.service';
+import { DATA_OPERACIONAL_SQL } from '../services/operational-date.service';
 
 // v2.5 (§5.6) — indicadores diários embutidos em cada dia do week_comparison;
 // a data fica no objeto externo, então `day` é omitida do sub-objeto
@@ -261,7 +262,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
 
         let dateFrom: string;
         let dateTo: string;
-        const now = new Date();
+          const now = new Date();
 
         if (from || to) {
           // §5.1 — período customizado; se só `from` presente, assume dia único (to = from)
@@ -289,13 +290,13 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           dateTo = dateFrom;
         }
 
-        const params: unknown[] = [dateFrom];
-        let dateFilter = 'created_at::date >= $1';
-        if (dateFrom === dateTo) {
-          dateFilter = 'created_at::date = $1';
-        } else {
-          params.push(dateTo);
-          dateFilter = 'created_at::date >= $1 AND created_at::date <= $2';
+          const params: unknown[] = [dateFrom];
+          let dateFilter = `${DATA_OPERACIONAL_SQL} >= $1`;
+          if (dateFrom === dateTo) {
+            dateFilter = `${DATA_OPERACIONAL_SQL} = $1`;
+          } else {
+            params.push(dateTo);
+            dateFilter = `${DATA_OPERACIONAL_SQL} >= $1 AND ${DATA_OPERACIONAL_SQL} <= $2`;
         }
         const dateFilterD = dateFilter.replace(/\bcreated_at\b/g, 'd.created_at');
 
@@ -398,13 +399,13 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         const trend = dateFrom !== dateTo ? await safeQuery<{
           day: string; total: string; entregues: string; cancelados: string; roturas: string; atrasos_cozinha: string; atrasos_salao: string;
         }>('3.Trend',
-          `SELECT created_at::date AS day, COUNT(*)::int AS total,
+           `SELECT ${DATA_OPERACIONAL_SQL} AS day, COUNT(*)::int AS total,
             COUNT(*) FILTER (WHERE status = 'retrieved')::int AS entregues,
             COUNT(*) FILTER (WHERE status IN ('cancelled_salao','cancelled_cozinha'))::int AS cancelados,
             COUNT(*) FILTER (WHERE stockout_reported = true)::int AS roturas,
             COUNT(*) FILTER (WHERE sla_breached_cozinha = true)::int AS atrasos_cozinha,
             COUNT(*) FILTER (WHERE sla_breached_salao = true)::int AS atrasos_salao
-           FROM demands WHERE ${dateFilter} AND status != 'annulled' ${stationFilter} GROUP BY created_at::date ORDER BY day`,
+            FROM demands WHERE ${dateFilter} AND status != 'annulled' ${stationFilter} GROUP BY ${DATA_OPERACIONAL_SQL} ORDER BY day`,
           baseParams
         ) : [];
 
@@ -477,8 +478,8 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
 
         // ── 10. Média móvel 7 dias ──
         const rawVolume = dateFrom !== dateTo ? await safeQuery<{ day: string; total: string }>('10.RawVolume',
-          `SELECT created_at::date AS day, COUNT(*)::int AS total
-           FROM demands WHERE ${dateFilter} AND status != 'annulled' ${stationFilter} GROUP BY created_at::date ORDER BY day`, baseParams
+           `SELECT ${DATA_OPERACIONAL_SQL} AS day, COUNT(*)::int AS total
+            FROM demands WHERE ${dateFilter} AND status != 'annulled' ${stationFilter} GROUP BY ${DATA_OPERACIONAL_SQL} ORDER BY day`, baseParams
         ) : [];
         const volumeMA: VolumeMARow[] = [];
         for (let i = 0; i < rawVolume.length; i++) {
@@ -543,14 +544,14 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           if (station_id) compParams.push(station_id);
 
           const compData = await safeQuery<{ day: string; total: string; period: string }>('15.WeekComparison',
-            `SELECT created_at::date AS day, COUNT(*)::int AS total, 'current' AS period
+             `SELECT ${DATA_OPERACIONAL_SQL} AS day, COUNT(*)::int AS total, 'current' AS period
              FROM demands
-             WHERE created_at::date >= $1 AND created_at::date <= $2 AND status != 'annulled' ${stationFilter15}
+              WHERE ${DATA_OPERACIONAL_SQL} >= $1 AND ${DATA_OPERACIONAL_SQL} <= $2 AND status != 'annulled' ${stationFilter15}
              GROUP BY 1
              UNION ALL
-             SELECT (created_at::date + $5::integer)::date AS day, COUNT(*)::int AS total, 'previous' AS period
+             SELECT (${DATA_OPERACIONAL_SQL} + $5::integer)::date AS day, COUNT(*)::int AS total, 'previous' AS period
              FROM demands
-             WHERE created_at::date >= $3 AND created_at::date < $4 AND status != 'annulled' ${stationFilter15}
+              WHERE ${DATA_OPERACIONAL_SQL} >= $3 AND ${DATA_OPERACIONAL_SQL} < $4 AND status != 'annulled' ${stationFilter15}
              GROUP BY 1`,
             compParams
           );
@@ -565,7 +566,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
             stockouts: number;
             urgent_pct: string | null;
           }>('15b.DayIndicators',
-            `SELECT created_at::date AS day,
+             `SELECT ${DATA_OPERACIONAL_SQL} AS day,
               ROUND(AVG(EXTRACT(EPOCH FROM (ready_at - created_at)) / 60)::numeric, 1) AS avg_time_min,
               ROUND(100.0 * COUNT(*) FILTER (WHERE sla_breached_cozinha = true)
                 / NULLIF(COUNT(*) FILTER (WHERE status IN ('ready','retrieved')), 0), 1) AS sla_pct,
@@ -635,7 +636,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
 
         // ── 18. Análise de trocas por dia (§2.5 fase 2) ──
         const replacementsRaw = await safeQuery<ReplacementRow>('18.Replacements',
-          `SELECT created_at::date AS day,
+             `SELECT ${DATA_OPERACIONAL_SQL} AS day,
             COUNT(*)::int AS total,
             COUNT(*) FILTER (WHERE is_replacement = true)::int AS replacements,
             ROUND(100.0 * COUNT(*) FILTER (WHERE is_replacement = true) / NULLIF(COUNT(*), 0), 1) AS replacement_pct
@@ -736,18 +737,33 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         );
         const current: Record<string, EntityScore> = {};
         const historyMap = new Map<string, { date: string; [entity: string]: number | string }>();
-        const averages: Record<string, EntityScore> = {};
-        for (const entity of entities) {
-          const rows = scoreRows.filter(row => row.entity === entity);
-          if (!rows.length) continue;
-          const latest = rows[rows.length - 1];
-          averages[entity] = aggregateScoreAlias(entity as PerformanceEntity, rows);
-          current[entity] = { ...aggregateScoreAlias(entity as PerformanceEntity, [latest]), entity: entity as PerformanceEntity };
-          for (const row of rows) {
-            const date = String(row.date).slice(0, 10);
-            if (!historyMap.has(date)) historyMap.set(date, { date });
-            historyMap.get(date)![entity] = Number(row.final_score);
-          }
+         const averages: Record<string, EntityScore> = {};
+         for (const entity of entities) {
+           const rows = scoreRows.filter(row => row.entity === entity);
+           const aliasRows = entity === 'cozinha_geral'
+             ? scoreRows.filter(row => ['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria'].includes(row.entity))
+             : rows;
+           const latest = rows[rows.length - 1] || aliasRows[aliasRows.length - 1];
+           averages[entity] = aggregateScoreAlias(entity as PerformanceEntity, aliasRows);
+           const currentRows = entity === 'cozinha_geral'
+             ? (latest ? aliasRows.filter(row => String(row.date).slice(0, 10) === String(latest.date).slice(0, 10)) : [])
+             : (latest ? [latest] : []);
+           current[entity] = { ...aggregateScoreAlias(entity as PerformanceEntity, currentRows), entity: entity as PerformanceEntity };
+           if (entity === 'cozinha_geral') {
+             const dates = Array.from(new Set(aliasRows.map(row => String(row.date).slice(0, 10))));
+             for (const date of dates) {
+               const dailyAlias = aggregateScoreAlias(entity, aliasRows.filter(row => String(row.date).slice(0, 10) === date));
+               if (dailyAlias.final_score === null) continue;
+               if (!historyMap.has(date)) historyMap.set(date, { date });
+               historyMap.get(date)![entity] = dailyAlias.final_score;
+             }
+           } else {
+             for (const row of rows) {
+               const date = String(row.date).slice(0, 10);
+               if (!historyMap.has(date)) historyMap.set(date, { date });
+               historyMap.get(date)![entity] = Number(row.final_score);
+             }
+           }
         }
         const operational: Record<string, EntityPerformance> = {};
         for (const entity of entities) {
