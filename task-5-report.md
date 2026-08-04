@@ -63,3 +63,4 @@ Implementação concluída em `src/views/dashboard.html`.
 - O identificador `weight_version_id` é escapado antes da renderização HTML do detalhamento.
 - Critérios de scores legados retornam `weights_status: indisponivel_snapshot_legado` e `weights: []`; as versões vigentes do intervalo permanecem somente em `weight_versions` como contexto, sem serem apresentadas como pesos aplicados.
 - PDF e Excel exibem `Snapshot indisponível` para qualquer ocorrência sem peso, desconto ou versão; a média da Cozinha Geral valida as três entidades distintas, não apenas a quantidade de linhas.
+- O Excel preserva todas as versões de `weights` quando o status é `vigente_intervalo`; `Snapshot indisponível` fica reservado ao status legado. A validação de exportação rejeita nulos, vazios e `undefined` em campos obrigatórios, permitindo `null` somente na média diária e nos campos opcionais de snapshot.

@@ -711,19 +711,22 @@ export function aggregatePerformance(
   details: PerformanceDetails,
   dailyAverageRows: PerformanceScoreRow[] = rows
 ): EntityPerformance {
-  const dailyAverages = new Map<string, number[]>();
+  const dailyAverages = new Map<string, Map<string, number>>();
   for (const row of dailyAverageRows) {
-    if (!dailyAverages.has(row.date)) dailyAverages.set(row.date, []);
-    dailyAverages.get(row.date)!.push(Number(row.final_score));
+    if (!dailyAverages.has(row.date)) dailyAverages.set(row.date, new Map<string, number>());
+    dailyAverages.get(row.date)!.set(row.entity, Number(row.final_score));
   }
+  const expectedKitchenEntities = new Set<PerformanceEntity>(['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria']);
   const completeDailyAverages = entity === 'cozinha_geral'
-    ? Array.from(dailyAverages.values()).filter(scores => scores.length === 3)
+    ? Array.from(dailyAverages.values()).filter(scores =>
+      scores.size === expectedKitchenEntities.size
+      && Array.from(expectedKitchenEntities).every(expected => scores.has(expected)))
     : Array.from(dailyAverages.values());
   const dailyAverageComplete = entity !== 'cozinha_geral'
     || (dailyAverages.size > 0 && completeDailyAverages.length === dailyAverages.size);
   const dailyAverage = dailyAverageComplete && completeDailyAverages.length
     ? round1(completeDailyAverages.reduce((sum, scores) =>
-      sum + scores.reduce((dailySum, score) => dailySum + score, 0) / scores.length, 0) / completeDailyAverages.length)
+      sum + Array.from(scores.values()).reduce((dailySum, score) => dailySum + score, 0) / scores.size, 0) / completeDailyAverages.length)
     : null;
   const criteria = details.criteria.map(criterion => ({
     ...criterion,
