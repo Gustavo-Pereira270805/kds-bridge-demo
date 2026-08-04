@@ -76,8 +76,8 @@ for (let index = 0; index < relativeEndpoints.length; index += 1) {
 }
 assert.ok((analyticsSource.match(/AT TIME ZONE 'UTC'/g) || []).length >= 8, 'analytics deve agrupar horários explicitamente em UTC');
 assert.ok(!analyticsSource.includes("AT TIME ZONE 'America/Sao_Paulo'"), 'analytics não pode usar fuso legado');
-assert.ok(analyticsSource.includes('setUTCDate(d.getUTCDate() - 7)'), 'semana deve usar aritmética UTC');
-assert.ok(analyticsSource.includes('setUTCDate(d.getUTCDate() - 30)'), 'mês deve usar aritmética UTC');
+assert.ok(analyticsSource.includes("dateFrom = deslocarDataUtc(dateTo, -6)"), 'semana deve ter 7 dias inclusivos');
+assert.ok(analyticsSource.includes("dateFrom = deslocarDataUtc(dateTo, -29)"), 'mês deve ter 30 dias inclusivos');
 assert.ok(analyticsSource.includes('setUTCDate(prevStart.getUTCDate() - rangeNum)'), 'comparativo deve usar aritmética UTC');
 
 assert.ok(performanceSource.includes('DATA_OPERACIONAL_SQL'), 'performance deve usar a data operacional comum');
@@ -99,5 +99,12 @@ assert.ok(dashboardSource.includes('cursor.setUTCDate(cursor.getUTCDate() + 1)')
 assert.ok(dashboardSource.includes('function addUtcDays(date, days)'), 'dashboard deve centralizar deslocamentos relativos em UTC');
 assert.ok(!dashboardSource.includes('.setDate('), 'dashboard não pode usar aritmética de data local');
 assert.ok(!/T00:00:00['"]/.test(dashboardSource), 'datas de calendário do dashboard devem ser interpretadas explicitamente em UTC');
+assert.ok(analyticsSource.includes("reply.code(500).send({ error: 'Erro ao buscar dados do dashboard' })"), 'dashboard não deve expor detalhe do erro');
+assert.ok(!analyticsSource.includes("'Erro ao buscar dados do dashboard: ' + msg"), 'dashboard não deve concatenar mensagem crua');
+assert.ok(!readFileSync(new URL('../src/routes/admin.ts', import.meta.url), 'utf8').includes('sla_breach: version.sla_breach_cozinha'), 'contrato novo não deve expor alias ambíguo');
+assert.ok(readFileSync(new URL('../src/views/admin.html', import.meta.url), 'utf8').includes("input.max = '5'"), 'frontend deve limitar pesos a 5');
+assert.ok(readFileSync(new URL('../src/services/performance.service.ts', import.meta.url), 'utf8').includes('total_deduction: number | null'), 'desconto agregado deve aceitar indisponibilidade');
+assert.equal(janela.inicio.toISOString(), '2026-08-03T00:00:00.000Z');
+assert.equal(new Date('2026-08-04T00:00:00.000Z').getTime() - new Date('2026-08-03T00:00:00.000Z').getTime(), 86400000);
 
 console.log('Verificações isoladas de performance: OK');

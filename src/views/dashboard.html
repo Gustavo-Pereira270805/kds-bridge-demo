@@ -1297,7 +1297,7 @@ if (document.readyState === 'loading') {
                 });
                 bars += '</tbody></table></div></div>';
             }
-             h += '<div class="panel score-detail-panel" data-entity="'+order[i]+'" style="display:none;"><div class="section-title">Detalhamento - '+labels[order[i]]+' <span style="font-size:12px;font-weight:400;color:#9ca3af;">(Operacional: '+(sc === null ? 'Indisponível' : sc.toFixed(1))+' · Média diária: '+(daily === null ? 'Indisponível' : daily.toFixed(1))+(s.legacy_unversioned ? ' · histórico legado sem snapshot de pesos' : '')+' · Abertas: '+Number(s.open_demands)+' · Desconto: '+Number(s.total_deduction).toFixed(2)+')</span></div><div style="max-height:420px;overflow-y:auto;">'+bars+'</div></div>';
+             h += '<div class="panel score-detail-panel" data-entity="'+order[i]+'" style="display:none;"><div class="section-title">Detalhamento - '+labels[order[i]]+' <span style="font-size:12px;font-weight:400;color:#9ca3af;">(Operacional: '+(sc === null ? 'Indisponível' : sc.toFixed(1))+' · Média diária: '+(daily === null ? 'Indisponível' : daily.toFixed(1))+(s.legacy_unversioned ? ' · histórico legado sem snapshot de pesos' : '')+' · Abertas: '+Number(s.open_demands)+' · Desconto: '+(s.total_deduction === null ? 'Indisponível' : Number(s.total_deduction).toFixed(2))+')</span></div><div style="max-height:420px;overflow-y:auto;">'+bars+'</div></div>';
         }
         return h + '</div>';
     }
@@ -1315,7 +1315,7 @@ if (document.readyState === 'loading') {
         if (f.range === 'yesterday') cursor = addUtcDays(cursor, -1);
         to = cursor.toISOString().split('T')[0];
         if (f.range === 'week') cursor = addUtcDays(cursor, -6);
-        else if (f.range === 'month') cursor = addUtcDays(cursor, -30);
+        else if (f.range === 'month') cursor = addUtcDays(cursor, -29);
         from = cursor.toISOString().split('T')[0];
         return { from: from, to: to };
     }
@@ -1858,7 +1858,7 @@ if (document.readyState === 'loading') {
         var performance = await response.json();
         if (!performance.operational || !Object.keys(performance.operational).length) throw new Error('A performance oficial não foi retornada. O relatório não foi gerado.');
         task6AssertFinite(performance, 'performance');
-        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; ['operational_score', 'total_demands'].forEach(function(key) { task6RequireNumber(item[key], 'performance.operational.' + entity + '.' + key, true); }); ['open_demands', 'total_deduction'].forEach(function(key) { task6RequireNumber(item[key], 'performance.operational.' + entity + '.' + key); }); task6RequireNumber(item.daily_average_score, 'performance.operational.' + entity + '.daily_average_score', true); (item.criteria || []).forEach(function(c, index) { task6RequireNumber(c.count, 'performance.operational.' + entity + '.criteria[' + index + '].count'); task6RequireNumber(c.eligible_base, 'performance.operational.' + entity + '.criteria[' + index + '].eligible_base', true); task6RequireNumber(c.rate, 'performance.operational.' + entity + '.criteria[' + index + '].rate', true); task6RequireNumber(c.deduction, 'performance.operational.' + entity + '.criteria[' + index + '].deduction'); (c.weights || []).forEach(function(w, weightIndex) { ['weight', 'count', 'deduction'].forEach(function(key) { task6RequireNumber(w[key], 'performance.operational.' + entity + '.criteria[' + index + '].weights[' + weightIndex + '].' + key); }); }); }); (item.occurrences || []).forEach(function(o, index) { ['weight', 'deduction'].forEach(function(key) { task6RequireNumber(o[key], 'performance.operational.' + entity + '.occurrences[' + index + '].' + key, true); }); }); });
+        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; ['operational_score', 'total_demands'].forEach(function(key) { task6RequireNumber(item[key], 'performance.operational.' + entity + '.' + key, true); }); task6RequireNumber(item.open_demands, 'performance.operational.' + entity + '.open_demands'); task6RequireNumber(item.total_deduction, 'performance.operational.' + entity + '.total_deduction', true); task6RequireNumber(item.daily_average_score, 'performance.operational.' + entity + '.daily_average_score', true); (item.criteria || []).forEach(function(c, index) { task6RequireNumber(c.count, 'performance.operational.' + entity + '.criteria[' + index + '].count'); task6RequireNumber(c.eligible_base, 'performance.operational.' + entity + '.criteria[' + index + '].eligible_base', true); task6RequireNumber(c.rate, 'performance.operational.' + entity + '.criteria[' + index + '].rate', true); task6RequireNumber(c.deduction, 'performance.operational.' + entity + '.criteria[' + index + '].deduction', true); (c.weights || []).forEach(function(w, weightIndex) { ['weight', 'count', 'deduction'].forEach(function(key) { task6RequireNumber(w[key], 'performance.operational.' + entity + '.criteria[' + index + '].weights[' + weightIndex + '].' + key); }); }); }); (item.occurrences || []).forEach(function(o, index) { ['weight', 'deduction'].forEach(function(key) { task6RequireNumber(o[key], 'performance.operational.' + entity + '.occurrences[' + index + '].' + key, true); }); }); });
         return performance;
     }
 
@@ -1891,7 +1891,7 @@ if (document.readyState === 'loading') {
 
     function task6PerformanceRows(performance) {
         var labels = { cozinha_geral:'Cozinha Geral', cozinha_quente_a:'Quente A', cozinha_quente_b:'Quente B', cozinha_fria:'Fria', salao:'Salão' }, rows = [];
-        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; rows.push({ Entidade: labels[entity] || entity, 'Nota operacional': item.operational_score === null ? 'Indisponível' : item.operational_score, 'Média diária': item.daily_average_score === null ? 'Consolidação incompleta' : item.daily_average_score, 'Média completa': item.daily_average_complete, 'Histórico legado sem snapshot': item.legacy_unversioned, Demandas: item.total_demands === null ? 'Indisponível' : item.total_demands, 'Demandas abertas': item.open_demands, 'Desconto total': item.total_deduction }); });
+        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; rows.push({ Entidade: labels[entity] || entity, 'Nota operacional': item.operational_score === null ? 'Indisponível' : item.operational_score, 'Média diária': item.daily_average_score === null ? 'Consolidação incompleta' : item.daily_average_score, 'Média completa': item.daily_average_complete, 'Histórico legado sem snapshot': item.legacy_unversioned, Demandas: item.total_demands === null ? 'Indisponível' : item.total_demands, 'Demandas abertas': item.open_demands, 'Desconto total': item.total_deduction === null ? 'Indisponível' : item.total_deduction }); });
         return rows;
     }
 

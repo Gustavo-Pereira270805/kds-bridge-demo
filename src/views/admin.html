@@ -420,7 +420,7 @@ var weightFields = [
 function formatWeightDate(value) {
     if (!value) return 'Em aberto';
     var date = new Date(value);
-    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('pt-BR');
+    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('pt-BR', { timeZone: 'UTC' }) + ' UTC';
 }
 
 function renderWeightFields(version) {
@@ -437,6 +437,7 @@ function renderWeightFields(version) {
         input.type = 'number';
         input.step = '0.01';
         input.min = '0';
+        input.max = '5';
         input.id = 'weight-' + field[0];
         input.setAttribute('data-weight-key', field[0]);
         input.className = 'sla-input';
@@ -536,11 +537,11 @@ document.getElementById('weightsForm').addEventListener('submit', function(event
     document.querySelectorAll('#weightsFields [data-weight-key]').forEach(function(input) {
         var rawValue = input.value.trim();
         var value = Number(rawValue);
-        if (!rawValue || !Number.isFinite(value) || value < 0) invalid = input;
+        if (!rawValue || !Number.isFinite(value) || value < 0 || value > 5) invalid = input;
         body[input.getAttribute('data-weight-key')] = value;
     });
     if (invalid) {
-        showWeightsFeedback('Preencha todos os pesos com valores numéricos finitos e não negativos.', false);
+        showWeightsFeedback('Preencha todos os pesos com valores numéricos entre 0 e 5.', false);
         invalid.focus();
         return;
     }

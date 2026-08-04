@@ -27,7 +27,7 @@ import {
   PerformanceWeightVersion,
 } from '../types';
 import { createPerformanceWeightCache, ensureValidScoresForDate, aggregatePerformance, aggregateScoreAlias, getPerformanceDetails } from '../services/performance.service';
-import { DATA_OPERACIONAL_SQL } from '../services/operational-date.service';
+import { DATA_OPERACIONAL_SQL, diasInclusivos, deslocarDataUtc, validarIntervaloInclusivo } from '../services/operational-date.service';
 
 // v2.5 (§5.6) — indicadores diários embutidos em cada dia do week_comparison;
 // a data fica no objeto externo, então `day` é omitida do sub-objeto
@@ -268,23 +268,14 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           // §5.1 — período customizado; se só `from` presente, assume dia único (to = from)
           dateFrom = (from || to) as string;
           dateTo = (to || from) as string;
-          const diffDays = (new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / 86400000;
-          if (diffDays < 0) {
-            return reply.code(400).send({ error: 'A data inicial deve ser anterior ou igual à data final' });
-          }
-          if (diffDays > 31) {
-            return reply.code(400).send({ error: 'O período máximo é de 31 dias' });
-          }
+          const intervalError = validarIntervaloInclusivo(dateFrom, dateTo);
+          if (intervalError) return reply.code(400).send({ error: intervalError });
         } else if (range === 'week') {
-          const d = new Date(now);
-          d.setUTCDate(d.getUTCDate() - 7);
-          dateFrom = d.toISOString().split('T')[0];
           dateTo = now.toISOString().split('T')[0];
+          dateFrom = deslocarDataUtc(dateTo, -6);
         } else if (range === 'month') {
-          const d = new Date(now);
-          d.setUTCDate(d.getUTCDate() - 30);
-          dateFrom = d.toISOString().split('T')[0];
           dateTo = now.toISOString().split('T')[0];
+          dateFrom = deslocarDataUtc(dateTo, -29);
         } else {
           dateFrom = now.toISOString().split('T')[0];
           dateTo = dateFrom;
@@ -307,9 +298,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         const baseParams: unknown[] = station_id ? [...params, station_id] : params;
 
         const hasCustomRange = Boolean(from || to);
-        const customSpanDays = Math.round(
-          (new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / 86400000
-        ) + 1;
+        const customSpanDays = diasInclusivos(dateFrom, dateTo);
         const rangeNum = Math.floor(
           dateFrom === dateTo ? 1
             : !hasCustomRange && range === 'week' ? 7
@@ -669,13 +658,8 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           replacements,
         };
       } catch (error: any) {
-        const msg = error && typeof error === 'object' ? (error.message || String(error)) : String(error);
-        const stack = error && typeof error === 'object' && error.stack ? error.stack : '';
-        console.error('=== DASHBOARD ERROR ===');
-        console.error('Message:', msg);
-        console.error('Stack:', stack);
         request.log.error(error, 'Dashboard query failed');
-        reply.code(500).send({ error: 'Erro ao buscar dados do dashboard: ' + msg });
+        reply.code(500).send({ error: 'Erro ao buscar dados do dashboard' });
       }
     }
   );
@@ -698,18 +682,18 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           date.setUTCDate(date.getUTCDate() + days);
           return date.toISOString().slice(0, 10);
         };
-        let dateFrom = from || to || (range === 'week' ? shiftDate(-6) : range === 'month' ? shiftDate(-30) : shiftDate(0));
+        let dateFrom = from || to || (range === 'week' ? shiftDate(-6) : range === 'month' ? shiftDate(-29) : shiftDate(0));
         let dateTo = to || from || shiftDate(0);
         if (range && !['week', 'month'].includes(range)) return reply.code(400).send({ error: 'O intervalo deve ser week ou month' });
         if (range && (from || to)) return reply.code(400).send({ error: 'Use range ou from/to, não os dois' });
         if (range === 'week') { dateFrom = shiftDate(-6); dateTo = shiftDate(0); }
-        if (range === 'month') { dateFrom = shiftDate(-30); dateTo = shiftDate(0); }
+        if (range === 'month') { dateFrom = shiftDate(-29); dateTo = shiftDate(0); }
         if (!validDate(dateFrom) || !validDate(dateTo)) return reply.code(400).send({ error: 'As datas devem estar no formato ISO YYYY-MM-DD e ser válidas' });
         const start = new Date(`${dateFrom}T00:00:00Z`).getTime();
         const end = new Date(`${dateTo}T00:00:00Z`).getTime();
-        const days = Math.round((end - start) / 86400000) + 1;
-        if (days < 1) return reply.code(400).send({ error: 'A data inicial deve ser anterior ou igual à data final' });
-        if (days > 31) return reply.code(400).send({ error: 'O período máximo é de 31 dias' });
+        const days = diasInclusivos(dateFrom, dateTo);
+        const intervalError = validarIntervaloInclusivo(dateFrom, dateTo);
+        if (intervalError) return reply.code(400).send({ error: intervalError });
 
         let stationCode: string | undefined;
         if (stationId) {

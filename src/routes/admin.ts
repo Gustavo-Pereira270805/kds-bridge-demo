@@ -435,10 +435,6 @@ export default async function adminRoutes(fastify: FastifyInstance) {
       const version = await ensureWeightVersion();
       return {
         ...version,
-        // Aliases preservados para consumidores anteriores desta rota.
-        sla_breach: version.sla_breach_cozinha,
-        cancellation: version.cancellation_cozinha,
-        slow_item: version.slow_item_cozinha,
       };
     } catch (error) {
       request.log.error(error);
@@ -467,7 +463,16 @@ export default async function adminRoutes(fastify: FastifyInstance) {
   // PUT: Atualiza a configuração de pesos de desempenho
   fastify.put<{
     Body: Partial<typeof PESOS_PADRAO>
-  }>('/settings/weights', { preHandler: requireAdminOrManager }, async (request, reply) => {
+  }>('/settings/weights', {
+    preHandler: requireAdminOrManager,
+    schema: {
+      body: {
+        type: 'object',
+        required: ['sla_breach_cozinha', 'sla_breach_salao', 'cancellation_cozinha', 'cancellation_salao', 'stockout_salao', 'slow_item_cozinha', 'slow_pickup_salao'],
+        properties: Object.fromEntries(Object.keys(PESOS_PADRAO).map(key => [key, { type: 'number', minimum: 0, maximum: 5 }]))
+      }
+    }
+  }, async (request, reply) => {
     const body = request.body || {};
     const pesos = {
       sla_breach_cozinha: body.sla_breach_cozinha,
@@ -480,7 +485,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     };
     const faltantes = Object.keys(pesos).filter(key => {
       const value = pesos[key as keyof typeof pesos];
-      return typeof value !== 'number' || !Number.isFinite(value) || value < 0;
+      return typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 5;
     });
     if (faltantes.length > 0) {
       return reply.code(400).send({ error: `Pesos ausentes ou inválidos: ${faltantes.join(', ')}` });

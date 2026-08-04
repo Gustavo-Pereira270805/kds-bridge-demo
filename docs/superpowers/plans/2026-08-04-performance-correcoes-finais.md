@@ -15,6 +15,9 @@
 - Parsing de datas de calendário do dashboard (filtros, validação customizada e exportações) usa `T00:00:00Z`, preservando timestamps que já informam o fuso.
 - A validação `task6RequireNumber` diferencia campo ausente (`undefined`) de campo explicitamente nulo (`null`), aceitando `null` somente quando o contrato permite.
 - `scripts/verificar-performance-final.ts` cobre a distinção de nulidade, verifica os cinco endpoints relativos e testa bordas de janela UTC sem abrir conexão com o banco.
+- As janelas relativas são inclusivas: `week` = 7 dias (`to - 6`), `month` = 30 dias (`to - 29`); intervalos customizados usam `from/to` exatos e rejeitam mais de 31 dias inclusivos.
+- O contrato de desconto legado usa `null` quando qualquer componente não possui snapshot; dashboard, PDF e Excel exibem `Indisponível` sem recalcular a nota histórica.
+- O endpoint de dashboard registra o erro detalhado apenas no log e responde mensagem fixa em pt-BR; pesos aceitam somente valores numéricos entre 0 e 5.
 
 ## Verificações
 

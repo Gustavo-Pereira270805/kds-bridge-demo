@@ -315,19 +315,19 @@ export interface PerformanceScoreRow {
   final_score: number;
   total_demands: number;
   sla_breaches: number;
-  sla_breach_deduction: number;
+  sla_breach_deduction: number | null;
   cancellations: number;
-  cancellation_deduction: number;
+  cancellation_deduction: number | null;
   stockouts: number;
-  stockout_deduction: number;
+  stockout_deduction: number | null;
   slow_items: number;
-  slow_item_deduction: number;
+  slow_item_deduction: number | null;
 }
 
 export interface PerformanceDetractor {
   label: string;
   count: number;
-  deduction: number;
+  deduction: number | null;
 }
 
 export interface EntityScore {
@@ -336,13 +336,13 @@ export interface EntityScore {
   base_score: number | null;
   total_demands: number | null;
   sla_breaches: number;
-  sla_breach_deduction: number;
+  sla_breach_deduction: number | null;
   cancellations: number;
-  cancellation_deduction: number;
+  cancellation_deduction: number | null;
   stockouts: number;
-  stockout_deduction: number;
+  stockout_deduction: number | null;
   slow_items: number;
-  slow_item_deduction: number;
+  slow_item_deduction: number | null;
   detractors: PerformanceDetractor[];
 }
 
@@ -381,7 +381,7 @@ export interface PerformanceCriterionSummary {
   weights?: { weight_version_id: string; weight: number; count: number; deduction: number }[];
   weights_status: 'aplicado' | 'vigente_intervalo' | 'indisponivel_snapshot_legado';
   multi_version?: boolean;
-  deduction: number;
+  deduction: number | null;
 }
 
 export interface PerformanceOccurrence {
@@ -404,7 +404,7 @@ export interface EntityPerformance {
   daily_average_complete: boolean;
   total_demands: number | null;
   open_demands: number;
-  total_deduction: number;
+  total_deduction: number | null;
   criteria: PerformanceCriterionSummary[];
   occurrences: PerformanceOccurrence[];
   weight_versions: PerformanceWeightVersion[];

@@ -22,18 +22,21 @@ export interface OcorrenciaBruta {
   station?: string | null;
 }
 
-export function calcularNotasCozinhaGeral(stations: { entity: PerformanceEntity; total: number; deduction: number; final?: number }[]): NotaCozinhaGeral {
+export function calcularNotasCozinhaGeral(stations: { entity: PerformanceEntity; total: number; deduction: number | null; final?: number }[]): NotaCozinhaGeral {
   const expectedEntities = new Set<PerformanceEntity>(['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria']);
   const stationEntities = new Set(stations.map(station => station.entity));
   const hasExactlyThreeStations = stations.length === 3
     && stationEntities.size === expectedEntities.size
     && Array.from(expectedEntities).every(entity => stationEntities.has(entity));
   const total = stations.reduce((sum, station) => sum + station.total, 0);
-  const deduction = stations.reduce((sum, station) => sum + station.deduction, 0);
-  const operationalScore = hasExactlyThreeStations ? round1(5 - deduction) : null;
+  const deduction = stations.some(station => station.deduction === null)
+    ? null
+    : stations.reduce((sum, station) => sum + (station.deduction as number), 0);
+  const operationalScore = hasExactlyThreeStations && deduction !== null ? round1(5 - deduction) : null;
   const dailyAverageComplete = hasExactlyThreeStations;
   const dailyAverageScore = dailyAverageComplete
-    ? round1(stations.reduce((sum, station) => sum + (station.final ?? round1(5 - station.deduction)), 0) / stations.length)
+    ? stations.some(station => station.deduction === null) ? null
+      : round1(stations.reduce((sum, station) => sum + (station.final ?? round1(5 - (station.deduction as number))), 0) / stations.length)
     : null;
   return {
     operational_score: operationalScore,
@@ -150,11 +153,11 @@ function entityFromStationCode(code: string): string {
 }
 
 async function upsertScore(
-  entity: string, dateStr: string, finalScore: number, total: number,
-  slaBreaches: number, slaDed: number,
-  cancellations: number, cancelDed: number,
-  stockouts: number, stockDed: number,
-  slowItems: number, slowDed: number, weightVersionId: string
+  entity: string, dateStr: string, finalScore: number | null, total: number,
+   slaBreaches: number, slaDed: number | null,
+   cancellations: number, cancelDed: number | null,
+   stockouts: number, stockDed: number | null,
+   slowItems: number, slowDed: number | null, weightVersionId: string
 ): Promise<void> {
   await query(
     `INSERT INTO performance_scores (entity, date, base_score, final_score, total_demands,
@@ -294,20 +297,21 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
     const aggregate = calcularNotasCozinhaGeral(stationRows.map(row => ({
       entity: row.entity as PerformanceEntity,
       total: Number(row.total_demands),
-      deduction: Number(row.sla_breach_deduction) + Number(row.cancellation_deduction)
-        + Number(row.stockout_deduction) + Number(row.slow_item_deduction),
+       deduction: [row.sla_breach_deduction, row.cancellation_deduction, row.stockout_deduction, row.slow_item_deduction]
+         .some(value => value === null) ? null : (row.sla_breach_deduction as number) + (row.cancellation_deduction as number)
+           + (row.stockout_deduction as number) + (row.slow_item_deduction as number),
       final: Number(row.final_score),
     })));
     const agg = stationRows.reduce((sum, row) => ({
       total: sum.total + Number(row.total_demands),
-      sla: sum.sla + Number(row.sla_breaches), slaDed: sum.slaDed + Number(row.sla_breach_deduction),
-      cancel: sum.cancel + Number(row.cancellations), cancelDed: sum.cancelDed + Number(row.cancellation_deduction),
-      stock: sum.stock + Number(row.stockouts), stockDed: sum.stockDed + Number(row.stockout_deduction),
-      slow: sum.slow + Number(row.slow_items), slowDed: sum.slowDed + Number(row.slow_item_deduction),
-    }), { total: 0, sla: 0, slaDed: 0, cancel: 0, cancelDed: 0, stock: 0, stockDed: 0, slow: 0, slowDed: 0 });
+       sla: sum.sla + Number(row.sla_breaches), slaDed: sum.slaDed === null || row.sla_breach_deduction === null ? null : sum.slaDed + row.sla_breach_deduction,
+       cancel: sum.cancel + Number(row.cancellations), cancelDed: sum.cancelDed === null || row.cancellation_deduction === null ? null : sum.cancelDed + row.cancellation_deduction,
+       stock: sum.stock + Number(row.stockouts), stockDed: sum.stockDed === null || row.stockout_deduction === null ? null : sum.stockDed + row.stockout_deduction,
+       slow: sum.slow + Number(row.slow_items), slowDed: sum.slowDed === null || row.slow_item_deduction === null ? null : sum.slowDed + row.slow_item_deduction,
+     }), { total: 0, sla: 0, slaDed: 0 as number | null, cancel: 0, cancelDed: 0 as number | null, stock: 0, stockDed: 0 as number | null, slow: 0, slowDed: 0 as number | null });
     await upsertScore('cozinha_geral', dateStr,
        aggregate.operational_score!, agg.total, agg.sla, agg.slaDed,
-      agg.cancel, agg.cancelDed, agg.stock, agg.stockDed, agg.slow, agg.slowDed, version.id);
+       agg.cancel, agg.cancelDed, agg.stock, agg.stockDed, agg.slow, agg.slowDed, version.id);
   }
 }
 
@@ -339,7 +343,7 @@ export function buildDetractors(score: PerformanceScoreRow): PerformanceDetracto
       deduction: score.slow_item_deduction,
     });
   }
-  list.sort((a, b) => b.deduction - a.deduction);
+  list.sort((a, b) => (b.deduction || 0) - (a.deduction || 0));
   return list;
 }
 
@@ -393,7 +397,7 @@ export function buildCriterionSummaries(
   eligibleBases: Partial<Record<string, number | null>> = {},
   eligibleBaseStatuses: Partial<Record<string, PerformanceCriterionSummary['eligible_base_status']>> = {}
 ): PerformanceCriterionSummary[] {
-  const criteria: [string, number, number][] = isKitchen
+  const criteria: [string, number, number | null][] = isKitchen
     ? [
       ['sla_breach_cozinha', score.sla_breaches, score.sla_breach_deduction],
       ['cancellation_cozinha', score.cancellations, score.cancellation_deduction],
@@ -416,7 +420,7 @@ export function buildCriterionSummaries(
     return {
       criterion, count, eligible_base: total, eligible_base_status: baseStatus,
       rate: total === null || total === 0 ? (total === 0 ? 0 : null) : count / total,
-      weight, weights_status: 'aplicado', deduction: criterion === 'stockout_cozinha' ? 0 : deduction,
+       weight, weights_status: 'aplicado', deduction: criterion === 'stockout_cozinha' ? 0 : deduction,
     };
   });
 }
@@ -602,7 +606,7 @@ export interface PerformanceDetails {
   weight_versions: PerformanceWeightVersion[];
   total_demands: number | null;
   open_demands: number;
-  total_deduction: number;
+  total_deduction: number | null;
   legacy_unversioned: boolean;
 }
 
@@ -651,7 +655,7 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
     versions.set(version.id, version);
   }
   const counts = new Map<string, number>();
-  const deductions = new Map<string, number>();
+  const deductions = new Map<string, number | null>();
   const criterionWeights = new Map<string, Map<string, { weight: number; count: number; deduction: number }>>();
   for (const occurrence of occurrences) {
     const criterion = occurrence.type === 'Estouro de SLA'
@@ -662,7 +666,9 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
           ? (entity === 'salao' ? 'stockout_salao' : 'stockout_cozinha')
           : (entity === 'salao' ? 'slow_pickup_salao' : 'slow_item_cozinha');
     counts.set(criterion, (counts.get(criterion) || 0) + 1);
-    deductions.set(criterion, (deductions.get(criterion) || 0) + (occurrence.deduction || 0));
+    const currentDeduction = deductions.get(criterion);
+    deductions.set(criterion, currentDeduction === null || occurrence.deduction === null
+      ? null : (currentDeduction || 0) + occurrence.deduction);
     if (occurrence.weight_version_id) {
       if (!criterionWeights.has(criterion)) criterionWeights.set(criterion, new Map());
       const version = criterionWeights.get(criterion)!;
@@ -676,13 +682,13 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
   const criteria = buildCriterionSummaries({
     total_demands: bases.total_demands,
     sla_breaches: counts.get(entity === 'salao' ? 'sla_breach_salao' : 'sla_breach_cozinha') || 0,
-    sla_breach_deduction: deductions.get(entity === 'salao' ? 'sla_breach_salao' : 'sla_breach_cozinha') || 0,
+    sla_breach_deduction: deductions.has(entity === 'salao' ? 'sla_breach_salao' : 'sla_breach_cozinha') ? deductions.get(entity === 'salao' ? 'sla_breach_salao' : 'sla_breach_cozinha')! : 0,
     cancellations: counts.get(entity === 'salao' ? 'cancellation_salao' : 'cancellation_cozinha') || 0,
-    cancellation_deduction: deductions.get(entity === 'salao' ? 'cancellation_salao' : 'cancellation_cozinha') || 0,
+    cancellation_deduction: deductions.has(entity === 'salao' ? 'cancellation_salao' : 'cancellation_cozinha') ? deductions.get(entity === 'salao' ? 'cancellation_salao' : 'cancellation_cozinha')! : 0,
     stockouts: counts.get(entity === 'salao' ? 'stockout_salao' : 'stockout_cozinha') || 0,
-    stockout_deduction: deductions.get(entity === 'salao' ? 'stockout_salao' : 'stockout_cozinha') || 0,
+    stockout_deduction: deductions.has(entity === 'salao' ? 'stockout_salao' : 'stockout_cozinha') ? deductions.get(entity === 'salao' ? 'stockout_salao' : 'stockout_cozinha')! : 0,
     slow_items: counts.get(entity === 'salao' ? 'slow_pickup_salao' : 'slow_item_cozinha') || 0,
-    slow_item_deduction: deductions.get(entity === 'salao' ? 'slow_pickup_salao' : 'slow_item_cozinha') || 0,
+    slow_item_deduction: deductions.has(entity === 'salao' ? 'slow_pickup_salao' : 'slow_item_cozinha') ? deductions.get(entity === 'salao' ? 'slow_pickup_salao' : 'slow_item_cozinha')! : 0,
   } as PerformanceScoreRow, latest, entity !== 'salao', bases, baseStatuses);
   for (const criterion of criteria) {
     const observedWeights = criterionWeights.get(criterion.criterion) || new Map();
@@ -738,7 +744,8 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
     weight_versions: Array.from(versions.values()),
     total_demands: bases.total_demands,
     open_demands: Number(openRow?.count || 0),
-    total_deduction: round1(occurrences.reduce((sum, occurrence) => sum + (occurrence.deduction || 0), 0)),
+    total_deduction: occurrences.some(occurrence => occurrence.deduction === null)
+      ? null : round1(occurrences.reduce((sum, occurrence) => sum + (occurrence.deduction || 0), 0)),
     legacy_unversioned: scoreRows.some(row => row.weight_version_id === null),
   };
 }
@@ -775,7 +782,7 @@ export function aggregatePerformance(
     entity,
     operational_score: generalIncomplete ? null : details.legacy_unversioned && rows.length
       ? round1(rows.reduce((sum, row) => sum + Number(row.final_score), 0) / rows.length)
-      : round1(5 - details.total_deduction),
+      : details.total_deduction === null ? null : round1(5 - details.total_deduction),
     daily_average_score: dailyAverage,
     daily_average_complete: dailyAverageComplete,
     total_demands: generalIncomplete ? null : details.total_demands,
@@ -791,7 +798,9 @@ export function aggregatePerformance(
 
 export function aggregateScoreAlias(entity: PerformanceEntity, rows: PerformanceScoreRow[]): EntityScore {
   const sum = (field: keyof PerformanceScoreRow): number => rows.reduce((total, row) => total + Number(row[field] || 0), 0);
-  const totalDeduction = sum('sla_breach_deduction') + sum('cancellation_deduction') + sum('stockout_deduction') + sum('slow_item_deduction');
+  const deductionFields: (keyof PerformanceScoreRow)[] = ['sla_breach_deduction', 'cancellation_deduction', 'stockout_deduction', 'slow_item_deduction'];
+  const hasUnknownDeduction = rows.some(row => deductionFields.some(field => row[field] === null));
+  const totalDeduction = hasUnknownDeduction ? null : deductionFields.reduce((total, field) => total + sum(field), 0);
   const latest = rows[rows.length - 1];
   if (entity === 'cozinha_geral') {
     const expected = ['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria'];
@@ -813,17 +822,17 @@ export function aggregateScoreAlias(entity: PerformanceEntity, rows: Performance
   }
   return {
     entity,
-    final_score: rows.length ? round1(rows.reduce((total, row) => total + Number(row.final_score), 0) / rows.length) : null,
+    final_score: rows.length && !hasUnknownDeduction ? round1(rows.reduce((total, row) => total + Number(row.final_score), 0) / rows.length) : null,
     base_score: latest ? Number(latest.base_score) : null,
     total_demands: sum('total_demands'),
     sla_breaches: sum('sla_breaches'),
-    sla_breach_deduction: sum('sla_breach_deduction'),
+    sla_breach_deduction: hasUnknownDeduction ? null : sum('sla_breach_deduction'),
     cancellations: sum('cancellations'),
-    cancellation_deduction: sum('cancellation_deduction'),
+    cancellation_deduction: hasUnknownDeduction ? null : sum('cancellation_deduction'),
     stockouts: sum('stockouts'),
-    stockout_deduction: sum('stockout_deduction'),
+    stockout_deduction: hasUnknownDeduction ? null : sum('stockout_deduction'),
     slow_items: sum('slow_items'),
-    slow_item_deduction: sum('slow_item_deduction'),
-    detractors: latest ? buildDetractors({ ...latest, entity, final_score: round1(5 - totalDeduction), total_demands: sum('total_demands') } as PerformanceScoreRow) : [],
+    slow_item_deduction: hasUnknownDeduction ? null : sum('slow_item_deduction'),
+    detractors: latest && totalDeduction !== null ? buildDetractors({ ...latest, entity, final_score: round1(5 - totalDeduction), total_demands: sum('total_demands') } as PerformanceScoreRow) : [],
   };
 }
