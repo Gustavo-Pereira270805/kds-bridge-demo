@@ -8,7 +8,7 @@ Foi alterado o fluxo de exportação em `src/views/dashboard.html` e o contrato 
 
 - PDF e Excel consultam `/api/v1/analytics/performance` com `from` e `to` exatos no momento da exportação; quando há estação selecionada, enviam também `station_id`.
 - O relatório usa exclusivamente `performance.operational`, sem reconstruir descontos ou pesos no navegador.
-- PDF e Excel incluem resumo operacional, nota, média diária, demandas, critérios com contagem, base elegível, taxa, peso/desconto, vigências dos pesos e ocorrências reais.
+- PDF e Excel incluem resumo operacional com SLA da cozinha e do salão, cada um com percentual, numerador e base elegível, além de nota, média diária, demandas, critérios com contagem, peso/desconto, vigências dos pesos e ocorrências reais.
 - A exportação por dia consulta dashboard e performance para cada data, usando a nota e as versões aplicáveis daquele dia.
 - Falhas de performance ou de dados interrompem a exportação e exibem erro explícito; nenhum arquivo parcial é salvo.
 - Textos provenientes da API usados no HTML temporário são escapados com `escapePerfHtml`.
@@ -19,6 +19,9 @@ Foi alterado o fluxo de exportação em `src/views/dashboard.html` e o contrato 
 - A paginação PDF captura sempre a última fatia, inclusive quando ela tem menos de 150 pixels.
 - A exportação diária não chama `buildContent`; usa somente o relatório exportável e nunca injeta `undefined`.
 - O PDF consolidado valida `state.lastData` antes de construir e capturar um container temporário independente, usando somente `task6ReportHtml` e sem depender de `#content` ou de `contentEl.innerHTML`.
+- O payload do dashboard expõe `dentro_sla_cozinha`, `base_sla_cozinha`, `pct_dentro_sla_cozinha`, `dentro_sla_salao`, `base_sla_salao` e `pct_dentro_sla_salao`; as populações exigem os timestamps aplicáveis, excluem anulados e cancelados e não incluem demandas abertas.
+- `pct_dentro_sla` permanece somente como alias legado explicitamente equivalente à cozinha; novos consumidores e exportações usam os campos nomeados.
+- Os endpoints relativos tipam `days` e `responsible` conforme aceitos e mantêm a validação de `days` entre 1 e 366.
 - O PDF exibe, por critério e versão, peso, contagem e desconto; o Excel mantém esses dados em campos separados ou detalhados.
 
 ## Validações

@@ -175,13 +175,13 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.get<{ Querystring: { from?: string; to?: string; responsible?: string } }>(
+  fastify.get<{ Querystring: { days?: string; responsible?: string } }>(
     '/sla-breaches',
     async (request, reply) => {
       try {
         let days: number;
         try {
-          days = validarDiasRelativos((request.query as any).days);
+          days = validarDiasRelativos(request.query.days);
         } catch (error) {
           return reply.code(400).send({ error: (error as Error).message });
         }
@@ -221,13 +221,13 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     }
   );
 
-  fastify.get<{ Querystring: { from?: string; to?: string } }>(
+  fastify.get<{ Querystring: { days?: string } }>(
     '/cancellations',
     async (request, reply) => {
       try {
         let days: number;
         try {
-          days = validarDiasRelativos((request.query as any).days);
+          days = validarDiasRelativos(request.query.days);
         } catch (error) {
           return reply.code(400).send({ error: (error as Error).message });
         }
@@ -253,13 +253,13 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     }
   );
 
-  fastify.get<{ Querystring: { from?: string; to?: string } }>(
+  fastify.get<{ Querystring: { days?: string } }>(
     '/stockouts',
     async (request, reply) => {
       try {
         let days: number;
         try {
-          days = validarDiasRelativos((request.query as any).days);
+          days = validarDiasRelativos(request.query.days);
         } catch (error) {
           return reply.code(400).send({ error: (error as Error).message });
         }
@@ -357,12 +357,13 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           total_cancelados: string;
           total_entregues: string;
           atrasos_cozinha: string;
-          atrasos_salao: string;
-          urgentes_puros: string;
-           urgentes_rotura: string;
-           dentro_sla: string;
-           base_sla_cozinha: string;
-           base_sla_salao: string;
+           atrasos_salao: string;
+           urgentes_puros: string;
+            urgentes_rotura: string;
+            dentro_sla_cozinha: string;
+            dentro_sla_salao: string;
+            base_sla_cozinha: string;
+            base_sla_salao: string;
           avg_cooking_min: string;
           avg_pickup_min: string;
         }>('1.KPIs',
@@ -371,13 +372,14 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
             COUNT(*) FILTER (WHERE stockout_reported = true)::int AS total_roturas,
             COUNT(*) FILTER (WHERE status IN ('cancelled_salao','cancelled_cozinha'))::int AS total_cancelados,
             COUNT(*) FILTER (WHERE status = 'retrieved')::int AS total_entregues,
-             COUNT(*) FILTER (WHERE sla_breached_cozinha = true AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL)::int AS atrasos_cozinha,
-             COUNT(*) FILTER (WHERE sla_breached_salao = true AND ready_at IS NOT NULL AND retrieved_at IS NOT NULL)::int AS atrasos_salao,
-             COUNT(*) FILTER (WHERE sla_minutes IS NOT NULL AND ready_at IS NOT NULL)::int AS base_sla_cozinha,
-             COUNT(*) FILTER (WHERE ready_at IS NOT NULL AND retrieved_at IS NOT NULL)::int AS base_sla_salao,
+             COUNT(*) FILTER (WHERE sla_breached_cozinha = true AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::int AS atrasos_cozinha,
+             COUNT(*) FILTER (WHERE sla_breached_salao = true AND ready_at IS NOT NULL AND retrieved_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::int AS atrasos_salao,
+             COUNT(*) FILTER (WHERE sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::int AS base_sla_cozinha,
+             COUNT(*) FILTER (WHERE ready_at IS NOT NULL AND retrieved_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::int AS base_sla_salao,
             COUNT(*) FILTER (WHERE priority = 'urgent' AND stockout_reported = false)::int AS urgentes_puros,
             COUNT(*) FILTER (WHERE stockout_reported = true)::int AS urgentes_rotura,
-             COUNT(*) FILTER (WHERE sla_breached_cozinha = false AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL)::int AS dentro_sla,
+             COUNT(*) FILTER (WHERE sla_breached_cozinha = false AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::int AS dentro_sla_cozinha,
+             COUNT(*) FILTER (WHERE sla_breached_salao = false AND ready_at IS NOT NULL AND retrieved_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::int AS dentro_sla_salao,
              ROUND(AVG(EXTRACT(EPOCH FROM (ready_at - created_at)) / 60) FILTER (WHERE ready_at IS NOT NULL), 1) AS avg_cooking_min,
              ROUND(AVG(EXTRACT(EPOCH FROM (retrieved_at - ready_at)) / 60) FILTER (WHERE retrieved_at IS NOT NULL), 1) AS avg_pickup_min
           FROM demands
@@ -398,15 +400,26 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           atrasos_salao: parseInt(totals?.atrasos_salao || '0', 10),
           urgentes_puros: parseInt(totals?.urgentes_puros || '0', 10),
           urgentes_rotura: parseInt(totals?.urgentes_rotura || '0', 10),
-           dentro_sla: parseInt(totals?.dentro_sla || '0', 10),
+           dentro_sla_cozinha: parseInt(totals?.dentro_sla_cozinha || '0', 10),
+           dentro_sla_salao: parseInt(totals?.dentro_sla_salao || '0', 10),
+           dentro_sla: parseInt(totals?.dentro_sla_cozinha || '0', 10),
            base_sla_cozinha: parseInt(totals?.base_sla_cozinha || '0', 10),
            base_sla_salao: parseInt(totals?.base_sla_salao || '0', 10),
            pct_dentro_sla_cozinha: parseInt(totals?.base_sla_cozinha || '0', 10) > 0
-             ? Math.round((parseInt(totals?.dentro_sla || '0', 10) / parseInt(totals?.base_sla_cozinha || '0', 10)) * 1000) / 10
+             ? Math.round((parseInt(totals?.dentro_sla_cozinha || '0', 10) / parseInt(totals?.base_sla_cozinha || '0', 10)) * 1000) / 10
              : 0,
+           pct_dentro_sla_salao: parseInt(totals?.base_sla_salao || '0', 10) > 0
+             ? Math.round((parseInt(totals?.dentro_sla_salao || '0', 10) / parseInt(totals?.base_sla_salao || '0', 10)) * 1000) / 10
+             : 0,
+           // Compatibilidade legada: este alias sempre representa o SLA da cozinha.
            pct_dentro_sla: parseInt(totals?.base_sla_cozinha || '0', 10) > 0
-             ? Math.round((parseInt(totals?.dentro_sla || '0', 10) / parseInt(totals?.base_sla_cozinha || '0', 10)) * 1000) / 10
+             ? Math.round((parseInt(totals?.dentro_sla_cozinha || '0', 10) / parseInt(totals?.base_sla_cozinha || '0', 10)) * 1000) / 10
              : 0,
+           sla_semantics: {
+             pct_dentro_sla: 'pct_dentro_sla é compatibilidade legada equivalente à cozinha; novos consumidores devem usar pct_dentro_sla_cozinha ou pct_dentro_sla_salao.',
+             cozinha: 'dentro_sla_cozinha / base_sla_cozinha; elegíveis com sla_minutes e ready_at, excluindo anulados e cancelados.',
+             salao: 'dentro_sla_salao / base_sla_salao; elegíveis com ready_at e retrieved_at, excluindo anulados e cancelados.',
+           },
           pct_urgentes: totalPedidos > 0
             ? Math.round(((parseInt(totals?.urgentes_puros || '0', 10) + parseInt(totals?.urgentes_rotura || '0', 10)) / totalPedidos) * 1000) / 10
             : 0,
