@@ -762,10 +762,9 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         Object.values(operational).forEach(item => item.weight_versions.forEach(version => versions.set(version.id, version)));
         const response: PerformanceResponse = { current, history: Array.from(historyMap.values()).sort((a, b) => a.date.localeCompare(b.date)), averages, operational, detractor_dates: Object.fromEntries(entities.map(entity => [entity, operational[entity].occurrences])), date_from: dateFrom, date_to: dateTo, weight_versions: Array.from(versions.values()) };
         return response;
-      } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : String(error);
-        request.log.error(error);
-        reply.code(500).send({ error: 'Erro ao buscar performance: ' + msg });
+         } catch (error: unknown) {
+           request.log.error(error);
+           reply.code(500).send({ error: 'Erro ao buscar performance' });
       }
     }
   );

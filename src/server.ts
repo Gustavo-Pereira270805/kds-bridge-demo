@@ -151,7 +151,7 @@ async function seedDatabase() {
       // Mantém a persistência das versões de pesos alinhada à migration versionada.
       await client.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
       await client.query(
-        `CREATE TABLE IF NOT EXISTS performance_weight_versions (
+          `CREATE TABLE IF NOT EXISTS performance_weight_versions (
            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
            sla_breach_cozinha numeric NOT NULL,
            sla_breach_salao numeric NOT NULL,
@@ -164,8 +164,27 @@ async function seedDatabase() {
            valid_to timestamptz,
            created_at timestamptz NOT NULL DEFAULT now(),
            updated_at timestamptz NOT NULL DEFAULT now()
-         )`
+          )`
       );
+      for (const column of [
+        'sla_breach_cozinha', 'sla_breach_salao', 'cancellation_cozinha',
+        'cancellation_salao', 'stockout_salao', 'slow_item_cozinha',
+        'slow_pickup_salao',
+      ]) {
+        await client.query(
+          `DO $$ BEGIN
+             IF NOT EXISTS (
+               SELECT 1 FROM pg_constraint
+               WHERE conname = 'performance_weight_versions_${column}_check'
+                 AND conrelid = 'performance_weight_versions'::regclass
+             ) THEN
+               ALTER TABLE performance_weight_versions
+                 ADD CONSTRAINT performance_weight_versions_${column}_check
+                 CHECK (${column} >= 0 AND ${column} <= 5);
+             END IF;
+           END $$`
+        );
+      }
       await client.query(
         `CREATE INDEX IF NOT EXISTS performance_weight_versions_validity_idx
          ON performance_weight_versions (valid_from, valid_to)`

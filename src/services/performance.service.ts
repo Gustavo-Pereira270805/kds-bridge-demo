@@ -1,11 +1,12 @@
 import { query, pool } from '../db/client';
 import { PerformanceScoreRow, PerformanceDetractor, PerformanceWeights, PerformanceWeightVersion, PerformanceOccurrence, PerformanceCriterionSummary, PerformanceEntity, EntityPerformance, EntityScore } from '../types';
+import { dataOperacional, DATA_OPERACIONAL_SQL, intervaloUtc } from './operational-date.service';
 
 export interface NotaCozinhaGeral {
-  operational_score: number;
+  operational_score: number | null;
   daily_average_score: number | null;
   daily_average_complete: boolean;
-  total_demands: number;
+  total_demands: number | null;
   kitchen_stockout_weight: number;
 }
 
@@ -27,7 +28,7 @@ export function calcularNotasCozinhaGeral(stations: { entity: PerformanceEntity;
     && Array.from(expectedEntities).every(entity => stationEntities.has(entity));
   const total = stations.reduce((sum, station) => sum + station.total, 0);
   const deduction = stations.reduce((sum, station) => sum + station.deduction, 0);
-  const operationalScore = round1(5 - deduction);
+  const operationalScore = hasExactlyThreeStations ? round1(5 - deduction) : null;
   const dailyAverageComplete = hasExactlyThreeStations;
   const dailyAverageScore = dailyAverageComplete
     ? round1(stations.reduce((sum, station) => sum + (station.final ?? round1(5 - station.deduction)), 0) / stations.length)
@@ -36,7 +37,7 @@ export function calcularNotasCozinhaGeral(stations: { entity: PerformanceEntity;
     operational_score: operationalScore,
     daily_average_score: dailyAverageScore,
     daily_average_complete: dailyAverageComplete,
-    total_demands: total,
+    total_demands: hasExactlyThreeStations ? total : null,
     kitchen_stockout_weight: 0,
   };
 }
@@ -124,7 +125,7 @@ export async function createPerformanceWeightCache(dateFrom: string, dateTo: str
   await ensureWeightVersion();
   const versions = await getWeightVersions();
   const cache: PerformanceWeightCache = new Map();
-  for (const date = new Date(`${dateFrom}T00:00:00Z`); date <= new Date(`${dateTo}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + 1)) {
+  for (const date = intervaloUtc(dateFrom); date <= intervaloUtc(dateTo); date.setUTCDate(date.getUTCDate() + 1)) {
     const dateStr = date.toISOString().slice(0, 10);
     cache.set(dateStr, versionForDate(dateStr, versions));
   }
@@ -197,25 +198,25 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
 
     const slaBreaches = await safeCount(
       `SELECT COUNT(*)::int AS cnt FROM demands
-       WHERE kitchen_station_id = $1 AND created_at::date = $2 AND sla_breached_cozinha = true
+       WHERE kitchen_station_id = $1 AND ${DATA_OPERACIONAL_SQL} = $2 AND sla_breached_cozinha = true
          AND status != 'annulled'`,
       [sid, dateStr]
     );
     const cancellations = await safeCount(
       `SELECT COUNT(*)::int AS cnt FROM demands
-       WHERE kitchen_station_id = $1 AND created_at::date = $2 AND status = 'cancelled_cozinha'
+       WHERE kitchen_station_id = $1 AND ${DATA_OPERACIONAL_SQL} = $2 AND status = 'cancelled_cozinha'
          AND status != 'annulled'`,
       [sid, dateStr]
     );
     const stockouts = await safeCount(
       `SELECT COUNT(*)::int AS cnt FROM demands
-       WHERE kitchen_station_id = $1 AND created_at::date = $2 AND stockout_reported = true
+       WHERE kitchen_station_id = $1 AND ${DATA_OPERACIONAL_SQL} = $2 AND stockout_reported = true
          AND status != 'annulled'`,
       [sid, dateStr]
     );
     const slowItems = await safeCount(
       `SELECT COUNT(*)::int AS cnt FROM demands
-       WHERE kitchen_station_id = $1 AND created_at::date = $2
+       WHERE kitchen_station_id = $1 AND ${DATA_OPERACIONAL_SQL} = $2
          AND status != 'annulled'
          AND ready_at IS NOT NULL AND sla_minutes IS NOT NULL
          AND EXTRACT(EPOCH FROM (ready_at - created_at))/60 > sla_minutes * 1.5`,
@@ -223,7 +224,7 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
     );
     const total = await safeCount(
       `SELECT COUNT(*)::int AS cnt FROM demands
-       WHERE kitchen_station_id = $1 AND created_at::date = $2
+       WHERE kitchen_station_id = $1 AND ${DATA_OPERACIONAL_SQL} = $2
          AND status != 'annulled'`,
       [sid, dateStr]
     );
@@ -241,15 +242,15 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
 
   // -- Salão --
   const sSla = await safeCount(
-    `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND sla_breached_salao = true AND status != 'annulled'`,
+    `SELECT COUNT(*)::int AS cnt FROM demands WHERE ${DATA_OPERACIONAL_SQL} = $1 AND sla_breached_salao = true AND status != 'annulled'`,
     [dateStr]
   );
   const sCancel = await safeCount(
-    `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND status = 'cancelled_salao' AND status != 'annulled'`,
+    `SELECT COUNT(*)::int AS cnt FROM demands WHERE ${DATA_OPERACIONAL_SQL} = $1 AND status = 'cancelled_salao' AND status != 'annulled'`,
     [dateStr]
   );
   const sStock = await safeCount(
-    `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND stockout_reported = true AND status != 'annulled'`,
+    `SELECT COUNT(*)::int AS cnt FROM demands WHERE ${DATA_OPERACIONAL_SQL} = $1 AND stockout_reported = true AND status != 'annulled'`,
     [dateStr]
   );
 
@@ -260,14 +261,14 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
 
   const sSlow = await safeCount(
     `SELECT COUNT(*)::int AS cnt FROM demands
-     WHERE created_at::date = $1 AND status != 'annulled'
+     WHERE ${DATA_OPERACIONAL_SQL} = $1 AND status != 'annulled'
        AND retrieved_at IS NOT NULL AND ready_at IS NOT NULL
        AND EXTRACT(EPOCH FROM (retrieved_at - ready_at))/60 > $2`,
     [dateStr, tolerance * 2]
   );
 
   const sTotal = await safeCount(
-    `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND status != 'annulled'`,
+    `SELECT COUNT(*)::int AS cnt FROM demands WHERE ${DATA_OPERACIONAL_SQL} = $1 AND status != 'annulled'`,
     [dateStr]
   );
 
@@ -287,7 +288,7 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
      WHERE date = $1 AND entity IN ('cozinha_quente_a','cozinha_quente_b','cozinha_fria')`,
     [dateStr]
   );
-  if (stationRows.length > 0) {
+  if (stationRows.length === 3 && new Set(stationRows.map(row => row.entity)).size === 3) {
     const aggregate = calcularNotasCozinhaGeral(stationRows.map(row => ({
       entity: row.entity as PerformanceEntity,
       total: Number(row.total_demands),
@@ -303,7 +304,7 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
       slow: sum.slow + Number(row.slow_items), slowDed: sum.slowDed + Number(row.slow_item_deduction),
     }), { total: 0, sla: 0, slaDed: 0, cancel: 0, cancelDed: 0, stock: 0, stockDed: 0, slow: 0, slowDed: 0 });
     await upsertScore('cozinha_geral', dateStr,
-      aggregate.operational_score, agg.total, agg.sla, agg.slaDed,
+       aggregate.operational_score!, agg.total, agg.sla, agg.slaDed,
       agg.cancel, agg.cancelDed, agg.stock, agg.stockDed, agg.slow, agg.slowDed, version.id);
   }
 }
@@ -387,7 +388,8 @@ export function buildCriterionSummaries(
   score: PerformanceScoreRow,
   weights: PerformanceWeights,
   isKitchen: boolean,
-  eligibleBases: Partial<Record<string, number>> = {}
+  eligibleBases: Partial<Record<string, number | null>> = {},
+  eligibleBaseStatuses: Partial<Record<string, PerformanceCriterionSummary['eligible_base_status']>> = {}
 ): PerformanceCriterionSummary[] {
   const criteria: [string, number, number][] = isKitchen
     ? [
@@ -403,12 +405,15 @@ export function buildCriterionSummaries(
       ['slow_pickup_salao', score.slow_items, score.slow_item_deduction],
     ];
   return criteria.map(([criterion, count, deduction]) => {
-    const total = eligibleBases[criterion] ?? (Number(score.total_demands) || 0);
+    const total = eligibleBases[criterion] ?? null;
+    const baseStatus = eligibleBaseStatuses[criterion]
+      || (total === null ? 'indisponivel_sem_denominador' : 'aplicavel');
     const weight = criterion === 'stockout_cozinha'
       ? 0
       : getCriterionWeight(criterion, weights);
     return {
-      criterion, count, eligible_base: total, rate: total ? count / total : 0,
+      criterion, count, eligible_base: total, eligible_base_status: baseStatus,
+      rate: total ? count / total : null,
       weight, weights_status: 'aplicado', deduction: criterion === 'stockout_cozinha' ? 0 : deduction,
     };
   });
@@ -420,7 +425,7 @@ function getCriterionWeight(criterion: string, weights: PerformanceWeights): num
   throw new Error(`Critério de desempenho desconhecido: ${criterion}`);
 }
 
-export async function getCriterionEligibleBases(entity: string, dateStr: string, stationCode?: string): Promise<Record<string, number>> {
+export async function getCriterionEligibleBases(entity: string, dateStr: string, stationCode?: string): Promise<Record<string, number | null>> {
   const isGeneral = entity === 'cozinha_geral';
   const stationFilter = entity === 'salao' ? '' : 'AND kitchen_station_id IN (SELECT id FROM kitchen_stations WHERE code = ANY($2))';
   const stationCodes = isGeneral
@@ -441,18 +446,20 @@ export async function getCriterionEligibleBases(entity: string, dateStr: string,
        COUNT(*) FILTER (WHERE ready_at IS NOT NULL AND sla_minutes IS NOT NULL)::int AS slow_cozinha,
        COUNT(*) FILTER (WHERE ready_at IS NOT NULL AND retrieved_at IS NOT NULL)::int AS slow_salao
      FROM demands
-     WHERE created_at::date = $1 AND status != 'annulled' ${stationFilter}`,
+      WHERE ${DATA_OPERACIONAL_SQL} = $1 AND status != 'annulled' ${stationFilter}`,
     params
   );
   const values = row || { total_demands: '0', sla_cozinha: '0', sla_salao: '0', slow_cozinha: '0', slow_salao: '0' };
+  const hasCompleteGeneral = !isGeneral || stationCodes.length === 3;
+  const total = Number(values.total_demands);
   return {
     total_demands: Number(values.total_demands),
     sla_breach_cozinha: Number(values.sla_cozinha),
     sla_breach_salao: Number(values.sla_salao),
-    cancellation_cozinha: Number(values.total_demands),
-    cancellation_salao: Number(values.total_demands),
-    stockout_cozinha: Number(values.total_demands),
-    stockout_salao: Number(values.total_demands),
+    cancellation_cozinha: entity === 'salao' ? null : (hasCompleteGeneral ? total : null),
+    cancellation_salao: entity === 'salao' ? total : null,
+    stockout_cozinha: null,
+    stockout_salao: entity === 'salao' ? total : null,
     slow_item_cozinha: Number(values.slow_cozinha),
     slow_pickup_salao: Number(values.slow_salao),
   };
@@ -468,7 +475,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
     const slaRows = await query<{ id: string; product_name: string; created_at: string; sla_breach_minutes_cozinha: number }>(
       `SELECT d.id, d.product_name, d.created_at, d.sla_breach_minutes_cozinha
        FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
-       WHERE ks.code = $1 AND d.created_at::date >= $2 AND d.created_at::date <= $3 AND d.sla_breached_cozinha = true AND d.status != 'annulled'`,
+       WHERE ks.code = $1 AND (d.created_at AT TIME ZONE 'UTC')::date >= $2 AND (d.created_at AT TIME ZONE 'UTC')::date <= $3 AND d.sla_breached_cozinha = true AND d.status != 'annulled'`,
       [selectedStationCode, dateFrom, dateTo]
     );
     slaRows.forEach(r => results.push({
@@ -481,7 +488,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
     const cancelRows = await query<{ id: string; product_name: string; created_at: string; cancel_reason: string | null }>(
       `SELECT d.id, d.product_name, d.created_at, d.cancel_reason
        FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
-       WHERE ks.code = $1 AND d.created_at::date >= $2 AND d.created_at::date <= $3 AND d.status = 'cancelled_cozinha'`,
+       WHERE ks.code = $1 AND (d.created_at AT TIME ZONE 'UTC')::date >= $2 AND (d.created_at AT TIME ZONE 'UTC')::date <= $3 AND d.status = 'cancelled_cozinha'`,
       [selectedStationCode, dateFrom, dateTo]
     );
     cancelRows.forEach(r => results.push({
@@ -493,7 +500,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
     const stockRows = await query<{ id: string; product_name: string; created_at: string }>(
       `SELECT d.id, d.product_name, d.created_at
        FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
-       WHERE ks.code = $1 AND d.created_at::date >= $2 AND d.created_at::date <= $3 AND d.stockout_reported = true AND d.status != 'annulled'`,
+       WHERE ks.code = $1 AND (d.created_at AT TIME ZONE 'UTC')::date >= $2 AND (d.created_at AT TIME ZONE 'UTC')::date <= $3 AND d.stockout_reported = true AND d.status != 'annulled'`,
       [selectedStationCode, dateFrom, dateTo]
     );
     stockRows.forEach(r => results.push({
@@ -504,7 +511,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
     const slowRows = await query<{ id: string; product_name: string; created_at: string; sla_minutes: number }>(
       `SELECT d.id, d.product_name, d.created_at, d.sla_minutes
        FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
-       WHERE ks.code = $1 AND d.created_at::date >= $2 AND d.created_at::date <= $3 AND d.status != 'annulled'
+       WHERE ks.code = $1 AND (d.created_at AT TIME ZONE 'UTC')::date >= $2 AND (d.created_at AT TIME ZONE 'UTC')::date <= $3 AND d.status != 'annulled'
          AND d.ready_at IS NOT NULL AND d.sla_minutes IS NOT NULL
          AND EXTRACT(EPOCH FROM (d.ready_at - d.created_at))/60 > d.sla_minutes * 1.5`,
       [selectedStationCode, dateFrom, dateTo]
@@ -519,7 +526,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
   if (entity === 'salao') {
     const sSlaRows = await query<{ id: string; product_name: string; created_at: string; sla_breach_minutes_salao: number }>(
       `SELECT id, product_name, created_at, sla_breach_minutes_salao
-       FROM demands WHERE created_at::date >= $1 AND created_at::date <= $2 AND sla_breached_salao = true AND status != 'annulled'`,
+        FROM demands WHERE (created_at AT TIME ZONE 'UTC')::date >= $1 AND (created_at AT TIME ZONE 'UTC')::date <= $2 AND sla_breached_salao = true AND status != 'annulled'`,
       [dateFrom, dateTo]
     );
     sSlaRows.forEach(r => results.push({
@@ -530,7 +537,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
 
     const sCancelRows = await query<{ id: string; product_name: string; created_at: string; cancel_reason: string | null }>(
       `SELECT id, product_name, created_at, cancel_reason
-       FROM demands WHERE created_at::date >= $1 AND created_at::date <= $2 AND status = 'cancelled_salao'`,
+        FROM demands WHERE (created_at AT TIME ZONE 'UTC')::date >= $1 AND (created_at AT TIME ZONE 'UTC')::date <= $2 AND status = 'cancelled_salao'`,
       [dateFrom, dateTo]
     );
     sCancelRows.forEach(r => results.push({
@@ -541,7 +548,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
 
     const sStockRows = await query<{ id: string; product_name: string; created_at: string }>(
       `SELECT id, product_name, created_at
-       FROM demands WHERE created_at::date >= $1 AND created_at::date <= $2 AND stockout_reported = true AND status != 'annulled'`,
+        FROM demands WHERE (created_at AT TIME ZONE 'UTC')::date >= $1 AND (created_at AT TIME ZONE 'UTC')::date <= $2 AND stockout_reported = true AND status != 'annulled'`,
       [dateFrom, dateTo]
     );
     sStockRows.forEach(r => results.push({
@@ -556,7 +563,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
 
     const sSlowRows = await query<{ id: string; product_name: string; created_at: string }>(
       `SELECT id, product_name, created_at
-       FROM demands WHERE created_at::date >= $1 AND created_at::date <= $2 AND status != 'annulled'
+        FROM demands WHERE (created_at AT TIME ZONE 'UTC')::date >= $1 AND (created_at AT TIME ZONE 'UTC')::date <= $2 AND status != 'annulled'
          AND retrieved_at IS NOT NULL AND ready_at IS NOT NULL
          AND EXTRACT(EPOCH FROM (retrieved_at - ready_at))/60 > $3`,
       [dateFrom, dateTo, tolerance * 2]
@@ -600,29 +607,44 @@ export interface PerformanceDetails {
 export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom: string, dateTo: string, weightCache?: PerformanceWeightCache, stationCode?: string): Promise<PerformanceDetails> {
   const cache = weightCache || await createPerformanceWeightCache(dateFrom, dateTo);
   const occurrences = await getDetractorDates(entity, dateFrom, dateTo, cache, stationCode);
-  const scoreRows = await query<{ date: string; weight_version_id: string | null }>(
+  const scoreRows = await query<{ date: string; entity: PerformanceEntity; weight_version_id: string | null }>(
     `SELECT date, weight_version_id FROM performance_scores
      WHERE date >= $1 AND date <= $2 AND entity = ANY($3)`,
     [dateFrom, dateTo, entity === 'cozinha_geral'
       ? ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria']
       : [entity]]
   );
-  const legacyDates = new Set(scoreRows.filter(row => row.weight_version_id === null).map(row => String(row.date).slice(0, 10)));
   occurrences.forEach(occurrence => {
-    if (legacyDates.has(String(occurrence.date).slice(0, 10))) {
+    const occurrenceDate = dataOperacional(occurrence.date);
+    const occurrenceStation = occurrence.station || (occurrence.entity && occurrence.entity !== 'salao'
+      ? occurrence.entity.replace('cozinha_', '') : null);
+    const isLegacyForOccurrence = scoreRows.some(row => row.weight_version_id === null
+      && dataOperacional(row.date) === occurrenceDate
+      && (entity !== 'cozinha_geral'
+        ? row.entity === entity
+        : occurrenceStation === row.entity.replace('cozinha_', '')));
+    if (isLegacyForOccurrence) {
       occurrence.weight = null;
       occurrence.deduction = null;
       occurrence.weight_version_id = null;
     }
   });
-  const bases: Record<string, number> = {};
+  const bases: Record<string, number | null> = {};
+  const baseStatuses: Partial<Record<string, PerformanceCriterionSummary['eligible_base_status']>> = {};
   const versions = new Map<string, PerformanceWeightVersion>();
-  const from = new Date(`${dateFrom}T00:00:00Z`);
-  const to = new Date(`${dateTo}T00:00:00Z`);
+  const from = intervaloUtc(dateFrom);
+  const to = intervaloUtc(dateTo);
   for (const date = new Date(from); date <= to; date.setUTCDate(date.getUTCDate() + 1)) {
     const dateStr = date.toISOString().slice(0, 10);
     const dailyBases = await getCriterionEligibleBases(entity, dateStr, stationCode);
-    for (const [criterion, base] of Object.entries(dailyBases)) bases[criterion] = (bases[criterion] || 0) + base;
+    for (const [criterion, base] of Object.entries(dailyBases)) {
+      if (base === null) {
+        bases[criterion] = null;
+        baseStatuses[criterion] = entity === 'cozinha_geral' ? 'incompleta_cozinha_geral' : 'indisponivel_sem_denominador';
+      } else if (bases[criterion] !== null) {
+        bases[criterion] = (bases[criterion] || 0) + base;
+      }
+    }
     const version = cache.get(dateStr)!;
     versions.set(version.id, version);
   }
@@ -659,7 +681,7 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
     stockout_deduction: deductions.get(entity === 'salao' ? 'stockout_salao' : 'stockout_cozinha') || 0,
     slow_items: counts.get(entity === 'salao' ? 'slow_pickup_salao' : 'slow_item_cozinha') || 0,
     slow_item_deduction: deductions.get(entity === 'salao' ? 'slow_pickup_salao' : 'slow_item_cozinha') || 0,
-  } as PerformanceScoreRow, latest, entity !== 'salao', bases);
+  } as PerformanceScoreRow, latest, entity !== 'salao', bases, baseStatuses);
   for (const criterion of criteria) {
     const observedWeights = criterionWeights.get(criterion.criterion) || new Map();
     criterion.weights_status = scoreRows.some(row => row.weight_version_id === null)
@@ -683,7 +705,7 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
   }
   const [openRow] = await query<{ count: string }>(
     `SELECT COUNT(*)::int AS count FROM demands
-     WHERE created_at::date >= $1 AND created_at::date <= $2
+      WHERE (created_at AT TIME ZONE 'UTC')::date >= $1 AND (created_at AT TIME ZONE 'UTC')::date <= $2
        AND status IN ('pending', 'ready')
        AND status != 'annulled'
        ${entity === 'salao' ? '' : entity === 'cozinha_geral'
@@ -732,14 +754,15 @@ export function aggregatePerformance(
     ...criterion,
     multi_version: (criterion.weights?.length || 0) > 1,
   }));
+  const generalIncomplete = entity === 'cozinha_geral' && !dailyAverageComplete;
   return {
     entity,
-    operational_score: details.legacy_unversioned && rows.length
+    operational_score: generalIncomplete ? null : details.legacy_unversioned && rows.length
       ? round1(rows.reduce((sum, row) => sum + Number(row.final_score), 0) / rows.length)
       : round1(5 - details.total_deduction),
     daily_average_score: dailyAverage,
     daily_average_complete: dailyAverageComplete,
-    total_demands: details.total_demands,
+    total_demands: generalIncomplete ? null : details.total_demands,
     open_demands: details.open_demands,
     total_deduction: details.total_deduction,
     criteria,
@@ -754,6 +777,17 @@ export function aggregateScoreAlias(entity: PerformanceEntity, rows: Performance
   const sum = (field: keyof PerformanceScoreRow): number => rows.reduce((total, row) => total + Number(row[field] || 0), 0);
   const totalDeduction = sum('sla_breach_deduction') + sum('cancellation_deduction') + sum('stockout_deduction') + sum('slow_item_deduction');
   const latest = rows[rows.length - 1];
+  if (entity === 'cozinha_geral' && rows.length > 0) {
+    const entities = new Set(rows.map(row => row.entity));
+    if (entities.size < 3 || !['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria'].every(item => entities.has(item))) {
+      return {
+        entity, final_score: 5, base_score: 5, total_demands: 0,
+        sla_breaches: 0, sla_breach_deduction: 0, cancellations: 0,
+        cancellation_deduction: 0, stockouts: 0, stockout_deduction: 0,
+        slow_items: 0, slow_item_deduction: 0, detractors: [],
+      };
+    }
+  }
   return {
     entity,
     final_score: rows.length ? round1(rows.reduce((total, row) => total + Number(row.final_score), 0) / rows.length) : 5,

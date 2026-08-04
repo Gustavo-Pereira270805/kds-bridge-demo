@@ -374,8 +374,9 @@ export interface PerformanceWeightVersion extends PerformanceWeights {
 export interface PerformanceCriterionSummary {
   criterion: string;
   count: number;
-  eligible_base: number;
-  rate: number;
+  eligible_base: number | null;
+  eligible_base_status: 'aplicavel' | 'indisponivel_sem_denominador' | 'incompleta_cozinha_geral';
+  rate: number | null;
   weight: number | null;
   weights?: { weight_version_id: string; weight: number; count: number; deduction: number }[];
   weights_status: 'aplicado' | 'vigente_intervalo' | 'indisponivel_snapshot_legado';
@@ -398,10 +399,10 @@ export interface PerformanceOccurrence {
 
 export interface EntityPerformance {
   entity: PerformanceEntity;
-  operational_score: number;
+  operational_score: number | null;
   daily_average_score: number | null;
   daily_average_complete: boolean;
-  total_demands: number;
+  total_demands: number | null;
   open_demands: number;
   total_deduction: number;
   criteria: PerformanceCriterionSummary[];
@@ -413,8 +414,8 @@ export interface EntityPerformance {
 
 export interface PerformanceAverage {
   entity: PerformanceEntity;
-  final_score: number;
-  total_demands: number;
+  final_score: number | null;
+  total_demands: number | null;
   sla_breaches: number;
   cancellations: number;
   stockouts: number;

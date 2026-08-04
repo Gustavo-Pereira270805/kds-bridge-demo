@@ -15,6 +15,28 @@ CREATE TABLE IF NOT EXISTS performance_weight_versions (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+DO $$
+DECLARE
+  column_name text;
+BEGIN
+  FOREACH column_name IN ARRAY ARRAY[
+    'sla_breach_cozinha', 'sla_breach_salao', 'cancellation_cozinha',
+    'cancellation_salao', 'stockout_salao', 'slow_item_cozinha',
+    'slow_pickup_salao'
+  ] LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conname = 'performance_weight_versions_' || column_name || '_check'
+        AND conrelid = 'performance_weight_versions'::regclass
+    ) THEN
+      EXECUTE format(
+        'ALTER TABLE performance_weight_versions ADD CONSTRAINT %I CHECK (%I >= 0 AND %I <= 5)',
+        'performance_weight_versions_' || column_name || '_check', column_name, column_name
+      );
+    END IF;
+  END LOOP;
+END $$;
+
 CREATE INDEX IF NOT EXISTS performance_weight_versions_validity_idx
   ON performance_weight_versions (valid_from, valid_to);
 
