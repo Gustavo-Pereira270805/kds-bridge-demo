@@ -1798,6 +1798,83 @@ if (document.readyState === 'loading') {
         finally { state.exporting = false; if (exportModal) exportModal.style.display = 'none'; if (exportProgress) exportProgress.style.display = 'none'; }
     }
 
+    // Exportação da Tarefa 6: contrato único de performance operacional.
+    function task6ExportDays(from, to) {
+        var days = [], cursor = new Date(from + 'T00:00:00'), end = new Date(to + 'T00:00:00');
+        for (; cursor <= end; cursor.setDate(cursor.getDate() + 1)) days.push(cursor.toISOString().split('T')[0]);
+        return days;
+    }
+
+    async function task6FetchPerformance(from, to) {
+        var response = await fetch('/api/v1/analytics/performance?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to));
+        if (!response.ok) throw new Error('Não foi possível carregar a performance do período (' + response.status + ').');
+        var performance = await response.json();
+        if (!performance.operational || !Object.keys(performance.operational).length) throw new Error('A performance oficial não foi retornada. O relatório não foi gerado.');
+        return performance;
+    }
+
+    async function task6FetchDashboard(from, to) {
+        var params = 'from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to) + (state.stationId ? '&station_id=' + encodeURIComponent(state.stationId) : '');
+        var response = await fetch('/api/v1/analytics/dashboard?' + params);
+        if (!response.ok) throw new Error('Não foi possível carregar os dados do período (' + response.status + ').');
+        return response.json();
+    }
+
+    function task6DateLabel(date) { var p = date.split('-'); return p[2] + '/' + p[1] + '/' + p[0]; }
+
+    function task6ReportHtml(data, performance, title) {
+        var labels = { cozinha_geral:'Cozinha Geral', cozinha_quente_a:'Quente A', cozinha_quente_b:'Quente B', cozinha_fria:'Fria', salao:'Salão' };
+        var html = '<div style="background:#fff;color:#27272a;font-family:Arial,sans-serif;padding:22px;width:856px;line-height:1.35;">' + '<h1 style="margin:0;color:#1d3557;font-size:24px;">Relatório operacional</h1><p style="margin:4px 0 18px;color:#52525b;">' + escapePerfHtml(title) + '</p>';
+        var k = data.kpis || {};
+        html += '<h2 style="font-size:16px;border-bottom:2px solid #1d3557;padding-bottom:5px;">Resumo</h2><table style="width:100%;border-collapse:collapse;font-size:12px;"><tbody>';
+        [['Pedidos', k.total_pedidos], ['Entregues (%)', k.pct_entregues], ['Cancelados', k.total_cancelados], ['Zerados', k.total_roturas], ['SLA (%)', k.pct_dentro_sla], ['Atrasos cozinha', k.atrasos_cozinha], ['Atrasos salão', k.atrasos_salao], ['Urgentes', k.urgentes_puros]].forEach(function(row) { html += '<tr><td style="padding:4px;border-bottom:1px solid #e4e4e7;">' + escapePerfHtml(row[0]) + '</td><td style="padding:4px;border-bottom:1px solid #e4e4e7;font-weight:bold;">' + escapePerfHtml(row[1]) + '</td></tr>'; });
+        html += '</tbody></table><h2 style="font-size:16px;border-bottom:2px solid #1d3557;padding-bottom:5px;margin-top:18px;">Notas operacionais</h2>';
+        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; html += '<h3 style="font-size:14px;margin:12px 0 4px;">' + escapePerfHtml(labels[entity] || entity) + ' | Nota: ' + Number(item.operational_score || 0).toFixed(1) + ' | Média diária: ' + Number(item.daily_average_score || 0).toFixed(1) + ' | Demandas: ' + Number(item.total_demands || 0) + '</h3><table style="width:100%;border-collapse:collapse;font-size:10px;"><thead><tr style="background:#e5e7eb;"><th>Critério</th><th>Contagem</th><th>Base</th><th>Taxa</th><th>Peso / desconto</th></tr></thead><tbody>'; (item.criteria || []).forEach(function(c) { html += '<tr><td>' + escapePerfHtml(c.criterion) + '</td><td>' + Number(c.count || 0) + '</td><td>' + Number(c.eligible_base || 0) + '</td><td>' + (Number(c.rate || 0) * 100).toFixed(1) + '%</td><td>' + Number(c.deduction || 0).toFixed(2) + '</td></tr>'; }); html += '</tbody></table>'; });
+        html += '<h2 style="font-size:16px;border-bottom:2px solid #1d3557;padding-bottom:5px;margin-top:18px;">Vigências dos pesos</h2><table style="width:100%;border-collapse:collapse;font-size:10px;"><thead><tr style="background:#e5e7eb;"><th>Versão</th><th>Vigência inicial</th><th>Vigência final</th></tr></thead><tbody>';
+        (performance.weight_versions || []).forEach(function(v) { html += '<tr><td>' + escapePerfHtml(v.id) + '</td><td>' + escapePerfHtml(v.valid_from) + '</td><td>' + escapePerfHtml(v.valid_to || 'Em vigor') + '</td></tr>'; });
+        html += '</tbody></table><h2 style="font-size:16px;border-bottom:2px solid #1d3557;padding-bottom:5px;margin-top:18px;">Ocorrências reais</h2><table style="width:100%;border-collapse:collapse;font-size:9px;"><thead><tr style="background:#e5e7eb;"><th>Data</th><th>Tipo</th><th>Produto</th><th>Detalhe</th><th>Peso / desconto</th></tr></thead><tbody>';
+        Object.keys(performance.operational).forEach(function(entity) { (performance.operational[entity].occurrences || []).forEach(function(o) { html += '<tr><td>' + formatPerfDate(o.date) + '</td><td>' + escapePerfHtml(o.type) + '</td><td>' + escapePerfHtml(o.product_name) + '</td><td>' + escapePerfHtml(o.detail) + '</td><td>' + Number(o.weight || 0).toFixed(2) + ' / -' + Number(o.deduction || 0).toFixed(2) + '</td></tr>'; }); });
+        return html + '</tbody></table></div>';
+    }
+
+    function task6PerformanceRows(performance) {
+        var labels = { cozinha_geral:'Cozinha Geral', cozinha_quente_a:'Quente A', cozinha_quente_b:'Quente B', cozinha_fria:'Fria', salao:'Salão' }, rows = [];
+        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; rows.push({ Entidade: labels[entity] || entity, 'Nota operacional': Number(item.operational_score || 0), 'Média diária': Number(item.daily_average_score || 0), Demandas: Number(item.total_demands || 0), 'Demandas abertas': Number(item.open_demands || 0), 'Desconto total': Number(item.total_deduction || 0) }); });
+        return rows;
+    }
+
+    function task6AppendExcel(wb, data, performance, prefix) {
+        var add = function(rows, name) { XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), (prefix + name).substring(0, 31)); };
+        add(task6PerformanceRows(performance), 'Performance');
+        var criteria = [], occurrences = [];
+        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; (item.criteria || []).forEach(function(c) { criteria.push({ Entidade: entity, Critério: c.criterion, Contagem: Number(c.count || 0), 'Base elegível': Number(c.eligible_base || 0), Taxa: Number(c.rate || 0), Desconto: Number(c.deduction || 0), 'Pesos por versão': (c.weights || []).map(function(w) { return w.weight_version_id + ': ' + Number(w.weight || 0).toFixed(2) + ' (' + Number(w.count || 0) + ', -' + Number(w.deduction || 0).toFixed(2) + ')'; }).join('; ') }); }); (item.occurrences || []).forEach(function(o) { occurrences.push({ Entidade: entity, Data: o.date, Tipo: o.type, Produto: o.product_name, Detalhe: o.detail, Peso: o.weight, Desconto: o.deduction, 'Versão do peso': o.weight_version_id }); }); });
+        add(criteria, 'Critérios'); add(occurrences, 'Ocorrências'); add((performance.weight_versions || []).map(function(v) { return { Versão: v.id, 'Vigência inicial': v.valid_from, 'Vigência final': v.valid_to || 'Em vigor' }; }), 'Vigências');
+        var k = data.kpis || {}; XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Métrica', 'Valor'], ['Pedidos', k.total_pedidos], ['Entregues (%)', k.pct_entregues], ['Cancelados', k.total_cancelados], ['Zerados', k.total_roturas], ['SLA (%)', k.pct_dentro_sla], ['Atrasos cozinha', k.atrasos_cozinha], ['Atrasos salão', k.atrasos_salao], ['Urgentes', k.urgentes_puros]]), (prefix + 'Resumo').substring(0, 31));
+    }
+
+    async function exportPDF(from, to, byDay) {
+        try {
+            if (!window.jspdf || !window.html2canvas) throw new Error('Bibliotecas do PDF não carregadas. Recarregue a página.');
+            var pdf = new window.jspdf.jsPDF('p', 'mm', 'a4'), pageW = pdf.internal.pageSize.getWidth(), pageH = pdf.internal.pageSize.getHeight(), first = true;
+            var addCanvas = function(canvas) { var width = pageW - 16, scale = width / canvas.width, pagePx = Math.max(1, Math.floor((pageH - 13) / scale)), y = 0; while (y < canvas.height) { var h = Math.min(pagePx, canvas.height - y), slice = document.createElement('canvas'); slice.width = canvas.width; slice.height = h; slice.getContext('2d').drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h); if (!first) pdf.addPage(); first = false; pdf.addImage(slice.toDataURL('image/jpeg', .92), 'JPEG', 8, 8, width, h * scale); y += h; } };
+            var days = byDay ? task6ExportDays(from, to) : [from + '|' + to];
+            for (var i = 0; i < days.length; i++) { var range = days[i].split('|'), start = range[0], end = range[1] || range[0]; if (exportProgress) exportProgress.textContent = 'Gerando página ' + (i + 1) + ' de ' + days.length + '...'; var data = byDay ? await task6FetchDashboard(start, end) : state.lastData; var performance = await task6FetchPerformance(start, end), temp = document.createElement('div'); temp.style.cssText = 'position:absolute;left:-9999px;top:0;'; temp.innerHTML = task6ReportHtml(data, performance, start === end ? task6DateLabel(start) : task6DateLabel(start) + ' a ' + task6DateLabel(end)); document.body.appendChild(temp); var canvas = await html2canvas(temp, { scale: 1.5, useCORS: true, backgroundColor: '#f4f4f5' }); document.body.removeChild(temp); addCanvas(canvas); }
+            pdf.save('dashboard_' + from + '_' + to + '.pdf');
+        } catch (e) { showToast('Erro ao gerar PDF: ' + e.message, 'error'); console.error(e); }
+        finally { state.exporting = false; if (exportModal) exportModal.style.display = 'none'; if (exportProgress) exportProgress.style.display = 'none'; }
+    }
+
+    async function exportExcel(from, to, byDay) {
+        try {
+            if (!window.XLSX) throw new Error('Biblioteca XLSX não carregada.');
+            var wb = XLSX.utils.book_new(), days = byDay ? task6ExportDays(from, to) : [from + '|' + to];
+            if (days.length > 31) throw new Error('A exportação por dia é limitada a 31 dias.');
+            for (var i = 0; i < days.length; i++) { var range = days[i].split('|'), start = range[0], end = range[1] || range[0]; if (exportProgress) exportProgress.textContent = 'Gerando aba ' + (i + 1) + ' de ' + days.length + '...'; var data = byDay ? await task6FetchDashboard(start, end) : state.lastData, performance = await task6FetchPerformance(start, end); task6AppendExcel(wb, data, performance, byDay ? ('D_' + start + '_') : ''); }
+            var wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }), blob = new Blob([wbout], { type: 'application/octet-stream' }), url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = 'dashboard_' + from + '_' + to + '.xlsx'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+        } catch (e) { showToast('Erro ao gerar Excel: ' + e.message, 'error'); console.error(e); }
+        finally { state.exporting = false; if (exportModal) exportModal.style.display = 'none'; if (exportProgress) exportProgress.style.display = 'none'; }
+    }
+
     // Criteria modal close button
     var btnCriteriaClose = document.getElementById('btnCriteriaClose');
     if (btnCriteriaClose) btnCriteriaClose.addEventListener('click', function() {
