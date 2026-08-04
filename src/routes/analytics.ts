@@ -20,27 +20,23 @@ import {
   DayIndicators,
   ReplacementRow,
   PerformanceScoreRow,
-  PerformanceResponse,
-  EntityScore,
-  EntityPerformance,
-  PerformanceEntity,
-  PerformanceWeightVersion,
 } from '../types';
-import { createPerformanceWeightCache, ensureValidScoresForDate, aggregatePerformance, aggregateScoreAlias, getPerformanceDetails, consolidacaoGeralValida } from '../services/performance.service';
-import { DATA_OPERACIONAL_SQL, diasInclusivos, deslocarDataUtc, validarDataCalendario, validarIntervaloInclusivo } from '../services/operational-date.service';
+import { ensureScoresForDate, buildDetractors, getDetractorDates } from '../services/performance.service';
+
+function validarDataIso(value: string | undefined): boolean {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
+}
+
+function intervaloInclusivo(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000) + 1;
+}
 
 // v2.5 (§5.6) — indicadores diários embutidos em cada dia do week_comparison;
 // a data fica no objeto externo, então `day` é omitida do sub-objeto
 type DayIndicatorValues = Omit<DayIndicators, 'day'>;
 type WeekComparisonDayWithIndicators = WeekComparisonDay & { indicators: DayIndicatorValues };
-
-function validarDiasRelativos(valor: string | undefined): number {
-  const dias = valor === undefined ? 30 : Number(valor);
-  if (!Number.isInteger(dias) || dias < 1 || dias > 366) {
-    throw new Error('days deve ser um inteiro entre 1 e 366');
-  }
-  return dias;
-}
 
 export default async function analyticsRoutes(fastify: FastifyInstance) {
   fastify.get<{ Querystring: { from?: string; to?: string } }>(
@@ -53,7 +49,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         const params: string[] = [];
 
         if (from && to) {
-          whereClause = `WHERE ${DATA_OPERACIONAL_SQL} >= $1::date AND ${DATA_OPERACIONAL_SQL} <= $2::date`;
+          whereClause = 'WHERE created_at >= $1 AND created_at <= $2';
           params.push(from, to);
         }
         // §4.2 — excluir demandas anuladas das agregações
@@ -69,7 +65,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
            FROM demands
            WHERE status IN ('ready', 'retrieved')
              AND ready_at IS NOT NULL
-             ${from && to ? `AND ${DATA_OPERACIONAL_SQL} >= $1::date AND ${DATA_OPERACIONAL_SQL} <= $2::date` : ''}`,
+             ${from && to ? 'AND created_at >= $1 AND created_at <= $2' : ''}`,
           params
         );
 
@@ -96,16 +92,14 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     '/peak-hours',
     async (request, reply) => {
       try {
-        let days: number;
-        try { days = validarDiasRelativos(request.query.days); }
-        catch (error) { return reply.code(400).send({ error: (error as Error).message }); }
+        const days = parseInt(request.query.days || '30', 10);
 
         const rows = await query<PeakHourRow>(
           `SELECT
-            EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC')::int AS hora,
+            EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo')::int AS hora,
             COUNT(*)::int AS total
            FROM demands
-           WHERE created_at AT TIME ZONE 'UTC' >= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '1 day' * $1
+           WHERE created_at >= NOW() - INTERVAL '1 day' * $1
              AND status != 'annulled'
            GROUP BY 1 ORDER BY 1`,
           [days]
@@ -123,9 +117,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     '/by-product',
     async (request, reply) => {
       try {
-        let days: number;
-        try { days = validarDiasRelativos(request.query.days); }
-        catch (error) { return reply.code(400).send({ error: (error as Error).message }); }
+        const days = parseInt(request.query.days || '30', 10);
 
         const rows = await query<ProductRankingRow>(
           `SELECT
@@ -134,7 +126,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
             ROUND(AVG(EXTRACT(EPOCH FROM (ready_at - created_at)) / 60), 1) AS tempo_medio_min
            FROM demands
            WHERE status IN ('ready', 'retrieved')
-              AND created_at AT TIME ZONE 'UTC' >= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '1 day' * $1
+             AND created_at >= NOW() - INTERVAL '1 day' * $1
            GROUP BY product_name
            ORDER BY total_demandas DESC
            LIMIT 10`,
@@ -155,9 +147,9 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       const rawRows = await query<ShiftStatsRow>(
         `SELECT
           CASE
-             WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC') BETWEEN 6 AND 11 THEN 'Manhã'
-             WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC') BETWEEN 12 AND 14 THEN 'Almoço'
-             WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC') BETWEEN 15 AND 17 THEN 'Tarde'
+            WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo') BETWEEN 6 AND 11 THEN 'Manhã'
+            WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo') BETWEEN 12 AND 14 THEN 'Almoço'
+            WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo') BETWEEN 15 AND 17 THEN 'Tarde'
             ELSE 'Jantar'
           END AS turno,
           ROUND(AVG(EXTRACT(EPOCH FROM (ready_at - created_at)) / 60), 1) AS tempo_medio_min,
@@ -175,51 +167,29 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.get<{ Querystring: { days?: string; responsible?: string } }>(
+  fastify.get<{ Querystring: { from?: string; to?: string; responsible?: string } }>(
     '/sla-breaches',
     async (request, reply) => {
       try {
-        const { responsible } = request.query;
-        if (responsible !== undefined && responsible !== 'cozinha' && responsible !== 'salao') {
-          return reply.code(400).send({ error: 'responsible deve ser cozinha ou salao' });
-        }
-
-        let days: number;
-        try {
-          days = validarDiasRelativos(request.query.days);
-        } catch (error) {
-          return reply.code(400).send({ error: (error as Error).message });
-        }
+        const days = parseInt(
+          (request.query as any).days || '30',
+          10
+        );
 
         const rows = await query<SlaBreachRow>(
           `SELECT
             CASE
               WHEN sla_breached_cozinha THEN 'Cozinha'
-             WHEN sla_breached_salao THEN 'Salão'
-             END AS responsavel,
+              WHEN sla_breached_salao THEN 'Salão'
+            END AS responsavel,
             COUNT(*)::int AS total_estouros,
             ROUND(AVG(COALESCE(sla_breach_minutes_cozinha, sla_breach_minutes_salao)), 1) AS media_min_excedidos
-           FROM demands
-            WHERE sla_breached_cozinha = true
-              AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL
-              AND created_at AT TIME ZONE 'UTC' >= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '1 day' * $1
-              AND status != 'annulled'
-              AND status NOT IN ('cancelled_salao','cancelled_cozinha')
-              AND ($2::text IS NULL OR $2 = 'cozinha')
-            GROUP BY 1
-           UNION ALL
-           SELECT 'Salão' AS responsavel,
-             COUNT(*)::int AS total_estouros,
-             ROUND(AVG(sla_breach_minutes_salao), 1) AS media_min_excedidos
-           FROM demands
-            WHERE sla_breached_salao = true
-              AND ready_at IS NOT NULL AND retrieved_at IS NOT NULL
-              AND created_at AT TIME ZONE 'UTC' >= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '1 day' * $1
-              AND status != 'annulled'
-              AND status NOT IN ('cancelled_salao','cancelled_cozinha')
-              AND ($2::text IS NULL OR $2 = 'salao')
-            GROUP BY 1`,
-           [days, responsible ?? null]
+          FROM demands
+          WHERE (sla_breached_cozinha OR sla_breached_salao)
+            AND created_at >= NOW() - INTERVAL '1 day' * $1
+            AND status != 'annulled'
+          GROUP BY 1`,
+          [days]
         );
 
         return rows;
@@ -230,16 +200,14 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     }
   );
 
-  fastify.get<{ Querystring: { days?: string } }>(
+  fastify.get<{ Querystring: { from?: string; to?: string } }>(
     '/cancellations',
     async (request, reply) => {
       try {
-        let days: number;
-        try {
-          days = validarDiasRelativos(request.query.days);
-        } catch (error) {
-          return reply.code(400).send({ error: (error as Error).message });
-        }
+        const days = parseInt(
+          (request.query as any).days || '30',
+          10
+        );
 
         const rows = await query<CancellationRow>(
           `SELECT
@@ -248,7 +216,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
             cancel_reason
           FROM demands
           WHERE status IN ('cancelled_salao', 'cancelled_cozinha')
-              AND created_at AT TIME ZONE 'UTC' >= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '1 day' * $1
+            AND created_at >= NOW() - INTERVAL '1 day' * $1
           GROUP BY status, cancel_reason
           ORDER BY total DESC`,
           [days]
@@ -262,22 +230,20 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     }
   );
 
-  fastify.get<{ Querystring: { days?: string } }>(
+  fastify.get<{ Querystring: { from?: string; to?: string } }>(
     '/stockouts',
     async (request, reply) => {
       try {
-        let days: number;
-        try {
-          days = validarDiasRelativos(request.query.days);
-        } catch (error) {
-          return reply.code(400).send({ error: (error as Error).message });
-        }
+        const days = parseInt(
+          (request.query as any).days || '30',
+          10
+        );
 
         const rows = await query<StockoutRow>(
           `SELECT product_name, COUNT(*)::int AS total_roturas
           FROM demands
           WHERE stockout_reported = true
-             AND created_at AT TIME ZONE 'UTC' >= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '1 day' * $1
+            AND created_at >= NOW() - INTERVAL '1 day' * $1
             AND status != 'annulled'
           GROUP BY product_name
           ORDER BY total_roturas DESC`,
@@ -297,41 +263,44 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       try {
         const { range, from, to, station_id } = request.query;
-        if (range !== undefined && !['today', 'yesterday', 'week', 'month'].includes(range)) {
-          return reply.code(400).send({ error: 'O intervalo deve ser today, yesterday, week ou month' });
-        }
 
         let dateFrom: string;
         let dateTo: string;
-          const now = new Date();
+        const now = new Date();
 
         if (from || to) {
           // §5.1 — período customizado; se só `from` presente, assume dia único (to = from)
           dateFrom = (from || to) as string;
           dateTo = (to || from) as string;
-          if (!validarDataCalendario(dateFrom) || !validarDataCalendario(dateTo)) {
-            return reply.code(400).send({ error: 'A data deve estar no formato ISO YYYY-MM-DD e ser válida' });
+          const diffDays = (new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / 86400000;
+          if (diffDays < 0) {
+            return reply.code(400).send({ error: 'A data inicial deve ser anterior ou igual à data final' });
           }
-          const intervalError = validarIntervaloInclusivo(dateFrom, dateTo);
-          if (intervalError) return reply.code(400).send({ error: intervalError });
+          if (diffDays > 31) {
+            return reply.code(400).send({ error: 'O período máximo é de 31 dias' });
+          }
         } else if (range === 'week') {
+          const d = new Date(now);
+          d.setDate(d.getDate() - 7);
+          dateFrom = d.toISOString().split('T')[0];
           dateTo = now.toISOString().split('T')[0];
-          dateFrom = deslocarDataUtc(dateTo, -6);
         } else if (range === 'month') {
+          const d = new Date(now);
+          d.setDate(d.getDate() - 30);
+          dateFrom = d.toISOString().split('T')[0];
           dateTo = now.toISOString().split('T')[0];
-          dateFrom = deslocarDataUtc(dateTo, -29);
         } else {
           dateFrom = now.toISOString().split('T')[0];
           dateTo = dateFrom;
         }
 
-          const params: unknown[] = [dateFrom];
-          let dateFilter = `${DATA_OPERACIONAL_SQL} >= $1`;
-          if (dateFrom === dateTo) {
-            dateFilter = `${DATA_OPERACIONAL_SQL} = $1`;
-          } else {
-            params.push(dateTo);
-            dateFilter = `${DATA_OPERACIONAL_SQL} >= $1 AND ${DATA_OPERACIONAL_SQL} <= $2`;
+        const params: unknown[] = [dateFrom];
+        let dateFilter = 'created_at::date >= $1';
+        if (dateFrom === dateTo) {
+          dateFilter = 'created_at::date = $1';
+        } else {
+          params.push(dateTo);
+          dateFilter = 'created_at::date >= $1 AND created_at::date <= $2';
         }
         const dateFilterD = dateFilter.replace(/\bcreated_at\b/g, 'd.created_at');
 
@@ -342,7 +311,9 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         const baseParams: unknown[] = station_id ? [...params, station_id] : params;
 
         const hasCustomRange = Boolean(from || to);
-        const customSpanDays = diasInclusivos(dateFrom, dateTo);
+        const customSpanDays = Math.round(
+          (new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / 86400000
+        ) + 1;
         const rangeNum = Math.floor(
           dateFrom === dateTo ? 1
             : !hasCustomRange && range === 'week' ? 7
@@ -366,13 +337,10 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           total_cancelados: string;
           total_entregues: string;
           atrasos_cozinha: string;
-           atrasos_salao: string;
-           urgentes_puros: string;
-            urgentes_rotura: string;
-            dentro_sla_cozinha: string;
-            dentro_sla_salao: string;
-            base_sla_cozinha: string;
-            base_sla_salao: string;
+          atrasos_salao: string;
+          urgentes_puros: string;
+          urgentes_rotura: string;
+          dentro_sla: string;
           avg_cooking_min: string;
           avg_pickup_min: string;
         }>('1.KPIs',
@@ -381,16 +349,13 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
             COUNT(*) FILTER (WHERE stockout_reported = true)::int AS total_roturas,
             COUNT(*) FILTER (WHERE status IN ('cancelled_salao','cancelled_cozinha'))::int AS total_cancelados,
             COUNT(*) FILTER (WHERE status = 'retrieved')::int AS total_entregues,
-             COUNT(*) FILTER (WHERE sla_breached_cozinha = true AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::int AS atrasos_cozinha,
-             COUNT(*) FILTER (WHERE sla_breached_salao = true AND ready_at IS NOT NULL AND retrieved_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::int AS atrasos_salao,
-             COUNT(*) FILTER (WHERE sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::int AS base_sla_cozinha,
-             COUNT(*) FILTER (WHERE ready_at IS NOT NULL AND retrieved_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::int AS base_sla_salao,
+            COUNT(*) FILTER (WHERE sla_breached_cozinha = true)::int AS atrasos_cozinha,
+            COUNT(*) FILTER (WHERE sla_breached_salao = true)::int AS atrasos_salao,
             COUNT(*) FILTER (WHERE priority = 'urgent' AND stockout_reported = false)::int AS urgentes_puros,
             COUNT(*) FILTER (WHERE stockout_reported = true)::int AS urgentes_rotura,
-             COUNT(*) FILTER (WHERE sla_breached_cozinha = false AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::int AS dentro_sla_cozinha,
-             COUNT(*) FILTER (WHERE sla_breached_salao = false AND ready_at IS NOT NULL AND retrieved_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::int AS dentro_sla_salao,
-              ROUND(AVG(EXTRACT(EPOCH FROM (ready_at - created_at)) / 60) FILTER (WHERE ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha')), 1) AS avg_cooking_min,
-              ROUND(AVG(EXTRACT(EPOCH FROM (retrieved_at - ready_at)) / 60) FILTER (WHERE retrieved_at IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha')), 1) AS avg_pickup_min
+            COUNT(*) FILTER (WHERE (ready_at IS NOT NULL AND status IN ('ready','retrieved')) AND sla_breached_cozinha = false)::int AS dentro_sla,
+            ROUND(AVG(EXTRACT(EPOCH FROM (ready_at - created_at)) / 60) FILTER (WHERE ready_at IS NOT NULL), 1) AS avg_cooking_min,
+            ROUND(AVG(EXTRACT(EPOCH FROM (retrieved_at - ready_at)) / 60) FILTER (WHERE retrieved_at IS NOT NULL), 1) AS avg_pickup_min
           FROM demands
           WHERE ${dateFilter} AND status != 'annulled' ${stationFilter}`,
           baseParams
@@ -409,27 +374,10 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           atrasos_salao: parseInt(totals?.atrasos_salao || '0', 10),
           urgentes_puros: parseInt(totals?.urgentes_puros || '0', 10),
           urgentes_rotura: parseInt(totals?.urgentes_rotura || '0', 10),
-           dentro_sla_cozinha: parseInt(totals?.dentro_sla_cozinha || '0', 10),
-           dentro_sla_salao: parseInt(totals?.dentro_sla_salao || '0', 10),
-           dentro_sla: parseInt(totals?.dentro_sla_cozinha || '0', 10),
-           base_sla_cozinha: parseInt(totals?.base_sla_cozinha || '0', 10),
-           base_sla_salao: parseInt(totals?.base_sla_salao || '0', 10),
-           pct_dentro_sla_cozinha: parseInt(totals?.base_sla_cozinha || '0', 10) > 0
-             ? Math.round((parseInt(totals?.dentro_sla_cozinha || '0', 10) / parseInt(totals?.base_sla_cozinha || '0', 10)) * 1000) / 10
-             : 0,
-           pct_dentro_sla_salao: parseInt(totals?.base_sla_salao || '0', 10) > 0
-             ? Math.round((parseInt(totals?.dentro_sla_salao || '0', 10) / parseInt(totals?.base_sla_salao || '0', 10)) * 1000) / 10
-             : 0,
-           // Compatibilidade legada: este alias sempre representa o SLA da cozinha.
-           pct_dentro_sla: parseInt(totals?.base_sla_cozinha || '0', 10) > 0
-             ? Math.round((parseInt(totals?.dentro_sla_cozinha || '0', 10) / parseInt(totals?.base_sla_cozinha || '0', 10)) * 1000) / 10
-             : 0,
-           sla_semantics: {
-              pct_dentro_sla: 'pct_dentro_sla é compatibilidade legada equivalente à cozinha; novos consumidores devem usar pct_dentro_sla_cozinha ou pct_dentro_sla_salao.',
-              dentro_sla: 'dentro_sla é compatibilidade legada equivalente a dentro_sla_cozinha; novos consumidores devem usar dentro_sla_cozinha ou dentro_sla_salao.',
-             cozinha: 'dentro_sla_cozinha / base_sla_cozinha; elegíveis com sla_minutes e ready_at, excluindo anulados e cancelados.',
-             salao: 'dentro_sla_salao / base_sla_salao; elegíveis com ready_at e retrieved_at, excluindo anulados e cancelados.',
-           },
+          dentro_sla: parseInt(totals?.dentro_sla || '0', 10),
+          pct_dentro_sla: terminadas > 0
+            ? Math.round((parseInt(totals?.dentro_sla || '0', 10) / terminadas) * 1000) / 10
+            : 0,
           pct_urgentes: totalPedidos > 0
             ? Math.round(((parseInt(totals?.urgentes_puros || '0', 10) + parseInt(totals?.urgentes_rotura || '0', 10)) / totalPedidos) * 1000) / 10
             : 0,
@@ -455,19 +403,19 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         const trend = dateFrom !== dateTo ? await safeQuery<{
           day: string; total: string; entregues: string; cancelados: string; roturas: string; atrasos_cozinha: string; atrasos_salao: string;
         }>('3.Trend',
-           `SELECT ${DATA_OPERACIONAL_SQL} AS day, COUNT(*)::int AS total,
+          `SELECT created_at::date AS day, COUNT(*)::int AS total,
             COUNT(*) FILTER (WHERE status = 'retrieved')::int AS entregues,
             COUNT(*) FILTER (WHERE status IN ('cancelled_salao','cancelled_cozinha'))::int AS cancelados,
             COUNT(*) FILTER (WHERE stockout_reported = true)::int AS roturas,
-             COUNT(*) FILTER (WHERE sla_breached_cozinha = true AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::int AS atrasos_cozinha,
-             COUNT(*) FILTER (WHERE sla_breached_salao = true AND ready_at IS NOT NULL AND retrieved_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::int AS atrasos_salao
-            FROM demands WHERE ${dateFilter} AND status != 'annulled' ${stationFilter} GROUP BY ${DATA_OPERACIONAL_SQL} ORDER BY day`,
+            COUNT(*) FILTER (WHERE sla_breached_cozinha = true)::int AS atrasos_cozinha,
+            COUNT(*) FILTER (WHERE sla_breached_salao = true)::int AS atrasos_salao
+           FROM demands WHERE ${dateFilter} AND status != 'annulled' ${stationFilter} GROUP BY created_at::date ORDER BY day`,
           baseParams
         ) : [];
 
         // ── 4. Velocidade da cozinha por hora ──
         const speedByHour = await safeQuery<SpeedByHourRow>('4.SpeedByHour',
-           `SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC')::int AS hora,
+          `SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo')::int AS hora,
             ROUND(AVG(EXTRACT(EPOCH FROM (ready_at - created_at))/60)::numeric, 1) AS avg_min,
             COUNT(*)::int AS count
            FROM demands WHERE ${dateFilter} AND ready_at IS NOT NULL AND status IN ('ready','retrieved') ${stationFilter}
@@ -490,9 +438,9 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         const occRaw = await safeQuery<{ turno: string; pct_ociosa: string }>('6.Occupancy',
           `SELECT
             CASE
-             WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC') BETWEEN 6 AND 11 THEN 'Manhã'
-             WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC') BETWEEN 12 AND 14 THEN 'Almoço'
-             WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC') BETWEEN 15 AND 17 THEN 'Tarde'
+              WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo') BETWEEN 6 AND 11 THEN 'Manhã'
+              WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo') BETWEEN 12 AND 14 THEN 'Almoço'
+              WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo') BETWEEN 15 AND 17 THEN 'Tarde'
               ELSE 'Jantar'
             END AS turno,
             ROUND((1 - (COUNT(*) FILTER (WHERE status = 'pending')::numeric / NULLIF(COUNT(*),0))) * 100, 1) AS pct_ociosa
@@ -506,10 +454,10 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         // ── 7. SLA por produto (Pareto) ──
         const slaByProduct = await safeQuery<SlaByProductRow>('7.SlaByProduct',
           `SELECT product_name, COUNT(*)::int AS total,
-              COUNT(*) FILTER (WHERE sla_breached_cozinha = true AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::int AS breached,
-              ROUND((COUNT(*) FILTER (WHERE sla_breached_cozinha = false AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::numeric / NULLIF(COUNT(*) FILTER (WHERE sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha')),0)) * 100, 1) AS pct_ok,
-              ROUND(COALESCE(AVG(sla_breach_minutes_cozinha) FILTER (WHERE sla_breached_cozinha = true AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha')), 0)::numeric, 1) AS avg_overage_min
-             FROM demands WHERE ${dateFilter} AND status != 'annulled' AND status NOT IN ('cancelled_salao','cancelled_cozinha') AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL ${stationFilter}
+            COUNT(*) FILTER (WHERE sla_breached_cozinha = true)::int AS breached,
+            ROUND((COUNT(*) FILTER (WHERE sla_breached_cozinha = false AND ready_at IS NOT NULL)::numeric / NULLIF(COUNT(*) FILTER (WHERE ready_at IS NOT NULL),0)) * 100, 1) AS pct_ok,
+            ROUND(COALESCE(AVG(sla_breach_minutes_cozinha) FILTER (WHERE sla_breached_cozinha = true), 0)::numeric, 1) AS avg_overage_min
+           FROM demands WHERE ${dateFilter} AND (status IN ('ready','retrieved')) ${stationFilter}
            GROUP BY product_name ORDER BY breached DESC, total DESC`,
           baseParams
         );
@@ -525,7 +473,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
 
         // ── 9. Tempo de retirada por hora ──
         const pickupByHour = await safeQuery<PickupByHourRow>('9.PickupByHour',
-           `SELECT EXTRACT(HOUR FROM ready_at AT TIME ZONE 'UTC')::int AS hora,
+          `SELECT EXTRACT(HOUR FROM ready_at AT TIME ZONE 'America/Sao_Paulo')::int AS hora,
             ROUND(AVG(EXTRACT(EPOCH FROM (retrieved_at - ready_at))/60)::numeric, 1) AS avg_min,
             COUNT(*)::int AS count
            FROM demands WHERE ${dateFilter} AND retrieved_at IS NOT NULL AND ready_at IS NOT NULL AND status != 'annulled' ${stationFilter}
@@ -534,8 +482,8 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
 
         // ── 10. Média móvel 7 dias ──
         const rawVolume = dateFrom !== dateTo ? await safeQuery<{ day: string; total: string }>('10.RawVolume',
-           `SELECT ${DATA_OPERACIONAL_SQL} AS day, COUNT(*)::int AS total
-            FROM demands WHERE ${dateFilter} AND status != 'annulled' ${stationFilter} GROUP BY ${DATA_OPERACIONAL_SQL} ORDER BY day`, baseParams
+          `SELECT created_at::date AS day, COUNT(*)::int AS total
+           FROM demands WHERE ${dateFilter} AND status != 'annulled' ${stationFilter} GROUP BY created_at::date ORDER BY day`, baseParams
         ) : [];
         const volumeMA: VolumeMARow[] = [];
         for (let i = 0; i < rawVolume.length; i++) {
@@ -549,7 +497,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         // ── 11. Sazonalidade dia da semana ──
         const diasSemana = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
         const weekdayRaw = await safeQuery<{ dow: string; total: string }>('11.Weekday',
-           `SELECT EXTRACT(DOW FROM created_at AT TIME ZONE 'UTC')::int AS dow, COUNT(*)::int AS total
+          `SELECT EXTRACT(DOW FROM created_at)::int AS dow, COUNT(*)::int AS total
            FROM demands WHERE ${dateFilter} AND status != 'annulled' ${stationFilter} GROUP BY 1 ORDER BY 1`, baseParams
         );
         const weekdayData: WeekdayRow[] = diasSemana.map((dia, idx) => {
@@ -562,14 +510,14 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           `SELECT product_name, quantity AS qty,
             ROUND(EXTRACT(EPOCH FROM (ready_at - created_at))/60, 1) AS actual_min,
             sla_minutes AS sla_min
-            FROM demands WHERE ${dateFilter} AND ready_at IS NOT NULL AND sla_minutes IS NOT NULL AND status IN ('ready','retrieved') ${stationFilter}
+           FROM demands WHERE ${dateFilter} AND ready_at IS NOT NULL AND status IN ('ready','retrieved') ${stationFilter}
            ORDER BY quantity DESC LIMIT 200`, baseParams
         );
 
         // ── 13. Heatmap hora × dia da semana ──
         const heatmap = await safeQuery<HeatmapRow>('13.Heatmap',
-           `SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC')::int AS hora,
-             EXTRACT(DOW FROM created_at AT TIME ZONE 'UTC')::int AS dia_semana,
+          `SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo')::int AS hora,
+            EXTRACT(DOW FROM created_at)::int AS dia_semana,
             COUNT(*)::int AS total
            FROM demands WHERE ${dateFilter} AND status != 'annulled' ${stationFilter}
            GROUP BY 1, 2 ORDER BY 2, 1`, baseParams
@@ -592,7 +540,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         let weekComparison: WeekComparisonDayWithIndicators[] = [];
         if (range === 'week' || range === 'month') {
           const prevStart = new Date(dateFrom);
-          prevStart.setUTCDate(prevStart.getUTCDate() - rangeNum);
+          prevStart.setDate(prevStart.getDate() - rangeNum);
           const prevStartStr = prevStart.toISOString().split('T')[0];
           const compParams: unknown[] = [dateFrom, dateTo, prevStartStr, dateFrom, rangeNum];
           // §5.4 — nesta query station_id entra como $6 (após os 4 filtros de data + rangeNum)
@@ -600,14 +548,14 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           if (station_id) compParams.push(station_id);
 
           const compData = await safeQuery<{ day: string; total: string; period: string }>('15.WeekComparison',
-             `SELECT ${DATA_OPERACIONAL_SQL} AS day, COUNT(*)::int AS total, 'current' AS period
+            `SELECT created_at::date AS day, COUNT(*)::int AS total, 'current' AS period
              FROM demands
-              WHERE ${DATA_OPERACIONAL_SQL} >= $1 AND ${DATA_OPERACIONAL_SQL} <= $2 AND status != 'annulled' ${stationFilter15}
+             WHERE created_at::date >= $1 AND created_at::date <= $2 AND status != 'annulled' ${stationFilter15}
              GROUP BY 1
              UNION ALL
-             SELECT (${DATA_OPERACIONAL_SQL} + $5::integer)::date AS day, COUNT(*)::int AS total, 'previous' AS period
+             SELECT (created_at::date + $5::integer)::date AS day, COUNT(*)::int AS total, 'previous' AS period
              FROM demands
-              WHERE ${DATA_OPERACIONAL_SQL} >= $3 AND ${DATA_OPERACIONAL_SQL} < $4 AND status != 'annulled' ${stationFilter15}
+             WHERE created_at::date >= $3 AND created_at::date < $4 AND status != 'annulled' ${stationFilter15}
              GROUP BY 1`,
             compParams
           );
@@ -622,10 +570,10 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
             stockouts: number;
             urgent_pct: string | null;
           }>('15b.DayIndicators',
-             `SELECT ${DATA_OPERACIONAL_SQL} AS day,
-               ROUND(AVG(EXTRACT(EPOCH FROM (ready_at - created_at)) / 60) FILTER (WHERE ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))::numeric, 1) AS avg_time_min,
-                ROUND(100.0 * COUNT(*) FILTER (WHERE sla_breached_cozinha = true AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha'))
-                  / NULLIF(COUNT(*) FILTER (WHERE sla_minutes IS NOT NULL AND ready_at IS NOT NULL AND status NOT IN ('cancelled_salao','cancelled_cozinha')), 0), 1) AS sla_pct,
+            `SELECT created_at::date AS day,
+              ROUND(AVG(EXTRACT(EPOCH FROM (ready_at - created_at)) / 60)::numeric, 1) AS avg_time_min,
+              ROUND(100.0 * COUNT(*) FILTER (WHERE sla_breached_cozinha = true)
+                / NULLIF(COUNT(*) FILTER (WHERE status IN ('ready','retrieved')), 0), 1) AS sla_pct,
               ROUND(100.0 * COUNT(*) FILTER (WHERE status IN ('cancelled_salao','cancelled_cozinha'))
                 / NULLIF(COUNT(*), 0), 1) AS cancel_rate,
               COUNT(*) FILTER (WHERE stockout_reported = true)::int AS stockouts,
@@ -681,7 +629,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         // ── 17. Tempo de fila por estação × hora (§5.5) ──
         const queueTimeByHour = await safeQuery<QueueTimeByHourRow>('17.QueueTimeByHour',
           `SELECT ks.name AS estacao,
-             EXTRACT(HOUR FROM d.created_at AT TIME ZONE 'UTC')::int AS hora,
+            EXTRACT(HOUR FROM d.created_at AT TIME ZONE 'America/Sao_Paulo')::int AS hora,
             ROUND(AVG(EXTRACT(EPOCH FROM (d.ready_at - d.created_at)) / 60))::int AS tempo_medio_min
            FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
            WHERE ${dateFilterD} AND d.status IN ('ready','retrieved') AND d.ready_at IS NOT NULL
@@ -692,7 +640,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
 
         // ── 18. Análise de trocas por dia (§2.5 fase 2) ──
         const replacementsRaw = await safeQuery<ReplacementRow>('18.Replacements',
-             `SELECT ${DATA_OPERACIONAL_SQL} AS day,
+          `SELECT created_at::date AS day,
             COUNT(*)::int AS total,
             COUNT(*) FILTER (WHERE is_replacement = true)::int AS replacements,
             ROUND(100.0 * COUNT(*) FILTER (WHERE is_replacement = true) / NULLIF(COUNT(*), 0), 1) AS replacement_pct
@@ -725,8 +673,13 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           replacements,
         };
       } catch (error: any) {
+        const msg = error && typeof error === 'object' ? (error.message || String(error)) : String(error);
+        const stack = error && typeof error === 'object' && error.stack ? error.stack : '';
+        console.error('=== DASHBOARD ERROR ===');
+        console.error('Message:', msg);
+        console.error('Stack:', stack);
         request.log.error(error, 'Dashboard query failed');
-        reply.code(500).send({ error: 'Erro ao buscar dados do dashboard' });
+        reply.code(500).send({ error: 'Erro ao buscar dados do dashboard: ' + msg });
       }
     }
   );
@@ -736,116 +689,146 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     '/performance',
     async (request, reply) => {
       try {
-        const { range, from, to, station_id: stationId } = request.query;
-        if (range !== undefined && !['week', 'month'].includes(range)) {
-          return reply.code(400).send({ error: 'O intervalo deve ser week ou month' });
-        }
-        const today = new Date();
-        const shiftDate = (days: number): string => {
-          const date = new Date(today);
-          date.setUTCDate(date.getUTCDate() + days);
-          return date.toISOString().slice(0, 10);
-        };
-        let dateFrom = from || to || (range === 'week' ? shiftDate(-6) : range === 'month' ? shiftDate(-29) : shiftDate(0));
-        let dateTo = to || from || shiftDate(0);
-        if (range && !['week', 'month'].includes(range)) return reply.code(400).send({ error: 'O intervalo deve ser week ou month' });
-        if (range && (from || to)) return reply.code(400).send({ error: 'Use range ou from/to, não os dois' });
-        if (range === 'week') { dateFrom = shiftDate(-6); dateTo = shiftDate(0); }
-        if (range === 'month') { dateFrom = shiftDate(-29); dateTo = shiftDate(0); }
-        if (!validarDataCalendario(dateFrom) || !validarDataCalendario(dateTo)) return reply.code(400).send({ error: 'A data deve estar no formato ISO YYYY-MM-DD e ser válida' });
-        const start = new Date(`${dateFrom}T00:00:00Z`).getTime();
-        const end = new Date(`${dateTo}T00:00:00Z`).getTime();
-        const days = diasInclusivos(dateFrom, dateTo);
-        const intervalError = validarIntervaloInclusivo(dateFrom, dateTo);
-        if (intervalError) return reply.code(400).send({ error: intervalError });
+        const { range, from, to, station_id } = request.query;
+        const now = new Date();
 
-        let stationCode: string | undefined;
-        if (stationId) {
-          const [station] = await query<{ code: string }>('SELECT code FROM kitchen_stations WHERE id = $1', [stationId]);
-          if (!station) return reply.code(400).send({ error: 'Estação selecionada não encontrada' });
-          if (!['quente_a', 'quente_b', 'fria'].includes(station.code)) return reply.code(400).send({ error: 'A performance aceita apenas estações de cozinha' });
-          stationCode = station.code;
-        }
-        const allEntities: PerformanceEntity[] = ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'salao'];
-        const selectedEntity = stationCode === 'quente_a' ? 'cozinha_quente_a'
-          : stationCode === 'quente_b' ? 'cozinha_quente_b'
-            : stationCode === 'fria' ? 'cozinha_fria' : undefined;
-        const entities: PerformanceEntity[] = selectedEntity ? [selectedEntity] : allEntities;
-        const weightCache = await createPerformanceWeightCache(dateFrom, dateTo);
-        for (let index = 0; index < days; index += 1) {
-          const currentDate = new Date(start);
-          currentDate.setUTCDate(currentDate.getUTCDate() + index);
-          const date = currentDate.toISOString().slice(0, 10);
-          await ensureValidScoresForDate(date, weightCache);
+        let dateFrom: string;
+        let dateTo: string;
+        if (from || to) {
+          dateFrom = from || to as string;
+          dateTo = to || from as string;
+          if (!validarDataIso(dateFrom) || !validarDataIso(dateTo)) {
+            return reply.code(400).send({ error: 'A data deve estar no formato ISO YYYY-MM-DD e ser válida' });
+          }
+          if (dateFrom > dateTo) {
+            return reply.code(400).send({ error: 'A data inicial deve ser anterior ou igual à data final' });
+          }
+          if (intervaloInclusivo(dateFrom, dateTo) > 31) {
+            return reply.code(400).send({ error: 'O período máximo é de 31 dias' });
+          }
+        } else if (range === 'week') {
+          const d = new Date(now);
+          d.setDate(d.getDate() - 7);
+          dateFrom = d.toISOString().split('T')[0];
+          dateTo = now.toISOString().split('T')[0];
+        } else if (range === 'month') {
+          const d = new Date(now);
+          d.setDate(d.getDate() - 30);
+          dateFrom = d.toISOString().split('T')[0];
+          dateTo = now.toISOString().split('T')[0];
+        } else {
+          dateFrom = now.toISOString().split('T')[0];
+          dateTo = dateFrom;
         }
 
-        const scoreRows = await query<PerformanceScoreRow>(
-          `SELECT * FROM performance_scores WHERE date >= $1 AND date <= $2 AND entity = ANY($3) ORDER BY date, entity`,
-          [dateFrom, dateTo, entities]
+        // Ensure today's scores are computed
+        // Compute the requested dates. This also makes exact daily exports deterministic.
+        const cur = new Date(dateFrom + 'T00:00:00');
+        const end = new Date(dateTo + 'T00:00:00');
+        while (cur <= end) {
+          await ensureScoresForDate(cur.toISOString().split('T')[0]);
+          cur.setDate(cur.getDate() + 1);
+        }
+
+        const entities = ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'salao'];
+
+        // Current scores
+        const currentRows = await query<PerformanceScoreRow>(
+          `SELECT * FROM performance_scores
+           WHERE date = $1 AND entity = ANY($2)`,
+          [dateTo, entities]
         );
-          const validGeneralDates = new Set(
-            Array.from(new Set(scoreRows.filter(row => row.entity === 'cozinha_geral').map(row => String(row.date).slice(0, 10))))
-              .filter(date => {
-                const stationRows = scoreRows.filter(row => row.entity !== 'cozinha_geral' && String(row.date).slice(0, 10) === date);
-                return scoreRows
-                 .filter(row => row.entity === 'cozinha_geral' && String(row.date).slice(0, 10) === date)
-                 .some(generalRow => consolidacaoGeralValida(stationRows, generalRow));
-             })
-         );
-         const scoreRowsValidos = scoreRows.filter(row => row.entity !== 'cozinha_geral' || validGeneralDates.has(String(row.date).slice(0, 10)));
-         const current: Record<string, EntityScore> = {};
-        const historyMap = new Map<string, { date: string; [entity: string]: number | string | null }>();
-        for (let index = 0; index < days; index += 1) {
-          const date = deslocarDataUtc(dateFrom, index);
-          historyMap.set(date, { date, ...Object.fromEntries(entities.map(entity => [entity, null])) });
+
+        const current: Record<string, any> = {};
+        for (const row of currentRows) {
+          current[row.entity] = {
+            entity: row.entity,
+            final_score: row.final_score,
+            base_score: row.base_score,
+            total_demands: row.total_demands,
+            sla_breaches: row.sla_breaches,
+            sla_breach_deduction: row.sla_breach_deduction,
+            cancellations: row.cancellations,
+            cancellation_deduction: row.cancellation_deduction,
+            stockouts: row.stockouts,
+            stockout_deduction: row.stockout_deduction,
+            slow_items: row.slow_items,
+            slow_item_deduction: row.slow_item_deduction,
+            detractors: buildDetractors(row),
+          };
         }
-         const averages: Record<string, EntityScore> = {};
-         for (const entity of entities) {
-           const rows = scoreRowsValidos.filter(row => row.entity === entity);
-            const aliasRows = rows;
-            const completeDates = entity === 'cozinha_geral'
-              ? Array.from(new Set(rows.map(row => String(row.date).slice(0, 10))))
-                .filter(date => validGeneralDates.has(date))
-              : [];
-            const sortedCompleteDates = completeDates.sort();
-            const latestGeneralDate = sortedCompleteDates[sortedCompleteDates.length - 1];
-            const latest = entity === 'cozinha_geral'
-              ? (latestGeneralDate ? rows.find(row => String(row.date).slice(0, 10) === latestGeneralDate) : undefined)
-              : rows[rows.length - 1];
-            averages[entity] = aggregateScoreAlias(entity as PerformanceEntity, aliasRows);
-            const currentRows = entity === 'cozinha_geral'
-              ? (latest ? [latest] : [])
-              : (latest ? [latest] : []);
-            current[entity] = { ...aggregateScoreAlias(entity as PerformanceEntity, currentRows), entity: entity as PerformanceEntity };
-            if (entity === 'cozinha_geral') {
-              const dates = Array.from(new Set(rows.map(row => String(row.date).slice(0, 10))));
-              for (const date of dates) {
-                const dailyAlias = aggregateScoreAlias(entity, rows.filter(row => String(row.date).slice(0, 10) === date));
-                historyMap.get(date)![entity] = dailyAlias.final_score;
-              }
-           } else {
-             for (const row of rows) {
-               const date = String(row.date).slice(0, 10);
-                historyMap.get(date)![entity] = row.final_score === null ? null : Number(row.final_score);
-             }
-           }
-        }
-        const operational: Record<string, EntityPerformance> = {};
+
+        // Detractor dates for the current date (used to show individual occurrences)
+        const detractorDates: Record<string, any[]> = {};
         for (const entity of entities) {
-          const details = await getPerformanceDetails(entity, dateFrom, dateTo, weightCache, stationCode);
-           const rows = scoreRowsValidos.filter(row => row.entity === entity);
-            const dailyAverageRows = entity === 'cozinha_geral'
-              ? scoreRowsValidos.filter(row => ['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria'].includes(row.entity))
-              : rows;
-           operational[entity] = aggregatePerformance(entity as PerformanceEntity, rows, details, dailyAverageRows);
+          try {
+            detractorDates[entity] = await getDetractorDates(entity, dateFrom, dateTo);
+          } catch (e) {
+            detractorDates[entity] = [];
+          }
         }
-        const versions = new Map<string, PerformanceWeightVersion>();
-        Object.values(operational).forEach(item => item.weight_versions.forEach(version => versions.set(version.id, version)));
-        const response: PerformanceResponse = { current, history: Array.from(historyMap.values()).sort((a, b) => a.date.localeCompare(b.date)), averages, operational, detractor_dates: Object.fromEntries(entities.map(entity => [entity, operational[entity].occurrences])), date_from: dateFrom, date_to: dateTo, weight_versions: Array.from(versions.values()) };
-        return response;
-         } catch (error: unknown) {
-           request.log.error(error);
-           reply.code(500).send({ error: 'Erro ao buscar performance' });
+
+        // History for trend
+        let history: any[] = [];
+        if (dateFrom !== dateTo) {
+          const historyRows = await query<PerformanceScoreRow>(
+            `SELECT * FROM performance_scores
+             WHERE date >= $1 AND date <= $2 AND entity = ANY($3)
+             ORDER BY date, entity`,
+            [dateFrom, dateTo, entities]
+          );
+
+          const dayMap = new Map<string, Record<string, any>>();
+          for (const row of historyRows) {
+            const rawDate: any = row.date;
+            const day = rawDate instanceof Date
+              ? rawDate.toISOString().split('T')[0]
+              : String(rawDate).split('T')[0];
+            if (!dayMap.has(day)) dayMap.set(day, { date: day });
+            dayMap.get(day)![row.entity] = Number(row.final_score);
+          }
+          history = Array.from(dayMap.values()).sort((a, b) =>
+            String(a.date).localeCompare(String(b.date))
+          );
+        }
+
+        // Period averages (for week/month)
+        let averages: Record<string, any> = {};
+        if (dateFrom !== dateTo) {
+          const avgRows = await query<{
+            entity: string; avg_score: string; total_demands: string;
+            sla_breaches: string; cancellations: string; stockouts: string; slow_items: string;
+          }>(
+            `SELECT entity,
+               ROUND(AVG(final_score)::numeric, 1) AS avg_score,
+               SUM(total_demands)::int AS total_demands,
+               SUM(sla_breaches)::int AS sla_breaches,
+               SUM(cancellations)::int AS cancellations,
+               SUM(stockouts)::int AS stockouts,
+               SUM(slow_items)::int AS slow_items
+             FROM performance_scores
+             WHERE date >= $1 AND date <= $2 AND entity = ANY($3)
+             GROUP BY entity`,
+            [dateFrom, dateTo, entities]
+          );
+          for (const row of avgRows) {
+            averages[row.entity] = {
+              entity: row.entity,
+              final_score: parseFloat(row.avg_score),
+              total_demands: parseInt(row.total_demands),
+              sla_breaches: parseInt(row.sla_breaches),
+              cancellations: parseInt(row.cancellations),
+              stockouts: parseInt(row.stockouts),
+              slow_items: parseInt(row.slow_items),
+            };
+          }
+        }
+
+        return { current, history, averages, detractor_dates: detractorDates };
+      } catch (error: any) {
+        const msg = error && typeof error === 'object' ? (error.message || String(error)) : String(error);
+        request.log.error(error);
+        reply.code(500).send({ error: 'Erro ao buscar performance: ' + msg });
       }
     }
   );

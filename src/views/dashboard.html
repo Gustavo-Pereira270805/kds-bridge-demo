@@ -250,6 +250,45 @@
         .kpi-delta.up { color: var(--c-accent-warm); }
         .kpi-delta.down { color: var(--c-danger); }
         :root[data-theme="light"] .score-good { color: #8a5a22; }
+        .export-report { background:#090a0c; color:#f4efe8; font-family:Inter,sans-serif; padding:28px; width:900px; line-height:1.35; }
+        .export-report header { display:flex; justify-content:space-between; align-items:flex-start; padding:22px 24px; background:#151619; border:1px solid #2b2d30; border-radius:16px; margin-bottom:14px; }
+        .export-report header small, .export-report small { color:#9c8875; font-size:10px; letter-spacing:1.4px; font-weight:800; }
+        .export-report header h1 { color:#f4efe8; font-size:27px; margin:5px 0 3px; }
+        .export-report header p { color:#b7aaa0; margin:0; font-size:13px; }
+        .export-report header strong { color:#d4a574; font-family:var(--font-mono); font-size:12px; letter-spacing:1px; text-align:right; }
+        .export-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px; }
+        .export-kpis-all { grid-template-columns:repeat(4,1fr); }
+        .export-kpis > div, .export-panel { background:#151619; border:1px solid #2b2d30; border-radius:14px; padding:15px; }
+        .export-kpis b { display:block; color:#f4efe8; font:800 26px var(--font-mono); margin-top:5px; }
+        .export-two { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
+        .export-panel { min-width:0; margin-bottom:12px; }
+        .export-two .export-panel { margin-bottom:0; }
+        .export-panel h3 { color:#d4a574; font-size:14px; letter-spacing:.3px; margin:0 0 12px; padding-bottom:8px; border-bottom:1px solid #36383b; }
+        .export-panel .panel { background:transparent; border:0; box-shadow:none; padding:0; }
+        .export-panel .section-title { color:#d4a574; border-bottom-color:#36383b; }
+        .export-report canvas { width:100%; max-width:100%; background:#151619; }
+        .export-score-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+        .export-score { background:#202124; border:1px solid #36383b; border-radius:11px; padding:12px 6px; text-align:center; }
+        .export-score-name { color:#b7aaa0; font-size:10px; text-transform:uppercase; min-height:25px; }
+        .export-score-value { color:#d4a574; font:800 29px var(--font-mono); margin:4px 0; }
+        .export-stars { color:#d4a574; font-size:12px; letter-spacing:1px; white-space:nowrap; }
+        .export-score-meta, .export-muted { color:#817873; font-size:10px; }
+        .export-detail { padding:7px 0; border-bottom:1px solid #2b2d30; }
+        .export-detail:last-child { border-bottom:0; }
+        .export-detail h4 { color:#f4efe8; font-size:12px; margin:0 0 7px; }
+        .export-detail h4 em { color:#d4a574; font-style:normal; float:right; font-family:var(--font-mono); }
+        .export-bar-row { display:grid; grid-template-columns:130px 1fr 48px; gap:7px; align-items:center; font-size:10px; color:#b7aaa0; margin:5px 0; }
+        .export-bar-row > div { height:8px; background:#292b2e; border-radius:5px; overflow:hidden; }
+        .export-bar-row i { display:block; height:100%; background:#c66b5d; border-radius:5px; }
+        .export-bar-row b { color:#e18b7a; text-align:right; font:700 10px var(--font-mono); }
+        .export-empty { color:#817873; padding:20px; }
+        .export-donut-layout { display:flex; align-items:center; justify-content:center; gap:12px; min-height:150px; }
+        .export-donut-layout svg { width:145px; height:145px; flex:0 0 145px; }
+        .export-donut-layout ul { list-style:none; padding:0; margin:0; display:grid; gap:7px; width:100%; }
+        .export-donut-layout li { display:grid; grid-template-columns:10px 1fr auto; gap:6px; align-items:center; color:#b7aaa0; font-size:10px; }
+        .export-donut-layout li i { width:9px; height:9px; border-radius:2px; }
+        .export-donut-layout li b { color:#f4efe8; font:700 10px var(--font-mono); }
+        @media print { .export-report { background:#090a0c !important; } }
     </style>
 </head>
 <body>
@@ -403,22 +442,25 @@
 <div id="criteriaModal" class="modal-overlay" style="display:none;">
     <div class="modal-card modal-wide">
         <div class="modal-title">Como são calculadas as notas?</div>
-        <div class="modal-label">Critérios e vigência</div>
+        <div class="modal-label">Pesos e penalidades</div>
         <table class="criteria-table">
             <thead><tr><th>Evento</th><th>Impacto na nota</th></tr></thead>
             <tbody>
-                <tr><td>Estouro de SLA da cozinha</td><td>Peso exibido por versão</td></tr>
-                <tr><td>Estouro de SLA do salão</td><td>Peso exibido por versão</td></tr>
-                <tr><td>Cancelamento</td><td>Peso separado por entidade</td></tr>
-                <tr><td>Zerado da cozinha</td><td>Informativo, sem desconto</td></tr>
-                <tr><td>Zerado do salão</td><td>Peso exibido por versão</td></tr>
-                <tr><td>Preparo lento</td><td>Peso exibido por versão</td></tr>
-                <tr><td>Retirada lenta</td><td>Penaliza somente o salão</td></tr>
+                <tr><td>Nota base</td><td>5.0</td></tr>
+                <tr><td>Estouro de SLA (cozinha)</td><td>&minus;0.15 por ocorrência</td></tr>
+                <tr><td>Cancelamento</td><td>&minus;0.30 por ocorrência</td></tr>
+                <tr><td>Zerou (cozinha)</td><td>&minus;0.20 por ocorrência</td></tr>
+                <tr><td>Zerou (salão)</td><td>&minus;0.10 por ocorrência</td></tr>
+                <tr><td>Item lento</td><td>&minus;0.10 por ocorrência</td></tr>
             </tbody>
         </table>
-        <div class="modal-label">Como interpretar</div>
+        <div class="modal-label">Exemplo de cálculo</div>
         <div class="criteria-example">
-            A nota operacional e os descontos são calculados pela API para o período selecionado. Quando houver mais de uma versão vigente, o detalhamento preserva cada peso por versão e não resume o período pelo peso mais recente. Alterações de pesos valem para novas apurações e não recalculam notas históricas.
+            Quente A em um dia com 40 demandas:<br>
+            &bull; 2 estouros de SLA &rarr; 2 &times; (&minus;0.15) = &minus;0.30<br>
+            &bull; 1 cancelamento &rarr; 1 &times; (&minus;0.30) = &minus;0.30<br>
+            &bull; 1 zerou na cozinha &rarr; 1 &times; (&minus;0.20) = &minus;0.20<br>
+            <strong>Nota final = 5.0 &minus; 0.30 &minus; 0.30 &minus; 0.20 = 4.2 (&Oacute;timo)</strong>
         </div>
         <div class="modal-label">Escala de cores</div>
         <div class="criteria-scale">
@@ -428,7 +470,7 @@
             <div class="criteria-chip" style="background:#e63946;"><div class="cs-range">0 &ndash; 1.9</div><div class="cs-label">Ruim</div></div>
         </div>
         <div class="criteria-entities">
-            <strong>Entidades avaliadas:</strong> Cozinha Quente A, Cozinha Quente B, Cozinha Fria, Sal&atilde;o e Cozinha Geral. A cozinha geral mostra a nota operacional agregada e, separadamente, a m&eacute;dia simples das esta&ccedil;&otilde;es. Demandas abertas entram no total, mas ficam fora das bases eleg&iacute;veis que exigem timestamps.
+            <strong>Entidades avaliadas:</strong> Cozinha Quente A, Cozinha Quente B, Cozinha Fria, Sal&atilde;o e Cozinha Geral (m&eacute;dia das cozinhas). A nota parte de 5.0 e sofre as penalidades da tabela; &eacute; recalculada a cada mudan&ccedil;a de status das demandas do dia.
         </div>
         <div class="modal-actions">
             <button id="btnCriteriaClose" class="btn-modal-confirm" type="button">Fechar</button>
@@ -646,7 +688,6 @@ if (document.readyState === 'loading') {
 
     function renderKpis(data, trend) {
         var k = (data && data.kpis) || {};
-        var displayMetric = function(value, suffix) { return task6DisplayNumber(value, 1) + (suffix || ''); };
         var totalPedidos = k.total_pedidos || 0;
         var atrasosCozinha = k.atrasos_cozinha || 0;
         var atrasosSalao = k.atrasos_salao || 0;
@@ -660,8 +701,7 @@ if (document.readyState === 'loading') {
 
         var heroCards = [
             { key: 'pedidos', eyebrow: 'TOTAL DE PEDIDOS', value: totalPedidos.toLocaleString('pt-BR'), delta: k.comparison ? k.comparison.pedidos ? k.comparison.pedidos.delta_pct : null : null, status: 'neutral', target: '#overview' },
-            { key: 'sla', eyebrow: '% DENTRO SLA COZINHA', value: displayMetric(k.pct_dentro_sla_cozinha, '%'), delta: k.comparison ? k.comparison.sla ? k.comparison.sla.delta_pct : null : null, status: 'neutral', target: '#sla' },
-            { key: 'sla-salao', eyebrow: '% DENTRO SLA SALÃO', value: displayMetric(k.pct_dentro_sla_salao, '%'), delta: null, status: 'neutral', target: '#sla' },
+            { key: 'sla', eyebrow: '% DENTRO DO SLA', value: (k.pct_dentro_sla || 0).toFixed(1) + '%', delta: k.comparison ? k.comparison.sla ? k.comparison.sla.delta_pct : null : null, status: 'neutral', target: '#sla' },
             { key: 'atrasos-cozinha', eyebrow: 'ATRASOS COZINHA', value: atrasosCozinha.toLocaleString('pt-BR'), delta: k.comparison ? k.comparison.atrasos_cozinha ? k.comparison.atrasos_cozinha.delta_pct : null : null, status: statusForAtrasos(atrasosCozinha), target: '#sla' },
             { key: 'atrasos-salao', eyebrow: 'ATRASOS SAL\u00c3O', value: atrasosSalao.toLocaleString('pt-BR'), delta: k.comparison ? k.comparison.atrasos_salao ? k.comparison.atrasos_salao.delta_pct : null : null, status: statusForAtrasos(atrasosSalao), target: '#sla' },
         ];
@@ -672,12 +712,10 @@ if (document.readyState === 'loading') {
         var secondaryCards = [
             { key: 'zerados', label: 'PRODUTOS ZERADOS', value: (k.total_roturas || 0).toLocaleString('pt-BR') },
             { key: 'cancelados', label: 'CANCELADOS', value: (k.total_cancelados || 0).toLocaleString('pt-BR') },
-            { key: 'pct-urgentes', label: '% URGENTES', value: displayMetric(k.pct_urgentes, '%') },
+            { key: 'pct-urgentes', label: '% URGENTES', value: (k.pct_urgentes || 0).toFixed(1) + '%' },
             { key: 'urgentes', label: 'URGENTES', value: (k.urgentes_puros || 0).toLocaleString('pt-BR') },
-            { key: 'sla-base-cozinha', label: 'BASE SLA COZINHA', value: (k.base_sla_cozinha || 0).toLocaleString('pt-BR') + ' (' + (k.dentro_sla_cozinha || 0).toLocaleString('pt-BR') + ' dentro)' },
-            { key: 'sla-base-salao', label: 'BASE SLA SALÃO', value: (k.base_sla_salao || 0).toLocaleString('pt-BR') + ' (' + (k.dentro_sla_salao || 0).toLocaleString('pt-BR') + ' dentro)' },
-            { key: 'tempo-cozinha', label: 'TEMPO PREPARO', value: displayMetric(k.tempo_medio_cozinha_min) },
-            { key: 'tempo-retirada', label: 'TEMPO RETIRADA', value: displayMetric(k.tempo_medio_retirada_min) },
+            { key: 'tempo-cozinha', label: 'TEMPO PREPARO', value: (k.tempo_medio_cozinha_min || 0).toFixed(1) },
+            { key: 'tempo-retirada', label: 'TEMPO RETIRADA', value: (k.tempo_medio_retirada_min || 0).toFixed(1) },
             { key: 'ocupacao', label: 'CAPACIDADE OCIOSA', value: occMedia.toFixed(1) + '%' },
         ];
 
@@ -943,7 +981,7 @@ if (document.readyState === 'loading') {
             var productMap = {};
             data.qty_vs_time.forEach(function(d) {
                 var p = d.product_name;
-                if (!productMap[p]) productMap[p] = { name: p, totalMin: 0, count: 0, totalQty: 0, sla: d.sla_min === null || d.sla_min === undefined ? null : parseFloat(d.sla_min) };
+                if (!productMap[p]) productMap[p] = { name: p, totalMin: 0, count: 0, totalQty: 0, sla: parseFloat(d.sla_min) };
                 productMap[p].totalMin += parseFloat(d.actual_min);
                 productMap[p].totalQty += parseFloat(d.qty);
                 productMap[p].count++;
@@ -959,8 +997,8 @@ if (document.readyState === 'loading') {
                 var v = Math.round(d.avg_min);
                 var sla = d.sla_min;
                 var pct = qtyMax > 0 ? (v / qtyMax) * 100 : 0;
-                var color = sla === null ? '#94a3b8' : v <= sla ? '#2a9d8f' : v <= sla * 1.5 ? '#f4a261' : '#e63946';
-                qtyBars += '<div class="bar-row"><div class="bar-label" style="width:130px;" title="' + d.product_name + '">' + d.product_name.substring(0,16) + '</div><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:' + color + ';">' + (pct > 20 ? '<span>' + v + ' min</span>' : '') + '</div></div><div class="bar-value" style="width:100px;">' + v + 'm / SLA ' + (sla === null ? 'Indisponível' : sla) + '</div></div>';
+                var color = v <= sla ? '#2a9d8f' : v <= sla * 1.5 ? '#f4a261' : '#e63946';
+                qtyBars += '<div class="bar-row"><div class="bar-label" style="width:130px;" title="' + d.product_name + '">' + d.product_name.substring(0,16) + '</div><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:' + color + ';">' + (pct > 20 ? '<span>' + v + ' min</span>' : '') + '</div></div><div class="bar-value" style="width:100px;">' + v + 'm / SLA ' + sla + '</div></div>';
             });
             slaGrid.innerHTML += '<article class="panel" data-cols="6">' +
                 '<header class="panel-header"><h3 class="panel-title">Tempo Médio de Preparo por Produto</h3><p class="panel-subtitle">vs SLA esperado</p></header>' +
@@ -1220,142 +1258,118 @@ if (document.readyState === 'loading') {
         return s;
     }
 
-    function escapePerfHtml(value) {
-        return String(value === null || value === undefined ? '' : value)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
-
-    function task6NullableNumber(value) {
-        if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null;
-        var number = Number(value);
-        return Number.isFinite(number) ? number : null;
-    }
-
-    function task6DisplayNumber(value, decimals) {
-        var number = task6NullableNumber(value);
-        return number === null ? 'Indisponível' : number.toFixed(decimals);
-    }
-
-    function formatPerfDate(value) {
-        var raw = String(value === null || value === undefined ? '' : value);
-        var timestampIndex = raw.indexOf('T');
-        var datePart = timestampIndex > -1 ? raw.substring(0, timestampIndex) : raw;
-        var parts = datePart.split('-');
-        var timePart = timestampIndex > -1 ? raw.substring(timestampIndex + 1, timestampIndex + 6) : '';
-        var formatted = parts.length === 3 ? parts[2] + '/' + parts[1] + (timePart ? ' ' + timePart : '') : raw.substring(0, 16);
-        return escapePerfHtml(formatted);
-    }
-
     function renderScoreCards(perf) {
-        if(!perf || !perf.operational) return '';
-        var source = perf.operational;
+        if(!perf || (!perf.current && !perf.averages)) return '';
+        var source = perf.averages || perf.current;
+        var isAvg = !!perf.averages;
         var order = ['cozinha_geral','cozinha_quente_a','cozinha_quente_b','cozinha_fria','salao'];
         var labels = { cozinha_geral:'Cozinha Geral', cozinha_quente_a:'Quente A', cozinha_quente_b:'Quente B', cozinha_fria:'Fria', salao:'Sal\u00E3o' };
         var h = '<div class="score-grid">';
         for(var i=0; i<order.length; i++) {
             var s = source[order[i]];
             if(!s) continue;
-            var sc = task6NullableNumber(s.operational_score);
-            var daily = task6NullableNumber(s.daily_average_score);
+            var sc = Number(s.final_score) || 5;
             var cls = scoreClass(sc);
             h += '<div class="score-card" data-entity="'+order[i]+'" title="Clique para ver detalhamento">';
             h += '<div class="score-entity">'+labels[order[i]]+'</div>';
-            h += '<div class="score-value '+cls+'">'+(sc === null ? 'Indisponível' : sc.toFixed(1))+'</div>';
-            h += '<div class="score-stars '+cls+'">'+(sc === null ? 'Consolidação incompleta' : perfStars(sc))+'</div>';
-            h += '<div class="score-sub">Nota operacional</div>';
-            h += '<div class="score-sub">'+(order[i] === 'cozinha_geral' ? 'Média simples das estações' : 'Média diária')+': '+(daily === null ? 'Indisponível' : daily.toFixed(1))+' · '+(s.total_demands === null ? 'Indisponível' : String(s.total_demands))+' demandas</div>';
+            h += '<div class="score-value '+cls+'">'+sc.toFixed(1)+'</div>';
+            h += '<div class="score-stars '+cls+'">'+perfStars(sc)+'</div>';
+            h += '<div class="score-sub">'+ (isAvg ? 'Media: ' : '') + (Number(s.total_demands)||0)+' demandas</div>';
             h += '</div>';
         }
         return h + '</div>';
     }
 
-    function renderPerfDetractors(perf) {
-        if(!perf || !perf.operational) return '';
-        var source = perf.operational;
+    function renderPerfDetractors(perf, detractorDates, sourceOverride) {
+        var source = sourceOverride || perf.current;
+        if(!perf || !source) return '';
         var order = ['cozinha_geral','salao','cozinha_quente_a','cozinha_quente_b','cozinha_fria'];
         var labels = { cozinha_geral:'Cozinha Geral', cozinha_quente_a:'Quente A', cozinha_quente_b:'Quente B', cozinha_fria:'Fria', salao:'Sal\u00E3o' };
         var h = '<div class="panels" style="grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));">';
         for(var i=0; i<order.length; i++) {
             var s = source[order[i]];
             if(!s) continue;
-            var criteria = s.criteria || [];
-            var bars = '<div style="overflow-x:auto;"><table class="criteria-table"><thead><tr><th>Critério</th><th>Contagem</th><th>Base elegível</th><th>Taxa</th><th>Peso / desconto</th></tr></thead><tbody>';
-            criteria.forEach(function(c) {
-                var weights = c.weights || [];
-                var weightText = c.weights_status === 'indisponivel_snapshot_legado' ? 'Snapshot indisponível' : (weights.length ? weights.map(function(w) { return task6DisplayNumber(w.weight, 2) + ' (' + escapePerfHtml(String(w.weight_version_id || '').substring(0, 8)) + ')'; }).join('<br>') : (c.weight === null ? 'Várias versões vigentes no intervalo' : task6DisplayNumber(c.weight, 2)));
-                var criterionLabels = { sla_breach_cozinha:'Preparo lento / SLA cozinha', sla_breach_salao:'Retirada lenta / SLA salão', cancellation_cozinha:'Cancelamento cozinha', cancellation_salao:'Cancelamento salão', stockout_cozinha:'Zerado informativo (cozinha)', stockout_salao:'Zerado salão', slow_item_cozinha:'Preparo lento', slow_pickup_salao:'Retirada lenta' };
-                var rate = task6NullableNumber(c.rate);
-                bars += '<tr><td>'+ escapePerfHtml(criterionLabels[c.criterion] || c.criterion) +'</td><td>'+task6DisplayNumber(c.count, 0)+'</td><td>'+task6DisplayNumber(c.eligible_base, 0)+'</td><td>'+(rate === null ? 'Indisponível' : task6DisplayNumber(rate * 100, 1)+'%')+'</td><td>'+weightText+'<br>Status: '+escapePerfHtml(c.weights_status || 'vigente_intervalo')+'<br>Desconto: '+(c.weights_status === 'indisponivel_snapshot_legado' ? 'Snapshot indisponível' : task6DisplayNumber(c.deduction, 2))+'</td></tr>';
-            });
-            bars += '</tbody></table></div>';
-            var sc = task6NullableNumber(s.operational_score), daily = task6NullableNumber(s.daily_average_score);
-            var datesList = s.occurrences || [];
+            var det = s.detractors || [];
+            if(!det.length) continue;
+            var maxD = 0;
+            for(var j=0; j<det.length; j++) { if(det[j].deduction > maxD) maxD = det[j].deduction; }
+            var bars = '';
+            for(var j=0; j<det.length; j++) {
+                var d = det[j];
+                var p = maxD > 0 ? (d.deduction / maxD) * 100 : 0;
+                bars += '<div class="bar-row"><div class="bar-label" style="width:150px;">'+d.label+'</div><div class="bar-track"><div class="bar-fill" style="width:'+p+'%;background:#e63946;">'+(p>25?'<span>'+d.count+' ocorr.</span>':'')+'</div></div><div class="bar-value" style="width:55px;">-'+Number(d.deduction).toFixed(2)+'</div></div>';
+            }
+            var sc = Number(s.final_score) || 5;
+            var datesList = (detractorDates && detractorDates[order[i]]) ? detractorDates[order[i]] : [];
             if (datesList.length > 0) {
                 bars += '<div style="margin-top:8px;border-top:1px solid var(--c-border-light);padding-top:8px;">' +
                     '<div style="font-size:12px;font-weight:var(--fw-semi);color:var(--c-text);margin-bottom:4px;">Ocorrências (' + datesList.length + ')</div>' +
                     '<div style="max-height:200px;overflow-y:auto;font-size:11px;">' +
                     '<table style="width:100%;border-collapse:collapse;">' +
                     '<thead><tr style="border-bottom:1px solid var(--c-border-light);text-align:left;">' +
-                    '<th style="padding:3px 4px;">Data</th><th style="padding:3px 4px;">Tipo</th><th style="padding:3px 4px;">Produto</th><th style="padding:3px 4px;">Detalhe</th><th style="padding:3px 4px;">Origem</th><th style="padding:3px 4px;">Peso / desconto</th></tr></thead><tbody>';
+                    '<th style="padding:3px 4px;">Data</th><th style="padding:3px 4px;">Tipo</th><th style="padding:3px 4px;">Produto</th><th style="padding:3px 4px;">Detalhe</th></tr></thead><tbody>';
                 datesList.forEach(function(occ) {
+                    var d = String(occ.date || '');
+                    var formatted = '';
+                    if (d.indexOf('T') > -1) {
+                        var parts = d.split('T');
+                        var datePart = parts[0];
+                        var timePart = parts[1] ? parts[1].substring(0, 5) : '';
+                        var dp = datePart.split('-');
+                        formatted = dp.length === 3 ? dp[2] + '/' + dp[1] + ' ' + timePart : d.substring(0, 16);
+                    } else {
+                        formatted = d.substring(0, 16);
+                    }
                     bars += '<tr style="border-bottom:1px solid var(--c-border-light);">' +
-                        '<td style="padding:3px 4px;font-family:var(--font-mono);">' + formatPerfDate(occ.date) + '</td>' +
-                        '<td style="padding:3px 4px;">' + escapePerfHtml(occ.type) + '</td>' +
-                        '<td style="padding:3px 4px;">' + escapePerfHtml(occ.product_name || '-') + '</td>' +
-                        '<td style="padding:3px 4px;color:var(--c-text-muted);">' + escapePerfHtml(occ.detail) + '</td>' +
-                        '<td style="padding:3px 4px;">' + escapePerfHtml(occ.station || (order[i] === 'cozinha_geral' ? 'Cozinha' : '-')) + '</td>' +
-                         '<td style="padding:3px 4px;">' + (occ.weight === null || occ.weight === undefined || occ.deduction === null || occ.deduction === undefined ? 'Indisponível' : task6DisplayNumber(occ.weight, 2) + ' / -' + task6DisplayNumber(occ.deduction, 2)) + '<br><small>' + escapePerfHtml(String(occ.weight_version_id || '').substring(0, 8)) + '</small></td></tr>';
+                        '<td style="padding:3px 4px;font-family:var(--font-mono);">' + formatted + '</td>' +
+                        '<td style="padding:3px 4px;">' + (occ.type || '') + '</td>' +
+                        '<td style="padding:3px 4px;">' + (occ.product_name || '-') + '</td>' +
+                        '<td style="padding:3px 4px;color:var(--c-text-muted);">' + (occ.detail || '') + '</td></tr>';
                 });
                 bars += '</tbody></table></div></div>';
             }
-             h += '<div class="panel score-detail-panel" data-entity="'+order[i]+'" style="display:none;"><div class="section-title">Detalhamento - '+labels[order[i]]+' <span style="font-size:12px;font-weight:400;color:#9ca3af;">(Operacional: '+task6DisplayNumber(sc, 1)+' · Média diária: '+task6DisplayNumber(daily, 1)+(s.legacy_unversioned ? ' · histórico legado sem snapshot de pesos' : '')+' · Abertas: '+task6DisplayNumber(s.open_demands, 0)+' · Desconto: '+task6DisplayNumber(s.total_deduction, 2)+')</span></div><div style="max-height:420px;overflow-y:auto;">'+bars+'</div></div>';
+            h += '<div class="panel score-detail-panel" data-entity="'+order[i]+'" style="display:none;"><div class="section-title">Detratores \u2014 '+labels[order[i]]+' <span style="font-size:12px;font-weight:400;color:#9ca3af;">(Nota: '+sc.toFixed(1)+')</span></div><div style="max-height:420px;overflow-y:auto;">'+bars+'</div></div>';
         }
         return h + '</div>';
     }
 
-    function addUtcDays(date, days) {
-        var result = new Date(date);
-        result.setUTCDate(result.getUTCDate() + days);
-        return result;
-    }
-
-    function getPerformanceDates() {
-        var f = state.filter || {};
-        var cursor = new Date(), from, to;
-        if (f.from) return { from: f.from, to: f.to || f.from };
-        if (f.range === 'yesterday') cursor = addUtcDays(cursor, -1);
-        to = cursor.toISOString().split('T')[0];
-        if (f.range === 'week') cursor = addUtcDays(cursor, -6);
-        else if (f.range === 'month') cursor = addUtcDays(cursor, -29);
-        from = cursor.toISOString().split('T')[0];
-        return { from: from, to: to };
-    }
-
-    function loadPerformance() {
-        var perfGrid = document.querySelector('#performance .bento-grid');
-        var dates = getPerformanceDates();
-        var perfUrl = '/api/v1/analytics/performance?from=' + encodeURIComponent(dates.from) + '&to=' + encodeURIComponent(dates.to);
-        if (state.stationId) perfUrl += '&station_id=' + encodeURIComponent(state.stationId);
-        if (perfGrid) perfGrid.innerHTML = '<article class="panel" data-cols="12"><div class="panel-body loading">Carregando notas de performance...</div></article>';
+    function loadPerformance(filter) {
         try {
+            var pr = filter === 'today' ? 'week' : (filter === 'month' ? 'month' : 'week');
+            var perfUrl = '/api/v1/analytics/performance?range=' + pr;
             api(perfUrl).then(function(perf) {
+                var perfGrid = document.querySelector('#performance .bento-grid');
                 if(!perfGrid) return;
-                if (!perf.operational || !Object.keys(perf.operational).length) {
-                    perfGrid.innerHTML = '<article class="panel" data-cols="12"><div class="panel-body loading">Nenhum dado de performance no período selecionado.</div></article>';
-                    return;
-                }
 
                 var html = '<article class="panel" data-cols="12">' +
                     '<header class="panel-header"><div style="display:flex;justify-content:space-between;align-items:center;width:100%;"><h3 class="panel-title">Desempenho da Equipe</h3>' +
                     '<button id="btnCriteria" class="btn-criteria" type="button">Como são calculadas as notas?</button></div></header>' +
-                    '<div class="panel-body">' + renderScoreCards(perf) + '<p class="score-sub">Período: '+(perf.date_from || dates.from)+' a '+(perf.date_to || dates.to)+'</p></div></article>';
-                html += renderPerfDetractors(perf);
+                    '<div class="panel-body">' + renderScoreCards(perf) + '</div></article>';
+                var detractorSource = perf.current;
+                if (perf.averages) {
+                    detractorSource = {};
+                    var entities = ['cozinha_geral','cozinha_quente_a','cozinha_quente_b','cozinha_fria','salao'];
+                    for (var i = 0; i < entities.length; i++) {
+                        var e = entities[i];
+                        var avg = perf.averages[e];
+                        if (!avg) continue;
+                        var det = [];
+                        if (avg.sla_breaches > 0) det.push({ label: 'Estouros de SLA', deduction: Math.min(2.5, avg.sla_breaches * 0.5), count: avg.sla_breaches });
+                        if (avg.cancellations > 0) det.push({ label: 'Cancelamentos', deduction: Math.min(2.5, avg.cancellations * 0.5), count: avg.cancellations });
+                        if (avg.stockouts > 0) det.push({ label: 'Roturas de stock', deduction: Math.min(2.5, avg.stockouts * 0.5), count: avg.stockouts });
+                        if (avg.slow_items > 0) det.push({ label: 'Itens lentos', deduction: Math.min(2.5, avg.slow_items * 0.5), count: avg.slow_items });
+                        detractorSource[e] = {
+                            entity: e,
+                            final_score: avg.final_score,
+                            detractors: det,
+                            total_demands: avg.total_demands
+                        };
+                    }
+                }
+                html += renderPerfDetractors(perf, perf.detractor_dates, detractorSource);
                 if(perf.history && perf.history.length > 1) {
-                    html += '<article class="panel panel-chart" data-cols="12" id="perfTrendPanel"><header class="panel-header"><h3 class="panel-title">Evolução das notas no período</h3></header><div class="panel-body"><canvas id="perfTrendCanvas"></canvas></div></article>';
+                    var label = pr === 'week' ? 'Últimos 7 dias' : 'Últimos 30 dias';
+                    html += '<article class="panel panel-chart" data-cols="12" id="perfTrendPanel"><header class="panel-header"><h3 class="panel-title">Evolução das Notas — ' + label + '</h3></header><div class="panel-body"><canvas id="perfTrendCanvas"></canvas></div></article>';
                 }
                 perfGrid.innerHTML = html;
 
@@ -1391,12 +1405,10 @@ if (document.readyState === 'loading') {
                     });
                 }
             }).catch(function(err) {
-                console.error('Erro ao carregar performance:', err);
-                if (perfGrid) perfGrid.innerHTML = '<article class="panel" data-cols="12"><div class="panel-body loading" style="color:var(--c-danger);">Não foi possível carregar as notas de performance. Tente novamente.</div></article>';
+                console.warn('Performance:', err && err.message ? err.message : err);
             });
         } catch(e) {
-            console.error('Erro ao preparar performance:', e);
-            if (perfGrid) perfGrid.innerHTML = '<article class="panel" data-cols="12"><div class="panel-body loading" style="color:var(--c-danger);">Não foi possível carregar as notas de performance. Tente novamente.</div></article>';
+            console.warn('Performance error:', e);
         }
     }
 
@@ -1414,7 +1426,7 @@ if (document.readyState === 'loading') {
 
     function filterForPerf() {
         if (state.filter.range) return state.filter.range === 'today' || state.filter.range === 'yesterday' ? 'week' : state.filter.range;
-        var d1 = new Date(state.filter.from + 'T00:00:00Z'), d2 = new Date((state.filter.to || state.filter.from) + 'T00:00:00Z');
+        var d1 = new Date(state.filter.from + 'T00:00:00'), d2 = new Date((state.filter.to || state.filter.from) + 'T00:00:00');
         return ((d2 - d1) / 86400000) > 7 ? 'month' : 'week';
     }
 
@@ -1422,17 +1434,17 @@ if (document.readyState === 'loading') {
         if (state.filter.range === 'today' || state.filter.range === 'yesterday') return 1;
         if (state.filter.range === 'week') return 7;
         if (state.filter.range === 'month') return 30;
-        var d1 = new Date(state.filter.from + 'T00:00:00Z'), d2 = new Date((state.filter.to || state.filter.from) + 'T00:00:00Z');
+        var d1 = new Date(state.filter.from + 'T00:00:00'), d2 = new Date((state.filter.to || state.filter.from) + 'T00:00:00');
         return Math.round((d2 - d1) / 86400000) + 1;
     }
 
     function getExportDates() {
         var f = state.filter;
         var now = new Date();
-        if (f.range === 'yesterday') now = addUtcDays(now, -1);
+        if (f.range === 'yesterday') now.setDate(now.getDate() - 1);
         if (f.range === 'today' || f.range === 'yesterday') { var s = now.toISOString().split('T')[0]; return { from: s, to: s }; }
-        if (f.range === 'week') { var to = now.toISOString().split('T')[0]; now = addUtcDays(now, -6); return { from: now.toISOString().split('T')[0], to: to }; }
-        if (f.range === 'month') { var to = now.toISOString().split('T')[0]; now = addUtcDays(now, -29); return { from: now.toISOString().split('T')[0], to: to }; }
+        if (f.range === 'week') { var to = now.toISOString().split('T')[0]; now.setDate(now.getDate() - 6); return { from: now.toISOString().split('T')[0], to: to }; }
+        if (f.range === 'month') { var to = now.toISOString().split('T')[0]; now.setDate(now.getDate() - 29); return { from: now.toISOString().split('T')[0], to: to }; }
         return { from: f.from, to: f.to || f.from };
     }
 
@@ -1563,14 +1575,14 @@ if (document.readyState === 'loading') {
             // Step E: Load performance section (perf trend chart handled inside loadPerformance)
             requestAnimationFrame(function() {
                 requestAnimationFrame(function() {
-                    loadPerformance();
+                    loadPerformance(filterForPerf());
                 });
             });
         }).catch(function(err) {
             // Show error in overview section
             var overviewGrid = document.querySelector('#overview .bento-grid');
             if (overviewGrid) {
-                overviewGrid.innerHTML = '<article class="panel" data-cols="12" style="text-align:center;padding:var(--sp-8);color:var(--c-danger);">Não foi possível carregar o dashboard. Tente novamente.</article>';
+                overviewGrid.innerHTML = '<article class="panel" data-cols="12" style="text-align:center;padding:var(--sp-8);color:var(--c-danger);">Erro ao carregar: ' + (err.message || 'Tente novamente') + '</article>';
             }
             console.error(err);
         });
@@ -1589,7 +1601,7 @@ if (document.readyState === 'loading') {
             document.getElementById('dateFrom').value = '';
             document.getElementById('dateTo').value = '';
             if (range === 'yesterday') {
-                var y = addUtcDays(new Date(), -1);
+                var y = new Date(); y.setDate(y.getDate() - 1);
                 loadDashboard({ from: y.toISOString().split('T')[0], to: y.toISOString().split('T')[0] });
             } else {
                 loadDashboard({ range: range });
@@ -1604,7 +1616,7 @@ if (document.readyState === 'loading') {
             var from = document.getElementById('dateFrom').value;
             var to = document.getElementById('dateTo').value || from;
             if (!from) { showToast('Selecione a data de in\u00EDcio.', 'warn'); return; }
-            var d1 = new Date(from + 'T00:00:00Z'), d2 = new Date(to + 'T00:00:00Z');
+            var d1 = new Date(from + 'T00:00:00'), d2 = new Date(to + 'T00:00:00');
             if (isNaN(d1.getTime()) || isNaN(d2.getTime())) { showToast('Datas inv\u00E1lidas.', 'warn'); return; }
             if (d1 > d2) { showToast('A data de in\u00EDcio deve ser anterior \u00E0 data final.', 'warn'); return; }
             var diff = Math.round((d2 - d1) / 86400000);
@@ -1686,10 +1698,132 @@ if (document.readyState === 'loading') {
         });
     }
 
+    function exportEscape(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, function(ch) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+        });
+    }
+
+    function exportDateLabel(value) {
+        var parts = String(value || '').split('-');
+        return parts.length === 3 ? parts[2] + '/' + parts[1] + '/' + parts[0] : value;
+    }
+
+    function exportBars(data, keyLabel, keyValue, color) {
+        if (!data || !data.length) return '<p class="export-muted">Sem dados no período.</p>';
+        var max = 1;
+        data.forEach(function(row) { var value = typeof keyValue === 'function' ? keyValue(row) : Number(row[keyValue] || 0); if (value > max) max = value; });
+        return data.slice(0, 12).map(function(row) {
+            var value = typeof keyValue === 'function' ? keyValue(row) : Number(row[keyValue] || 0);
+            var label = typeof keyLabel === 'function' ? keyLabel(row) : row[keyLabel] || '-';
+            return '<div class="export-bar-row"><span>' + exportEscape(label) + '</span><div><i style="width:' + Math.max(2, value / max * 100) + '%;background:' + color + '"></i></div><b>' + (Math.round(value * 10) / 10) + '</b></div>';
+        }).join('');
+    }
+
+    function exportDonut(title, segments, colors) {
+        var total = segments.reduce(function(sum, segment) { return sum + Number(segment.value || 0); }, 0);
+        if (!total) return '<div class="export-panel"><h3>' + title + '</h3><div class="export-donut-layout"><svg viewBox="-70 -70 140 140"><circle cx="0" cy="0" r="48" fill="none" stroke="#36383b" stroke-width="18"></circle><text x="0" y="5" text-anchor="middle" fill="#f4efe8" font-size="18" font-weight="800">0</text></svg><p class="export-muted">Sem ocorrências no período.</p></div></div>';
+        var radius = 48, inner = 30, angle = -Math.PI / 2, paths = '';
+        segments.forEach(function(segment, index) {
+            var slice = Number(segment.value || 0) / total * Math.PI * 2;
+            if (slice < 0.001) return;
+            if (slice > Math.PI * 2 - 0.001) {
+                paths += '<circle cx="0" cy="0" r="39" fill="none" stroke="' + colors[index % colors.length] + '" stroke-width="18"></circle>';
+                angle += slice;
+                return;
+            }
+            var x1 = Math.cos(angle) * radius, y1 = Math.sin(angle) * radius;
+            var x2 = Math.cos(angle + slice) * radius, y2 = Math.sin(angle + slice) * radius;
+            var ix1 = Math.cos(angle) * inner, iy1 = Math.sin(angle) * inner;
+            var ix2 = Math.cos(angle + slice) * inner, iy2 = Math.sin(angle + slice) * inner;
+            var large = slice > Math.PI ? 1 : 0;
+            paths += '<path d="M ' + x1 + ' ' + y1 + ' A ' + radius + ' ' + radius + ' 0 ' + large + ' 1 ' + x2 + ' ' + y2 + ' L ' + ix2 + ' ' + iy2 + ' A ' + inner + ' ' + inner + ' 0 ' + large + ' 0 ' + ix1 + ' ' + iy1 + ' Z" fill="' + colors[index % colors.length] + '"></path>';
+            angle += slice;
+        });
+        var legend = segments.map(function(segment, index) { return '<li><i style="background:' + colors[index % colors.length] + '"></i>' + exportEscape(segment.label) + '<b>' + Number(segment.value || 0) + '</b></li>'; }).join('');
+        return '<div class="export-panel"><h3>' + title + '</h3><div class="export-donut-layout"><svg viewBox="-70 -70 140 140" aria-label="' + exportEscape(title) + '">' + paths + '<text x="0" y="5" text-anchor="middle" fill="#f4efe8" font-size="18" font-weight="800">' + total + '</text></svg><ul>' + legend + '</ul></div></div>';
+    }
+
+    function exportKpisHtml(k) {
+        var items = [
+            ['Total de pedidos', k.total_pedidos, ''], ['Dentro do SLA', k.pct_dentro_sla, '%'], ['Atrasos cozinha', k.atrasos_cozinha, ''], ['Atrasos salão', k.atrasos_salao, ''],
+            ['Produtos zerados', k.total_roturas, ''], ['Cancelados', k.total_cancelados, ''], ['% urgentes', k.pct_urgentes, '%'], ['Urgentes', k.urgentes_puros, ''],
+            ['Tempo preparo', k.tempo_medio_cozinha_min, ' min'], ['Tempo retirada', k.tempo_medio_retirada_min, ' min'], ['Dentro do SLA', k.dentro_sla, ''], ['Urgentes por zerou', k.urgentes_rotura, '']
+        ];
+        return '<div class="export-kpis export-kpis-all">' + items.map(function(item) { return '<div><small>' + item[0] + '</small><b>' + (Number(item[1] || 0).toLocaleString('pt-BR')) + item[2] + '</b></div>'; }).join('') + '</div>';
+    }
+
+    function exportPerformanceHtml(perf) {
+        if (!perf) return '<div class="export-empty">Notas indisponíveis para o período.</div>';
+        var source = perf.averages && Object.keys(perf.averages).length ? perf.averages : (perf.current || {}), order = ['cozinha_geral','cozinha_quente_a','cozinha_quente_b','cozinha_fria','salao'];
+        var labels = { cozinha_geral:'Cozinha Geral', cozinha_quente_a:'Quente A', cozinha_quente_b:'Quente B', cozinha_fria:'Fria', salao:'Salão' };
+        var cards = '', details = '';
+        order.forEach(function(entity) {
+            var item = source[entity]; if (!item) return;
+            var score = Number(item.final_score) || 0, detractors = (item.detractors || []).slice();
+            if (perf.averages && Object.keys(perf.averages).length && !detractors.length) [['Estouro de SLA', item.sla_breaches],['Cancelamentos', item.cancellations],['Roturas', item.stockouts],['Itens lentos', item.slow_items]].forEach(function(row) {
+                if (Number(row[1]) > 0) detractors.push({ label: row[0], count: Number(row[1]), deduction: Math.min(2.5, Number(row[1]) * 0.5) });
+            });
+            cards += '<div class="export-score"><div class="export-score-name">' + labels[entity] + '</div><div class="export-score-value">' + score.toFixed(1) + '</div><div class="export-stars">' + perfStars(score) + '</div><div class="export-score-meta">' + Number(item.total_demands || 0) + ' demandas</div></div>';
+            var rows = detractors.map(function(d) { return '<div class="export-bar-row"><span>' + exportEscape(d.label) + '</span><div><i style="width:' + Math.min(100, Number(d.deduction || 0) * 40) + '%"></i></div><b>-' + Number(d.deduction || 0).toFixed(2) + '</b></div>'; }).join('');
+            details += '<div class="export-detail"><h4>' + labels[entity] + ' <em>Nota ' + score.toFixed(1) + '</em></h4>' + (rows || '<p class="export-muted">Sem detratores registrados.</p>') + '</div>';
+        });
+        var trend = perf.history && perf.history.length > 1 ? '<div class="export-panel"><h3>Evolução das notas</h3><canvas id="exportPerfTrend" width="820" height="230"></canvas></div>' : '<div class="export-panel"><h3>Evolução das notas</h3><p class="export-muted">O modo diário mostra a nota do dia; a evolução exige um período com mais de uma data.</p></div>';
+        return '<div class="export-panel"><h3>Notas de performance</h3><div class="export-score-grid">' + cards + '</div></div><div class="export-panel"><h3>Principais detratores</h3><div class="export-details">' + details + '</div></div>' + trend;
+    }
+
+    function exportReportHtml(data, perf, title, index, includeVolume) {
+        var k = data.kpis || {};
+        var donutHtml = '<div class="export-two">' + exportDonut('Status das demandas', [{label:'Pendentes',value:Number(data.funnel && data.funnel.pending_now || 0)},{label:'Prontas',value:Math.max(0,Number(data.funnel && data.funnel.ready || 0)-Number(data.funnel && data.funnel.retrieved || 0))},{label:'Retiradas',value:Number(data.funnel && data.funnel.retrieved || 0)},{label:'Canceladas',value:Number(k.total_cancelados||0)}], ['#d4a574','#6b9080','#2a9d8f','#e63946']) + exportDonut('Origem das urgências', [{label:'Urgentes puros',value:Number(k.urgentes_puros||0)},{label:'Por zerou',value:Number(k.urgentes_rotura||0)}], ['#e63946','#f4a261']) + '</div>';
+        return '<div class="export-report"><header><div><small>KDS BRIDGE / RELATÓRIO OPERACIONAL</small><h1>Dashboard de operação</h1><p>' + exportEscape(title) + '</p></div><strong>WARM<br>OBSIDIAN</strong></header>' +
+            exportKpisHtml(k) + '<div class="export-two"><div class="export-panel"><h3>Funil de demandas</h3>' + exportBars([{label:'Criadas',value:Number(data.funnel && data.funnel.created || 0)},{label:'Iniciaram preparo',value:Number(data.funnel && data.funnel.ready || 0)},{label:'Prontas',value:Number(data.funnel && data.funnel.ready || 0)},{label:'Retiradas',value:Number(data.funnel && data.funnel.retrieved || 0)}], 'label', 'value', '#d4a574') + '</div>' + donutHtml + '</div>' +
+            '<div class="export-two"><div class="export-panel"><h3>Produtos mais demandados</h3>' + exportBars((data.produtos||[]).slice(0,10), 'product_name', function(r){return Number(r.total_qty||r.total_demandas||0);}, '#d4a574') + '</div><div class="export-panel"><h3>Sazonalidade</h3>' + exportBars(data.weekday_seasonality||[], 'dia', 'total', '#6b9080') + '</div></div>' +
+            '<div class="export-panel"><h3>Heatmap hora x dia da semana</h3>' + renderHeatmap(data.heatmap) + '</div><div class="export-two">' + (includeVolume ? '<div class="export-panel"><h3>Volume diário</h3><canvas id="exportVolume' + index + '" width="400" height="230"></canvas></div>' : '') + '<div class="export-panel"><h3>Fila por hora</h3><canvas id="exportQueue' + index + '" width="400" height="230"></canvas></div><div class="export-panel"><h3>Velocidade da cozinha</h3><canvas id="exportSpeed' + index + '" width="400" height="230"></canvas></div><div class="export-panel"><h3>Tempo de retirada</h3><canvas id="exportPickup' + index + '" width="400" height="230"></canvas></div></div>' +
+            '<div class="export-two"><div class="export-panel"><h3>SLA por produto</h3>' + exportBars(data.sla_by_product||[], 'product_name', function(r){return Number(r.breached||0);}, '#e76f51') + '</div><div class="export-panel"><h3>Cancelamentos</h3>' + exportBars(data.cancel_reasons||[], 'label', 'total', '#e63946') + '</div></div>' + exportPerformanceHtml(perf) + '</div>';
+    }
+
+    function exportChartData(data, date) {
+        var copy = Object.assign({}, data);
+        if (!copy.volume_ma || !copy.volume_ma.length) {
+            copy.volume_ma = [{ day: date, total: Number(copy.kpis && copy.kpis.total_pedidos || 0), ma7: Number(copy.kpis && copy.kpis.total_pedidos || 0) }];
+        }
+        return copy;
+    }
+
+    async function settleExportCharts(charts) {
+        charts.forEach(function(chart) {
+            if (!chart) return;
+            chart.options.animation = false;
+            chart.update('none');
+        });
+        await new Promise(function(resolve) { requestAnimationFrame(function() { requestAnimationFrame(resolve); }); });
+    }
+
+    async function fetchExportPerformance(from, to) {
+        var query = '/api/v1/analytics/performance?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to);
+        var response = await fetch(query);
+        if (!response.ok) throw new Error('Não foi possível carregar as notas de performance.');
+        var performance = await response.json();
+        if (!performance || (!performance.current && !performance.averages)) throw new Error('Notas de performance ausentes no período.');
+        return performance;
+    }
+
+    function appendPerformanceExcel(wb, perf, prefix) {
+        var labels = { cozinha_geral:'Cozinha Geral', cozinha_quente_a:'Quente A', cozinha_quente_b:'Quente B', cozinha_fria:'Fria', salao:'Salão' };
+        var source = perf && (perf.averages && Object.keys(perf.averages).length ? perf.averages : perf.current) || {};
+        var rows = [];
+        Object.keys(source).forEach(function(entity) {
+            var item = source[entity] || {};
+            rows.push({ Entidade: labels[entity] || entity, Nota: Number(item.final_score || 0), Demandas: Number(item.total_demands || 0), 'Estouro SLA': Number(item.sla_breaches || 0), Cancelamentos: Number(item.cancellations || 0), Roturas: Number(item.stockouts || 0), 'Itens lentos': Number(item.slow_items || 0) });
+        });
+        if (rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), (prefix + 'Notas Performance').substring(0, 31));
+        var detractors = [];
+        Object.keys(source).forEach(function(entity) { (source[entity].detractors || []).forEach(function(d) { detractors.push({ Entidade: labels[entity] || entity, Detrator: d.label, Ocorrências: Number(d.count || 0), Desconto: Number(d.deduction || 0) }); }); });
+        if (detractors.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detractors), (prefix + 'Detratores').substring(0, 31));
+    }
+
     async function exportPDF(from, to, byDay) {
-        var temp = null;
         try {
-            if (!window.jspdf || !window.html2canvas) throw new Error('Bibliotecas do PDF não carregadas. Recarregue a página.');
             var { jsPDF } = window.jspdf;
             var pdf = new jsPDF('p', 'mm', 'a4');
             var pageW = pdf.internal.pageSize.getWidth();
@@ -1702,11 +1836,17 @@ if (document.readyState === 'loading') {
                 var scaleFactor = imgW / canvas.width;
                 var imgH = canvas.height * scaleFactor;
                 var pxPerPage = Math.max(1, Math.floor(pageAvailH / scaleFactor));
+                var minSlicePx = 150; // evita página final quase em branco
                 var sourceY = 0;
                 var isFirst = firstPage;
                 while (sourceY < canvas.height) {
                     var remaining = canvas.height - sourceY;
                     var sliceH = Math.min(remaining, pxPerPage);
+                    // Se a fatia final for muito pequena, junte-a à página anterior (não cria página nova)
+                    if (remaining < minSlicePx && !isFirst && sliceH > 0) {
+                        sourceY += sliceH;
+                        break;
+                    }
                     if (sliceH <= 0) break;
                     var sliceCanvas = document.createElement('canvas');
                     sliceCanvas.width = canvas.width;
@@ -1722,7 +1862,10 @@ if (document.readyState === 'loading') {
             }
 
             if (byDay) {
-                var days = task6ExportDays(from, to).map(function(ds) { return new Date(ds + 'T00:00:00Z'); });
+                var fromD = new Date(from + 'T00:00:00');
+                var toD = new Date(to + 'T00:00:00');
+                var days = [];
+                for (var d = new Date(fromD); d <= toD; d.setDate(d.getDate() + 1)) { days.push(new Date(d)); }
                 var firstPage = true;
                 for (var i = 0; i < days.length; i++) {
                     if (exportProgress) exportProgress.textContent = 'Gerando p\u00E1gina ' + (i + 1) + ' de ' + days.length + '...';
@@ -1733,34 +1876,53 @@ if (document.readyState === 'loading') {
                     var resp = await fetch('/api/v1/analytics/dashboard?' + params);
                     if (!resp.ok) throw new Error('Erro ao carregar dados do dia ' + ds);
                     var dayData = await resp.json();
-                    task6AssertFinite(dayData, 'dashboard do dia ' + ds);
-                    task6ValidateDashboardNumbers(dayData);
-                    var dayPerformance = await task6FetchPerformance(ds, ds);
-                    temp = document.createElement('div');
-                    temp.style.cssText = 'position:absolute;left:-9999px;width:900px;background:white;font-family:Inter,sans-serif;padding:20px;';
-                    temp.innerHTML = task6ReportHtml(dayData, dayPerformance, dayLabel);
+                    var dayPerformance = await fetchExportPerformance(ds, ds);
+                    var temp = document.createElement('div');
+                    temp.style.cssText = 'position:fixed;left:-10000px;top:0;width:900px;z-index:-1;';
+                    temp.innerHTML = exportReportHtml(dayData, dayPerformance, dayLabel, i, false);
                     document.body.appendChild(temp);
+                    if (typeof Chart !== 'undefined') {
+                        var dayQueue = document.getElementById('exportQueue' + i);
+                        var daySpeed = document.getElementById('exportSpeed' + i);
+                        var dayPickup = document.getElementById('exportPickup' + i);
+                        var dayTrend = document.getElementById('exportPerfTrend'), dayCharts = [];
+                        if (dayQueue && dayData.queue_time_by_hour && dayData.queue_time_by_hour.length) dayCharts.push(createFilaHoraChart(dayQueue, dayData));
+                        if (daySpeed && dayData.speed_by_hour && dayData.speed_by_hour.length) dayCharts.push(createVelocidadeChart(daySpeed, dayData));
+                        if (dayPickup && dayData.pickup_by_hour && dayData.pickup_by_hour.length) dayCharts.push(createRetiradaChart(dayPickup, dayData));
+                        if (dayTrend && dayPerformance.history && dayPerformance.history.length > 1) dayCharts.push(createPerfTrendChart(dayTrend, dayPerformance));
+                        await settleExportCharts(dayCharts);
+                    }
                     var canvas = await html2canvas(temp, { scale: 1.5, useCORS: true, backgroundColor: '#f4f4f5' });
-                    document.body.removeChild(temp); temp = null;
+                    document.body.removeChild(temp);
                     firstPage = addCanvasToPdf(canvas, firstPage);
                 }
             } else {
                 if (exportProgress) exportProgress.textContent = 'Capturando dashboard...';
-                if (!state.lastData) throw new Error('Payload inválido: dados consolidados ausentes.');
-                task6AssertFinite(state.lastData, 'dashboard consolidado');
-                task6ValidateDashboardNumbers(state.lastData);
-                var performance = await task6FetchPerformance(from, to);
-                temp = document.createElement('div');
-                temp.style.cssText = 'position:absolute;left:-9999px;width:900px;background:white;font-family:Inter,sans-serif;padding:20px;';
-                temp.innerHTML = task6ReportHtml(state.lastData, performance, task6DateLabel(from) + ' a ' + task6DateLabel(to));
+                var performance = await fetchExportPerformance(from, to);
+                var temp = document.createElement('div');
+                temp.style.cssText = 'position:fixed;left:-10000px;top:0;width:900px;z-index:-1;';
+                temp.innerHTML = exportReportHtml(state.lastData, performance, exportDateLabel(from) + ' a ' + exportDateLabel(to), '0', true);
                 document.body.appendChild(temp);
-                var canvas = await html2canvas(temp, { scale: 1.5, useCORS: true, backgroundColor: '#f4f4f5' });
-                document.body.removeChild(temp); temp = null;
+                if (typeof Chart !== 'undefined') {
+                    var volume = document.getElementById('exportVolume0');
+                    var queue = document.getElementById('exportQueue0');
+                    var speed = document.getElementById('exportSpeed0');
+                    var pickup = document.getElementById('exportPickup0');
+                    var trend = document.getElementById('exportPerfTrend'), charts = [], chartData = exportChartData(state.lastData, from);
+                    if (volume) charts.push(createVolumeMAChart(volume, chartData));
+                    if (queue && state.lastData.queue_time_by_hour && state.lastData.queue_time_by_hour.length) charts.push(createFilaHoraChart(queue, state.lastData));
+                    if (speed && state.lastData.speed_by_hour && state.lastData.speed_by_hour.length) charts.push(createVelocidadeChart(speed, state.lastData));
+                    if (pickup && state.lastData.pickup_by_hour && state.lastData.pickup_by_hour.length) charts.push(createRetiradaChart(pickup, state.lastData));
+                    if (trend && performance.history && performance.history.length > 1) charts.push(createPerfTrendChart(trend, performance));
+                    await settleExportCharts(charts);
+                }
+                var canvas = await html2canvas(temp, { scale: 1.5, useCORS: true, backgroundColor: '#090a0c', logging: false });
+                temp.remove();
                 addCanvasToPdf(canvas, true);
             }
             pdf.save('dashboard_' + from + '_' + to + '.pdf');
         } catch (e) { showToast('Erro ao gerar PDF: ' + e.message, 'error'); console.error(e); }
-        finally { if (temp && temp.parentNode) temp.parentNode.removeChild(temp); state.exporting = false; if (exportModal) exportModal.style.display = 'none'; if (exportProgress) exportProgress.style.display = 'none'; }
+        finally { state.exporting = false; if (exportModal) exportModal.style.display = 'none'; if (exportProgress) exportProgress.style.display = 'none'; }
     }
 
     async function exportExcel(from, to, byDay) {
@@ -1769,51 +1931,57 @@ if (document.readyState === 'loading') {
             var wb = XLSX.utils.book_new();
             var data = state.lastData;
             if (!data) { throw new Error('Sem dados carregados'); }
-            task6AssertFinite(data, 'dashboard');
-            task6ValidateDashboardNumbers(data);
 
             if (byDay) {
-                var days = task6ExportDays(from, to).map(function(ds) { return new Date(ds + 'T00:00:00Z'); });
+                var fromD = new Date(from + 'T00:00:00');
+                var toD = new Date(to + 'T00:00:00');
+                var days = [];
+                for (var d = new Date(fromD); d <= toD; d.setDate(d.getDate() + 1)) { days.push(new Date(d)); }
                 if (days.length > 31) { showToast('Por dia limitado a 31 dias.', 'warn'); state.exporting = false; if (exportProgress) exportProgress.style.display = 'none'; return; }
                 var sheetsAdded = 0;
                 for (var i = 0; i < days.length; i++) {
                     var ds = days[i].toISOString().split('T')[0];
-                        var params = 'from=' + ds + '&to=' + ds + (state.stationId ? '&station_id=' + encodeURIComponent(state.stationId) : '');
+                    var parts = ds.split('-');
+                    var params = 'from=' + ds + '&to=' + ds + (state.stationId ? '&station_id=' + encodeURIComponent(state.stationId) : '');
                     if (exportProgress) exportProgress.textContent = 'Gerando dia ' + (i + 1) + ' de ' + days.length + '...';
                     try {
                         var resp = await fetch('/api/v1/analytics/dashboard?' + params);
                         if (!resp.ok) throw new Error('HTTP ' + resp.status);
                         var dd = await resp.json();
-                        task6AssertFinite(dd, 'dashboard do dia ' + ds);
-                        task6ValidateDashboardNumbers(dd);
-                        var dayPerformance = await task6FetchPerformance(ds, ds);
+                        var dayPerformance = await fetchExportPerformance(ds, ds);
                         var name = ('D_' + ds).substring(0, 31);
-                        var kpiArr = [['Métrica', 'Valor']];
+                        var kpiArr = [['M\u00E9trica', 'Valor']];
                         var kpis = dd.kpis || {};
-                        var km = { 'Pedidos': kpis.total_pedidos, 'Entregues %': kpis.pct_entregues, 'SLA cozinha %': kpis.pct_dentro_sla_cozinha, 'Dentro SLA cozinha': kpis.dentro_sla_cozinha, 'Base SLA cozinha': kpis.base_sla_cozinha, 'SLA salão %': kpis.pct_dentro_sla_salao, 'Dentro SLA salão': kpis.dentro_sla_salao, 'Base SLA salão': kpis.base_sla_salao, 'Zerados': kpis.total_roturas, 'Cancelados': kpis.total_cancelados, 'Atrasos Cozinha': kpis.atrasos_cozinha, 'Atrasos Salão': kpis.atrasos_salao, 'Urgentes': kpis.urgentes_puros, 'Tempo Médio Coz.': kpis.tempo_medio_cozinha_min, 'Tempo Retirada': kpis.tempo_medio_retirada_min };
+                        var km = { 'Pedidos': kpis.total_pedidos, 'Entregues %': kpis.pct_entregues, 'Zerados': kpis.total_roturas, 'Cancelados': kpis.total_cancelados, 'SLA %': kpis.pct_dentro_sla, 'Atrasos Cozinha': kpis.atrasos_cozinha, 'Atrasos Sal\u00E3o': kpis.atrasos_salao, 'Urgentes': kpis.urgentes_puros, 'Tempo M\u00E9dio Coz.': kpis.tempo_medio_cozinha_min, 'Tempo Retirada': kpis.tempo_medio_retirada_min };
                         Object.keys(km).forEach(function(k) { kpiArr.push([k, km[k]]); });
                         XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(kpiArr), (name + '_kpi').substring(0, 31));
                         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet((dd.produtos || []).slice(0, 30)), name);
-                        if (dd.cancel_reasons && dd.cancel_reasons.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dd.cancel_reasons.slice(0, 20)), (name + '_canc').substring(0, 31));
-                        task6AppendExcel(wb, dd, dayPerformance, name + '_');
+                        if (dd.cancel_reasons && dd.cancel_reasons.length) {
+                            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dd.cancel_reasons.slice(0, 20)), (name + '_canc').substring(0, 31));
+                        }
+                        appendPerformanceExcel(wb, dayPerformance, name + '_');
                         sheetsAdded++;
                     } catch (err) {
                         console.error('Erro ao carregar dia ' + ds + ':', err && err.message ? err.message : err);
-                        throw new Error('Não foi possível concluir a exportação do dia ' + ds + '.');
                     }
                 }
                 if (exportProgress) exportProgress.textContent = 'Finalizando Excel...';
                 if (sheetsAdded === 0) { showToast('Nenhum dado encontrado para exporta\u00E7\u00E3o.', 'warn'); state.exporting = false; if (exportProgress) exportProgress.style.display = 'none'; return; }
             } else {
                 // Consolidated
-                var kpiArr = [['Métrica', 'Valor']];
+                var kpiArr = [['M\u00E9trica', 'Valor']];
                 var kpis = data.kpis || {};
-                        var km = { 'Pedidos': kpis.total_pedidos, 'Entregues %': kpis.pct_entregues, 'SLA cozinha %': kpis.pct_dentro_sla_cozinha, 'Dentro SLA cozinha': kpis.dentro_sla_cozinha, 'Base SLA cozinha': kpis.base_sla_cozinha, 'SLA salão %': kpis.pct_dentro_sla_salao, 'Dentro SLA salão': kpis.dentro_sla_salao, 'Base SLA salão': kpis.base_sla_salao, 'Zerados': kpis.total_roturas, 'Cancelados': kpis.total_cancelados, 'Atrasos Cozinha': kpis.atrasos_cozinha, 'Atrasos Salão': kpis.atrasos_salao, 'Urgentes': kpis.urgentes_puros, 'Tempo Médio Coz.': kpis.tempo_medio_cozinha_min, 'Tempo Retirada': kpis.tempo_medio_retirada_min };
+                var km = { 'Pedidos': kpis.total_pedidos, 'Entregues %': kpis.pct_entregues, 'Zerados': kpis.total_roturas, 'Cancelados': kpis.total_cancelados, 'SLA %': kpis.pct_dentro_sla, 'Atrasos Cozinha': kpis.atrasos_cozinha, 'Atrasos Sal\u00E3o': kpis.atrasos_salao, 'Urgentes': kpis.urgentes_puros, 'Tempo M\u00E9dio Coz.': kpis.tempo_medio_cozinha_min, 'Tempo Retirada': kpis.tempo_medio_retirada_min };
                 Object.keys(km).forEach(function(k) { kpiArr.push([k, km[k]]); });
                 XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(kpiArr), 'KPIs');
-                var sheets = [['produtos', 'Produtos'], ['cancel_reasons', 'Cancelamentos'], ['replacements', 'Trocas'], ['queue_time_by_hour', 'Fila por Hora'], ['sla_by_product', 'SLA por Produto'], ['pickup_by_hour', 'Retirada por Hora'], ['weekday_seasonality', 'Sazonalidade'], ['speed_by_hour', 'Velocidade Cozinha']];
+                var sheets = [
+                    ['produtos', 'Produtos'], ['cancel_reasons', 'Cancelamentos'],
+                    ['replacements', 'Trocas'], ['queue_time_by_hour', 'Fila por Hora'],
+                    ['sla_by_product', 'SLA por Produto'], ['pickup_by_hour', 'Retirada por Hora'],
+                    ['weekday_seasonality', 'Sazonalidade'], ['speed_by_hour', 'Velocidade Cozinha']
+                ];
                 sheets.forEach(function(ab) { if (data[ab[0]] && data[ab[0]].length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data[ab[0]]), ab[1].substring(0, 31)); });
-                task6AppendExcel(wb, data, await task6FetchPerformance(from, to), '');
+                appendPerformanceExcel(wb, await fetchExportPerformance(from, to), '');
             }
             var wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
             var blob = new Blob([wbout], { type: 'application/octet-stream' });
@@ -1827,147 +1995,6 @@ if (document.readyState === 'loading') {
             URL.revokeObjectURL(url);
         } catch (e) { showToast('Erro ao gerar Excel: ' + e.message, 'error'); console.error(e); }
         finally { state.exporting = false; if (exportModal) exportModal.style.display = 'none'; if (exportProgress) exportProgress.style.display = 'none'; }
-    }
-
-    // Exportação da Tarefa 6: contrato único de performance operacional.
-    function task6ExportDays(from, to) {
-        var days = [], cursor = new Date(from + 'T00:00:00Z'), end = new Date(to + 'T00:00:00Z');
-        for (; cursor <= end; cursor.setUTCDate(cursor.getUTCDate() + 1)) days.push(cursor.toISOString().split('T')[0]);
-        return days;
-    }
-
-    function task6AssertFinite(value, path) {
-        if (typeof value === 'number' && !Number.isFinite(value)) throw new Error('Payload inválido: número não finito em ' + path + '.');
-        if (Array.isArray(value)) value.forEach(function(item, index) { task6AssertFinite(item, path + '[' + index + ']'); });
-        else if (value && typeof value === 'object') Object.keys(value).forEach(function(key) { task6AssertFinite(value[key], path + '.' + key); });
-    }
-
-    function task6ValidatePerformancePayload(performance) {
-        if (!performance || !performance.operational || typeof performance.operational !== 'object' || Array.isArray(performance.operational) || !Object.keys(performance.operational).length) throw new Error('Payload inválido: performance operacional ausente.');
-        Object.keys(performance.operational).forEach(function(entity) {
-            var item = performance.operational[entity];
-            if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error('Payload inválido: entidade de performance inválida em ' + entity + '.');
-            ['daily_average_complete', 'legacy_unversioned'].forEach(function(key) { if (typeof item[key] !== 'boolean') throw new Error('Payload inválido: status ausente em performance.operational.' + entity + '.' + key + '.'); });
-            ['criteria', 'occurrences', 'weight_versions'].forEach(function(key) { if (!Array.isArray(item[key])) throw new Error('Payload inválido: ' + key + ' ausentes em performance.operational.' + entity + '.'); });
-            item.criteria.forEach(function(criterion, index) {
-                if (!criterion || typeof criterion !== 'object' || typeof criterion.criterion !== 'string' || typeof criterion.weights_status !== 'string') throw new Error('Payload inválido: critério inválido em performance.operational.' + entity + '.criteria[' + index + '].');
-                if (criterion.weights !== undefined && !Array.isArray(criterion.weights)) throw new Error('Payload inválido: pesos inválidos em performance.operational.' + entity + '.criteria[' + index + '].');
-            });
-            item.occurrences.forEach(function(occurrence, index) {
-                ['entity', 'station', 'type', 'date', 'demand_id', 'product_name', 'detail'].forEach(function(key) { if (occurrence === null || occurrence === undefined || typeof occurrence[key] !== 'string') throw new Error('Payload inválido: ocorrência inválida em performance.operational.' + entity + '.occurrences[' + index + '].' + key + '.'); });
-                ['weight', 'deduction'].forEach(function(key) { task6RequireNumber(occurrence[key], 'performance.operational.' + entity + '.occurrences[' + index + '].' + key, true); });
-                if (occurrence.weight_version_id !== null && occurrence.weight_version_id !== undefined && typeof occurrence.weight_version_id !== 'string') throw new Error('Payload inválido: versão inválida em performance.operational.' + entity + '.occurrences[' + index + '].weight_version_id.');
-            });
-        });
-    }
-
-    function task6RequireNumber(value, path, allowNull) {
-        if (value === undefined) throw new Error('Payload inválido: campo ausente em ' + path + '.');
-        if (value === null) {
-            if (allowNull) return null;
-            throw new Error('Payload inválido: campo nulo em ' + path + '.');
-        }
-        if (typeof value === 'string' && value.trim() === '') throw new Error('Payload inválido: valor vazio em ' + path + '.');
-        var number = Number(value);
-        if (!Number.isFinite(number)) throw new Error('Payload inválido: número não finito em ' + path + '.');
-        return number;
-    }
-
-    function task6ValidateDashboardNumbers(data) {
-        var kpis = data && data.kpis;
-        if (!kpis) throw new Error('Payload inválido: KPIs ausentes.');
-        ['total_pedidos', 'pct_entregues', 'total_roturas', 'total_cancelados', 'pct_dentro_sla', 'pct_dentro_sla_cozinha', 'pct_dentro_sla_salao', 'base_sla_cozinha', 'base_sla_salao', 'atrasos_cozinha', 'atrasos_salao', 'urgentes_puros', 'urgentes_rotura', 'dentro_sla_cozinha', 'dentro_sla_salao', 'pct_urgentes', 'pct_cancelados', 'tempo_medio_cozinha_min', 'tempo_medio_retirada_min'].forEach(function(key) { task6RequireNumber(kpis[key], 'dashboard.kpis.' + key); });
-        [['trend', ['total', 'entregues', 'cancelados', 'roturas', 'atrasos_cozinha', 'atrasos_salao']], ['occupancy_by_shift', ['pct_ociosa']], ['produtos', ['total_qty', 'total_demandas']], ['replacements', ['total', 'replacements', 'replacement_pct']]].forEach(function(spec) {
-            (data[spec[0]] || []).forEach(function(row, index) { spec[1].forEach(function(key) { task6RequireNumber(row[key], 'dashboard.' + spec[0] + '[' + index + '].' + key); }); });
-        });
-        task6ValidateCriticalArrays(data);
-    }
-
-    function task6ValidateCriticalArrays(data) {
-        var specs = {
-            speed_by_hour: { required: ['hora', 'count'], nullable: ['avg_min'] },
-            queue_time_by_station: { required: ['count'], nullable: ['avg_wait_min', 'avg_cooking_min'] },
-            queue_time_by_hour: { required: ['hora'], nullable: ['tempo_medio_min'] },
-            sla_by_product: { required: ['total', 'breached'], nullable: ['pct_ok', 'avg_overage_min'] },
-            cancel_reasons: { required: ['total'] },
-            pickup_by_hour: { required: ['hora', 'count'], nullable: ['avg_min'] },
-            volume_ma: { required: ['total', 'ma7'] },
-            weekday_seasonality: { required: ['total', 'avg'] },
-            funnel: { object: true, required: ['created', 'ready', 'retrieved', 'cancelled', 'pending_now'] },
-            week_comparison: { required: ['this_week', 'last_week'], nullable: ['indicators.sla_pct', 'indicators.avg_time_min', 'indicators.cancel_rate', 'indicators.urgent_pct'] },
-            heatmap: { required: ['hora', 'dia_semana', 'total'] },
-            qty_vs_time: { required: ['qty', 'actual_min'], nullable: ['sla_min'] },
-            scatter_roturas: { required: ['total_demandas', 'total_roturas'] }
-        };
-        Object.keys(specs).forEach(function(name) {
-            var spec = specs[name];
-            var rows = spec.object ? [data[name]] : data[name];
-            if (spec.object ? (!data[name] || typeof data[name] !== 'object' || Array.isArray(data[name])) : !Array.isArray(rows)) throw new Error('Payload inválido: estrutura ausente em dashboard.' + name + '.');
-            rows.forEach(function(row, index) {
-                if (!row || typeof row !== 'object' || Array.isArray(row)) throw new Error('Payload inválido: item nulo ou inválido em dashboard.' + name + '[' + index + '].');
-                spec.required.forEach(function(key) { task6RequireNumber(row[key], 'dashboard.' + name + '[' + index + '].' + key); });
-                (spec.nullable || []).forEach(function(key) {
-                    var parts = key.split('.');
-                    var value = row;
-                    parts.forEach(function(part) { value = value === null || value === undefined ? undefined : value[part]; });
-                    task6RequireNumber(value, 'dashboard.' + name + '[' + index + '].' + key, true);
-                });
-            });
-        });
-    }
-
-    async function task6FetchPerformance(from, to) {
-        var query = '/api/v1/analytics/performance?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to);
-        if (state.stationId) query += '&station_id=' + encodeURIComponent(state.stationId);
-        var response = await fetch(query);
-        if (!response.ok) throw new Error('Não foi possível carregar a performance do período (' + response.status + ').');
-        var performance = await response.json();
-        task6ValidatePerformancePayload(performance);
-        task6AssertFinite(performance, 'performance');
-        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; ['operational_score', 'total_demands'].forEach(function(key) { task6RequireNumber(item[key], 'performance.operational.' + entity + '.' + key, true); }); task6RequireNumber(item.open_demands, 'performance.operational.' + entity + '.open_demands'); task6RequireNumber(item.total_deduction, 'performance.operational.' + entity + '.total_deduction', true); task6RequireNumber(item.daily_average_score, 'performance.operational.' + entity + '.daily_average_score', true); (item.criteria || []).forEach(function(c, index) { task6RequireNumber(c.count, 'performance.operational.' + entity + '.criteria[' + index + '].count'); task6RequireNumber(c.eligible_base, 'performance.operational.' + entity + '.criteria[' + index + '].eligible_base', true); task6RequireNumber(c.rate, 'performance.operational.' + entity + '.criteria[' + index + '].rate', true); task6RequireNumber(c.deduction, 'performance.operational.' + entity + '.criteria[' + index + '].deduction', true); (c.weights || []).forEach(function(w, weightIndex) { ['weight', 'count', 'deduction'].forEach(function(key) { task6RequireNumber(w[key], 'performance.operational.' + entity + '.criteria[' + index + '].weights[' + weightIndex + '].' + key); }); }); }); (item.occurrences || []).forEach(function(o, index) { ['weight', 'deduction'].forEach(function(key) { task6RequireNumber(o[key], 'performance.operational.' + entity + '.occurrences[' + index + '].' + key, true); }); }); });
-        return performance;
-    }
-
-    async function task6FetchDashboard(from, to) {
-        var params = 'from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to) + (state.stationId ? '&station_id=' + encodeURIComponent(state.stationId) : '');
-        var response = await fetch('/api/v1/analytics/dashboard?' + params);
-        if (!response.ok) throw new Error('Não foi possível carregar os dados do período (' + response.status + ').');
-        var data = await response.json();
-        task6AssertFinite(data, 'dashboard');
-        task6ValidateDashboardNumbers(data);
-        return data;
-    }
-
-    function task6DateLabel(date) { var p = date.split('-'); return p[2] + '/' + p[1] + '/' + p[0]; }
-
-    function task6ReportHtml(data, performance, title) {
-        var labels = { cozinha_geral:'Cozinha Geral', cozinha_quente_a:'Quente A', cozinha_quente_b:'Quente B', cozinha_fria:'Fria', salao:'Salão' };
-        var html = '<div style="background:#fff;color:#27272a;font-family:Arial,sans-serif;padding:22px;width:856px;line-height:1.35;">' + '<h1 style="margin:0;color:#1d3557;font-size:24px;">Relatório operacional</h1><p style="margin:4px 0 18px;color:#52525b;">' + escapePerfHtml(title) + '</p>';
-        var k = data.kpis || {};
-        html += '<h2 style="font-size:16px;border-bottom:2px solid #1d3557;padding-bottom:5px;">Resumo</h2><table style="width:100%;border-collapse:collapse;font-size:12px;"><tbody>';
-        [['Pedidos', k.total_pedidos], ['Entregues (%)', k.pct_entregues], ['SLA cozinha (%)', k.pct_dentro_sla_cozinha], ['Dentro SLA cozinha', k.dentro_sla_cozinha], ['Base SLA cozinha', k.base_sla_cozinha], ['SLA salão (%)', k.pct_dentro_sla_salao], ['Dentro SLA salão', k.dentro_sla_salao], ['Base SLA salão', k.base_sla_salao], ['Cancelados', k.total_cancelados], ['Zerados', k.total_roturas], ['Atrasos cozinha', k.atrasos_cozinha], ['Atrasos salão', k.atrasos_salao], ['Urgentes', k.urgentes_puros]].forEach(function(row) { html += '<tr><td style="padding:4px;border-bottom:1px solid #e4e4e7;">' + escapePerfHtml(row[0]) + '</td><td style="padding:4px;border-bottom:1px solid #e4e4e7;font-weight:bold;">' + escapePerfHtml(row[1]) + '</td></tr>'; });
-        html += '</tbody></table><h2 style="font-size:16px;border-bottom:2px solid #1d3557;padding-bottom:5px;margin-top:18px;">Notas operacionais</h2>';
-        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; var scoreText = task6DisplayNumber(item.operational_score, 1); var demandText = task6DisplayNumber(item.total_demands, 0); html += '<h3 style="font-size:14px;margin:12px 0 4px;">' + escapePerfHtml(labels[entity] || entity) + ' | Nota: ' + scoreText + ' | Média diária: ' + task6DisplayNumber(item.daily_average_score, 1) + (item.legacy_unversioned ? ' | histórico legado sem snapshot de pesos' : '') + ' | Demandas: ' + demandText + '</h3><table style="width:100%;border-collapse:collapse;font-size:10px;"><thead><tr style="background:#e5e7eb;"><th>Critério</th><th>Contagem</th><th>Base</th><th>Taxa</th><th>Peso / desconto</th></tr></thead><tbody>'; (item.criteria || []).forEach(function(c) { var weights = c.weights_status === 'indisponivel_snapshot_legado' ? 'Snapshot indisponível' : (c.weights || []).map(function(w) { return escapePerfHtml(w.weight_version_id) + ': peso ' + task6DisplayNumber(w.weight, 2) + ', contagem ' + task6DisplayNumber(w.count, 0) + ', desconto -' + task6DisplayNumber(w.deduction, 2); }).join('; '); var rate = task6NullableNumber(c.rate); var deductionText = c.weights_status === 'indisponivel_snapshot_legado' ? 'Snapshot indisponível' : task6DisplayNumber(c.deduction, 2); html += '<tr><td>' + escapePerfHtml(c.criterion) + '</td><td>' + task6DisplayNumber(c.count, 0) + '</td><td>' + task6DisplayNumber(c.eligible_base, 0) + '</td><td>' + (rate === null ? 'Indisponível' : task6DisplayNumber(rate * 100, 1) + '%') + '</td><td>' + weights + '<br>Status: ' + escapePerfHtml(c.weights_status || 'vigente_intervalo') + ', desconto -' + deductionText + '</td></tr>'; }); html += '</tbody></table>'; });
-        html += '<h2 style="font-size:16px;border-bottom:2px solid #1d3557;padding-bottom:5px;margin-top:18px;">Vigências dos pesos</h2><table style="width:100%;border-collapse:collapse;font-size:10px;"><thead><tr style="background:#e5e7eb;"><th>Versão</th><th>Vigência inicial</th><th>Vigência final</th></tr></thead><tbody>';
-        (performance.weight_versions || []).forEach(function(v) { html += '<tr><td>' + escapePerfHtml(v.id) + '</td><td>' + escapePerfHtml(v.valid_from) + '</td><td>' + escapePerfHtml(v.valid_to || 'Em vigor') + '</td></tr>'; });
-        html += '</tbody></table><h2 style="font-size:16px;border-bottom:2px solid #1d3557;padding-bottom:5px;margin-top:18px;">Ocorrências reais</h2><table style="width:100%;border-collapse:collapse;font-size:9px;"><thead><tr style="background:#e5e7eb;"><th>Entidade</th><th>Estação de origem</th><th>Tipo</th><th>Data/hora</th><th>Demand ID</th><th>Produto</th><th>Detalhe</th><th>Peso</th><th>Desconto</th><th>Versão do peso</th></tr></thead><tbody>';
-         Object.keys(performance.operational).forEach(function(entity) { (performance.operational[entity].occurrences || []).forEach(function(o) { var snapshot = task6NullableNumber(o.weight) !== null && task6NullableNumber(o.deduction) !== null && o.weight_version_id !== null && o.weight_version_id !== undefined; html += '<tr><td>' + escapePerfHtml(o.entity || entity) + '</td><td>' + escapePerfHtml(o.station || '-') + '</td><td>' + escapePerfHtml(o.type) + '</td><td>' + escapePerfHtml(o.date) + '</td><td>' + escapePerfHtml(o.demand_id) + '</td><td>' + escapePerfHtml(o.product_name) + '</td><td>' + escapePerfHtml(o.detail) + '</td><td>' + (snapshot ? task6DisplayNumber(o.weight, 2) : 'Indisponível') + '</td><td>' + (snapshot ? task6DisplayNumber(o.deduction, 2) : 'Indisponível') + '</td><td>' + (snapshot ? escapePerfHtml(o.weight_version_id) : 'Indisponível') + '</td></tr>'; }); });
-        return html + '</tbody></table></div>';
-    }
-
-    function task6PerformanceRows(performance) {
-        var labels = { cozinha_geral:'Cozinha Geral', cozinha_quente_a:'Quente A', cozinha_quente_b:'Quente B', cozinha_fria:'Fria', salao:'Salão' }, rows = [];
-        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; rows.push({ Entidade: labels[entity] || entity, 'Nota operacional': item.operational_score === null ? 'Indisponível' : item.operational_score, 'Média diária': item.daily_average_score === null ? 'Consolidação incompleta' : item.daily_average_score, 'Média completa': item.daily_average_complete, 'Histórico legado sem snapshot': item.legacy_unversioned, Demandas: item.total_demands === null ? 'Indisponível' : item.total_demands, 'Demandas abertas': item.open_demands, 'Desconto total': item.total_deduction === null ? 'Indisponível' : item.total_deduction }); });
-        return rows;
-    }
-
-    function task6AppendExcel(wb, data, performance, prefix) {
-        var add = function(rows, name) { XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), (prefix + name).substring(0, 31)); };
-        add(task6PerformanceRows(performance), 'Performance');
-        var criteria = [], occurrences = [];
-        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; (item.criteria || []).forEach(function(c) { var weightsAvailable = c.weights_status !== 'indisponivel_snapshot_legado'; criteria.push({ Entidade: entity, Critério: c.criterion, Contagem: c.count, 'Base elegível': task6NullableNumber(c.eligible_base) === null ? 'Indisponível' : c.eligible_base, Taxa: task6NullableNumber(c.rate) === null ? 'Indisponível' : c.rate, Desconto: weightsAvailable ? (task6NullableNumber(c.deduction) === null ? 'Indisponível' : c.deduction) : 'Snapshot indisponível', 'Status dos pesos': c.weights_status, 'Pesos por versão': weightsAvailable ? (c.weights || []).map(function(w) { return w.weight_version_id + ': peso ' + task6DisplayNumber(w.weight, 2) + ' (' + task6DisplayNumber(w.count, 0) + ', -' + task6DisplayNumber(w.deduction, 2) + ')'; }).join('; ') : 'Snapshot indisponível' }); }); (item.occurrences || []).forEach(function(o) { var snapshot = task6NullableNumber(o.weight) !== null && task6NullableNumber(o.deduction) !== null && o.weight_version_id !== null && o.weight_version_id !== undefined; occurrences.push({ Entidade: o.entity || entity, 'Estação de origem': o.station || '-', Tipo: o.type, 'Data/hora': o.date, 'Demand ID': o.demand_id, Produto: o.product_name, Detalhe: o.detail, Peso: snapshot ? o.weight : 'Indisponível', Desconto: snapshot ? o.deduction : 'Indisponível', 'Versão do peso': snapshot ? o.weight_version_id : 'Indisponível' }); }); });
-        add(criteria, 'Critérios'); add(occurrences, 'Ocorrências'); add((performance.weight_versions || []).map(function(v) { return { Versão: v.id, 'Vigência inicial': v.valid_from, 'Vigência final': v.valid_to || 'Em vigor' }; }), 'Vigências');
-        var k = data.kpis || {}; XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Métrica', 'Valor'], ['Pedidos', k.total_pedidos], ['Entregues (%)', k.pct_entregues], ['SLA cozinha (%)', k.pct_dentro_sla_cozinha], ['Dentro SLA cozinha', k.dentro_sla_cozinha], ['Base SLA cozinha', k.base_sla_cozinha], ['SLA salão (%)', k.pct_dentro_sla_salao], ['Dentro SLA salão', k.dentro_sla_salao], ['Base SLA salão', k.base_sla_salao], ['Cancelados', k.total_cancelados], ['Zerados', k.total_roturas], ['Atrasos cozinha', k.atrasos_cozinha], ['Atrasos salão', k.atrasos_salao], ['Urgentes', k.urgentes_puros]]), (prefix + 'Resumo').substring(0, 31));
     }
 
     // Criteria modal close button

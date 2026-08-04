@@ -1,179 +1,25 @@
-import { query, pool } from '../db/client';
-import { PerformanceScoreRow, PerformanceDetractor, PerformanceWeights, PerformanceWeightVersion, PerformanceOccurrence, PerformanceCriterionSummary, PerformanceEntity, EntityPerformance, EntityScore } from '../types';
-import { dataOperacional, DATA_OPERACIONAL_SQL, intervaloUtc } from './operational-date.service';
+import { query } from '../db/client';
+import { PerformanceScoreRow, PerformanceDetractor } from '../types';
 
-const DATA_OPERACIONAL_D_SQL = DATA_OPERACIONAL_SQL.replace(/\bcreated_at\b/g, 'd.created_at');
-
-export interface NotaCozinhaGeral {
-  operational_score: number | null;
-  daily_average_score: number | null;
-  daily_average_complete: boolean;
-  total_demands: number | null;
-  kitchen_stockout_weight: number;
+interface Weights {
+  sla_breach: number;
+  cancellation: number;
+  stockout_salao: number;
+  slow_item: number;
 }
 
-// A vigência usa a data civil UTC de valid_from e termina na data civil UTC de valid_to (fim exclusivo).
-
-export interface OcorrenciaBruta {
-  type: string;
-  date: string;
-  demand_id: string;
-  product_name: string;
-  detail: string;
-  entity?: PerformanceEntity;
-  station?: string | null;
-}
-
-export function calcularNotasCozinhaGeral(stations: { entity: PerformanceEntity; total: number; deduction: number | null; final?: number | null }[]): NotaCozinhaGeral {
-  const expectedEntities = new Set<PerformanceEntity>(['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria']);
-  const stationEntities = new Set(stations.map(station => station.entity));
-  const hasExactlyThreeStations = stations.length === 3
-    && stationEntities.size === expectedEntities.size
-    && Array.from(expectedEntities).every(entity => stationEntities.has(entity));
-  const total = stations.reduce((sum, station) => sum + station.total, 0);
-  const deduction = stations.some(station => station.deduction === null)
-    ? null
-    : stations.reduce((sum, station) => sum + (station.deduction as number), 0);
-  const hasCompleteFinals = hasExactlyThreeStations
-    && stations.every(station => scoreValido(station.final ?? null) !== null);
-  const operationalScore = hasCompleteFinals && deduction !== null ? round1(5 - deduction) : null;
-  const dailyAverageComplete = hasCompleteFinals;
-  const dailyAverageScore = dailyAverageComplete
-    ? round1(stations.reduce((sum, station) => sum + scoreValido(station.final ?? null)!, 0) / stations.length)
-    : null;
+async function getWeights(): Promise<Weights> {
+  const rows = await query<{ key: string; value: string }>(
+    `SELECT key, value FROM system_settings WHERE key LIKE 'score_weight_%'`
+  );
+  const map: Record<string, number> = {};
+  rows.forEach(r => { map[r.key] = parseFloat(r.value); });
   return {
-    operational_score: operationalScore,
-    daily_average_score: dailyAverageScore,
-    daily_average_complete: dailyAverageComplete,
-    total_demands: hasExactlyThreeStations ? total : null,
-    kitchen_stockout_weight: 0,
+    sla_breach: map.score_weight_sla_breach ?? 0.15,
+    cancellation: map.score_weight_cancellation ?? 0.30,
+    stockout_salao: map.score_weight_stockout_salao ?? 0.10,
+    slow_item: map.score_weight_slow_item ?? 0.10,
   };
-}
-
-export function consolidacaoGeralValida(
-  rows: Pick<PerformanceScoreRow, 'entity' | 'final_score' | 'weight_version_id'>[],
-  generalRow?: Pick<PerformanceScoreRow, 'entity' | 'final_score' | 'weight_version_id'>
-): boolean {
-  const expectedEntities = new Set<PerformanceEntity>(['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria']);
-  const stationRows = rows.filter(row => expectedEntities.has(row.entity as PerformanceEntity));
-  const stationEntities = new Set(stationRows.map(row => row.entity));
-  if (stationRows.length !== 3 || stationEntities.size !== 3) return false;
-  if (!Array.from(expectedEntities).every(entity => stationRows.some(row => row.entity === entity))) return false;
-  if (!stationRows.every(row => scoreValido(row.final_score) !== null)) return false;
-
-  const versions = stationRows.map(row => row.weight_version_id ?? null);
-  const allLegacy = versions.every(version => version === null);
-  const allVersioned = versions.every(version => version !== null && version === versions[0]);
-  if (!allLegacy && !allVersioned) return false;
-  if (!generalRow) return true;
-  if (generalRow.entity !== 'cozinha_geral' || scoreValido(generalRow.final_score) === null) return false;
-  return generalRow.weight_version_id === (allLegacy ? null : versions[0]);
-}
-
-export const PESOS_PADRAO: PerformanceWeights = {
-  sla_breach_cozinha: 0.15,
-  sla_breach_salao: 0.15,
-  cancellation_cozinha: 0.30,
-  cancellation_salao: 0.30,
-  stockout_salao: 0.10,
-  slow_item_cozinha: 0.10,
-  slow_pickup_salao: 0.10,
-};
-
-export async function ensureWeightVersion(): Promise<PerformanceWeightVersion> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query(`SELECT pg_advisory_xact_lock(hashtextextended('performance_weight_versions', 0))`);
-    const { rows: existing } = await client.query<PerformanceWeightVersion>(
-      `SELECT * FROM performance_weight_versions
-       WHERE valid_to IS NULL ORDER BY valid_from DESC LIMIT 1`
-    );
-    if (existing[0]) {
-      await client.query('COMMIT');
-      return existing[0];
-    }
-
-    const columns = Object.keys(PESOS_PADRAO);
-    const values = columns.map((_, index) => `$${index + 1}`).join(', ');
-    await client.query(
-      `INSERT INTO performance_weight_versions (${columns.join(', ')}) VALUES (${values})`,
-      columns.map(key => PESOS_PADRAO[key as keyof PerformanceWeights])
-    );
-    const { rows: created } = await client.query<PerformanceWeightVersion>(
-      `SELECT * FROM performance_weight_versions
-       WHERE valid_to IS NULL ORDER BY valid_from DESC LIMIT 1`
-    );
-    if (!created[0]) throw new Error('Não foi possível garantir a versão de pesos vigente');
-    await client.query('COMMIT');
-    return created[0];
-  } catch (error) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
-export async function getWeightVersionForDate(dateStr: string): Promise<PerformanceWeightVersion> {
-  await ensureWeightVersion();
-  // A versão vale pela data civil UTC de valid_from até a data civil UTC de valid_to (fim exclusivo).
-  const [version] = await query<PerformanceWeightVersion>(
-    `SELECT * FROM performance_weight_versions
-      WHERE (valid_from AT TIME ZONE 'UTC')::date <= $1::date
-        AND (valid_to IS NULL OR (valid_to AT TIME ZONE 'UTC')::date > $1::date)
-      ORDER BY valid_from DESC LIMIT 1`,
-    [dateStr]
-  );
-  if (!version) throw new Error('Não foi encontrada uma versão de pesos para a data');
-  return version;
-}
-
-export async function getWeightVersions(): Promise<PerformanceWeightVersion[]> {
-  return query<PerformanceWeightVersion>(
-    `SELECT * FROM performance_weight_versions ORDER BY valid_from DESC`
-  );
-}
-
-export type PerformanceWeightCache = Map<string, PerformanceWeightVersion>;
-
-function versionForDate(dateStr: string, versions: PerformanceWeightVersion[]): PerformanceWeightVersion {
-  const civilDate = (value: string): string => {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? value.slice(0, 10) : parsed.toISOString().slice(0, 10);
-  };
-  const version = versions
-    .filter(candidate => civilDate(candidate.valid_from) <= dateStr
-      && (!candidate.valid_to || civilDate(candidate.valid_to) > dateStr))
-    .sort((a, b) => new Date(b.valid_from).getTime() - new Date(a.valid_from).getTime())[0];
-  if (!version) throw new Error('Não foi encontrada uma versão de pesos para a data');
-  return version;
-}
-
-export async function createPerformanceWeightCache(dateFrom: string, dateTo: string): Promise<PerformanceWeightCache> {
-  await ensureWeightVersion();
-  const versions = await getWeightVersions();
-  const cache: PerformanceWeightCache = new Map();
-  for (const date = intervaloUtc(dateFrom); date <= intervaloUtc(dateTo); date.setUTCDate(date.getUTCDate() + 1)) {
-    const dateStr = date.toISOString().slice(0, 10);
-    cache.set(dateStr, versionForDate(dateStr, versions));
-  }
-  return cache;
-}
-
-function cachedWeightVersion(dateStr: string, cache?: PerformanceWeightCache): Promise<PerformanceWeightVersion> {
-  if (cache?.has(dateStr)) return Promise.resolve(cache.get(dateStr)!);
-  return getWeightVersionForDate(dateStr);
-}
-
-function round1(value: number): number {
-  return Math.max(0, Math.round(value * 10) / 10);
-}
-
-function scoreValido(value: number | null): number | null {
-  if (value === null) return null;
-  const score = Number(value);
-  return Number.isFinite(score) ? score : null;
 }
 
 function entityFromStationCode(code: string): string {
@@ -183,19 +29,18 @@ function entityFromStationCode(code: string): string {
 }
 
 async function upsertScore(
-  entity: string, dateStr: string, finalScore: number | null, total: number,
-   slaBreaches: number, slaDed: number | null,
-   cancellations: number, cancelDed: number | null,
-   stockouts: number, stockDed: number | null,
-   slowItems: number, slowDed: number | null, weightVersionId: string | null
+  entity: string, dateStr: string, finalScore: number, total: number,
+  slaBreaches: number, slaDed: number,
+  cancellations: number, cancelDed: number,
+  stockouts: number, stockDed: number,
+  slowItems: number, slowDed: number
 ): Promise<void> {
   await query(
     `INSERT INTO performance_scores (entity, date, base_score, final_score, total_demands,
        sla_breaches, sla_breach_deduction, cancellations, cancellation_deduction,
-       stockouts, stockout_deduction, slow_items, slow_item_deduction, weight_version_id, updated_at)
-     VALUES ($1, $2, 5.0, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now())
+       stockouts, stockout_deduction, slow_items, slow_item_deduction, updated_at)
+     VALUES ($1, $2, 5.0, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
      ON CONFLICT (entity, date) DO UPDATE SET
-        weight_version_id = EXCLUDED.weight_version_id,
        final_score = EXCLUDED.final_score,
        total_demands = EXCLUDED.total_demands,
        sla_breaches = EXCLUDED.sla_breaches,
@@ -206,11 +51,10 @@ async function upsertScore(
        stockout_deduction = EXCLUDED.stockout_deduction,
        slow_items = EXCLUDED.slow_items,
        slow_item_deduction = EXCLUDED.slow_item_deduction,
-        updated_at = now()
-      WHERE performance_scores.weight_version_id IS NOT NULL`,
-     [entity, dateStr, finalScore, total,
-      slaBreaches, slaDed, cancellations, cancelDed,
-      stockouts, stockDed, slowItems, slowDed, weightVersionId]
+       updated_at = now()`,
+    [entity, dateStr, finalScore, total,
+     slaBreaches, slaDed, cancellations, cancelDed,
+     stockouts, stockDed, slowItems, slowDed]
   );
 }
 
@@ -220,7 +64,7 @@ async function safeCount(sql: string, params: unknown[]): Promise<number> {
 }
 
 export async function computeDailyScores(dateStr: string): Promise<void> {
-  const version = await getWeightVersionForDate(dateStr);
+  const weights = await getWeights();
 
   const stations = await query<{ id: string; code: string }>(
     `SELECT id, code FROM kitchen_stations`
@@ -233,25 +77,25 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
 
     const slaBreaches = await safeCount(
       `SELECT COUNT(*)::int AS cnt FROM demands
-       WHERE kitchen_station_id = $1 AND ${DATA_OPERACIONAL_SQL} = $2 AND sla_breached_cozinha = true
-          AND status != 'annulled' AND sla_minutes IS NOT NULL AND ready_at IS NOT NULL`,
+       WHERE kitchen_station_id = $1 AND created_at::date = $2 AND sla_breached_cozinha = true
+         AND status != 'annulled'`,
       [sid, dateStr]
     );
     const cancellations = await safeCount(
       `SELECT COUNT(*)::int AS cnt FROM demands
-       WHERE kitchen_station_id = $1 AND ${DATA_OPERACIONAL_SQL} = $2 AND status = 'cancelled_cozinha'
+       WHERE kitchen_station_id = $1 AND created_at::date = $2 AND status = 'cancelled_cozinha'
          AND status != 'annulled'`,
       [sid, dateStr]
     );
     const stockouts = await safeCount(
       `SELECT COUNT(*)::int AS cnt FROM demands
-       WHERE kitchen_station_id = $1 AND ${DATA_OPERACIONAL_SQL} = $2 AND stockout_reported = true
+       WHERE kitchen_station_id = $1 AND created_at::date = $2 AND stockout_reported = true
          AND status != 'annulled'`,
       [sid, dateStr]
     );
     const slowItems = await safeCount(
       `SELECT COUNT(*)::int AS cnt FROM demands
-       WHERE kitchen_station_id = $1 AND ${DATA_OPERACIONAL_SQL} = $2
+       WHERE kitchen_station_id = $1 AND created_at::date = $2
          AND status != 'annulled'
          AND ready_at IS NOT NULL AND sla_minutes IS NOT NULL
          AND EXTRACT(EPOCH FROM (ready_at - created_at))/60 > sla_minutes * 1.5`,
@@ -259,34 +103,33 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
     );
     const total = await safeCount(
       `SELECT COUNT(*)::int AS cnt FROM demands
-       WHERE kitchen_station_id = $1 AND ${DATA_OPERACIONAL_SQL} = $2
+       WHERE kitchen_station_id = $1 AND created_at::date = $2
          AND status != 'annulled'`,
       [sid, dateStr]
     );
 
-    const slaDed = slaBreaches * version.sla_breach_cozinha;
-    const cancelDed = cancellations * version.cancellation_cozinha;
-    const stockDed = 0; // Zerado na cozinha é ocorrência, mas não desconta.
-    const slowDed = slowItems * version.slow_item_cozinha;
+    const slaDed = Math.round(slaBreaches * weights.sla_breach * 100) / 100;
+    const cancelDed = Math.round(cancellations * weights.cancellation * 100) / 100;
+    const stockDed = 0; // Removido o peso para cozinha: "Zerou" não tira nota da cozinha
+    const slowDed = Math.round(slowItems * weights.slow_item * 100) / 100;
     const totalDed = slaDed + cancelDed + stockDed + slowDed;
-    const finalScore = round1(5.0 - totalDed);
+    const finalScore = Math.max(0, Math.round((5.0 - totalDed) * 10) / 10);
 
     await upsertScore(entity, dateStr, finalScore, total,
-      slaBreaches, slaDed, cancellations, cancelDed, stockouts, stockDed, slowItems, slowDed, version.id);
+      slaBreaches, slaDed, cancellations, cancelDed, stockouts, stockDed, slowItems, slowDed);
   }
 
   // -- Salão --
   const sSla = await safeCount(
-    `SELECT COUNT(*)::int AS cnt FROM demands WHERE ${DATA_OPERACIONAL_SQL} = $1 AND sla_breached_salao = true AND status != 'annulled'
-      AND ready_at IS NOT NULL AND retrieved_at IS NOT NULL`,
+    `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND sla_breached_salao = true AND status != 'annulled'`,
     [dateStr]
   );
   const sCancel = await safeCount(
-    `SELECT COUNT(*)::int AS cnt FROM demands WHERE ${DATA_OPERACIONAL_SQL} = $1 AND status = 'cancelled_salao' AND status != 'annulled'`,
+    `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND status = 'cancelled_salao' AND status != 'annulled'`,
     [dateStr]
   );
   const sStock = await safeCount(
-    `SELECT COUNT(*)::int AS cnt FROM demands WHERE ${DATA_OPERACIONAL_SQL} = $1 AND stockout_reported = true AND status != 'annulled'`,
+    `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND stockout_reported = true AND status != 'annulled'`,
     [dateStr]
   );
 
@@ -297,57 +140,64 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
 
   const sSlow = await safeCount(
     `SELECT COUNT(*)::int AS cnt FROM demands
-     WHERE ${DATA_OPERACIONAL_SQL} = $1 AND status != 'annulled'
+     WHERE created_at::date = $1 AND status != 'annulled'
        AND retrieved_at IS NOT NULL AND ready_at IS NOT NULL
        AND EXTRACT(EPOCH FROM (retrieved_at - ready_at))/60 > $2`,
     [dateStr, tolerance * 2]
   );
 
   const sTotal = await safeCount(
-    `SELECT COUNT(*)::int AS cnt FROM demands WHERE ${DATA_OPERACIONAL_SQL} = $1 AND status != 'annulled'`,
+    `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND status != 'annulled'`,
     [dateStr]
   );
 
-  const sSlaDed = sSla * version.sla_breach_salao;
-  const sCancelDed = sCancel * version.cancellation_salao;
-  const sStockDed = sStock * version.stockout_salao;
-  const sSlowDed = sSlow * version.slow_pickup_salao;
+  const sSlaDed = Math.round(sSla * weights.sla_breach * 100) / 100;
+  const sCancelDed = Math.round(sCancel * weights.cancellation * 100) / 100;
+  const sStockDed = Math.round(sStock * weights.stockout_salao * 100) / 100;
+  const sSlowDed = Math.round(sSlow * weights.slow_item * 100) / 100;
   const sTotalDed = sSlaDed + sCancelDed + sStockDed + sSlowDed;
-  const sFinal = round1(5.0 - sTotalDed);
+  const sFinal = Math.max(0, Math.round((5.0 - sTotalDed) * 10) / 10);
 
   await upsertScore('salao', dateStr, sFinal, sTotal,
-    sSla, sSlaDed, sCancel, sCancelDed, sStock, sStockDed, sSlow, sSlowDed, version.id);
+    sSla, sSlaDed, sCancel, sCancelDed, sStock, sStockDed, sSlow, sSlowDed);
 
-  // Cozinha Geral usa toda a base das três estações; a média simples fica separada.
-  const stationRows = await query<PerformanceScoreRow>(
-    `SELECT * FROM performance_scores
+  // -- Cozinha Geral = média das 3 estações --
+  const stationRows = await query<{
+    total_demands: string; sla_breaches: string; sla_breach_deduction: string;
+    cancellations: string; cancellation_deduction: string;
+    stockouts: string; stockout_deduction: string;
+    slow_items: string; slow_item_deduction: string;
+    final_score: string;
+  }>(
+    `SELECT
+       SUM(total_demands)::int AS total_demands,
+       SUM(sla_breaches)::int AS sla_breaches,
+       SUM(sla_breach_deduction) AS sla_breach_deduction,
+       SUM(cancellations)::int AS cancellations,
+       SUM(cancellation_deduction) AS cancellation_deduction,
+       SUM(stockouts)::int AS stockouts,
+       SUM(stockout_deduction) AS stockout_deduction,
+       SUM(slow_items)::int AS slow_items,
+       SUM(slow_item_deduction) AS slow_item_deduction,
+       ROUND(AVG(final_score), 1) AS final_score
+     FROM performance_scores
      WHERE date = $1 AND entity IN ('cozinha_quente_a','cozinha_quente_b','cozinha_fria')`,
     [dateStr]
   );
-  if (stationRows.length === 3 && new Set(stationRows.map(row => row.entity)).size === 3) {
-    const aggregate = calcularNotasCozinhaGeral(stationRows.map(row => ({
-      entity: row.entity as PerformanceEntity,
-      total: Number(row.total_demands),
-       deduction: [row.sla_breach_deduction, row.cancellation_deduction, row.stockout_deduction, row.slow_item_deduction]
-         .some(value => value === null) ? null : (row.sla_breach_deduction as number) + (row.cancellation_deduction as number)
-           + (row.stockout_deduction as number) + (row.slow_item_deduction as number),
-        final: scoreValido(row.final_score),
-    })));
-    const agg = stationRows.reduce((sum, row) => ({
-      total: sum.total + Number(row.total_demands),
-       sla: sum.sla + Number(row.sla_breaches), slaDed: sum.slaDed === null || row.sla_breach_deduction === null ? null : sum.slaDed + row.sla_breach_deduction,
-       cancel: sum.cancel + Number(row.cancellations), cancelDed: sum.cancelDed === null || row.cancellation_deduction === null ? null : sum.cancelDed + row.cancellation_deduction,
-       stock: sum.stock + Number(row.stockouts), stockDed: sum.stockDed === null || row.stockout_deduction === null ? null : sum.stockDed + row.stockout_deduction,
-       slow: sum.slow + Number(row.slow_items), slowDed: sum.slowDed === null || row.slow_item_deduction === null ? null : sum.slowDed + row.slow_item_deduction,
-     }), { total: 0, sla: 0, slaDed: 0 as number | null, cancel: 0, cancelDed: 0 as number | null, stock: 0, stockDed: 0 as number | null, slow: 0, slowDed: 0 as number | null });
-      if (aggregate.operational_score !== null && aggregate.daily_average_complete) {
-        const generalWeightVersionId = stationRows.every(row => row.weight_version_id === null)
-          ? null
-          : version.id;
-        await upsertScore('cozinha_geral', dateStr,
-           aggregate.operational_score, agg.total, agg.sla, agg.slaDed,
-           agg.cancel, agg.cancelDed, agg.stock, agg.stockDed, agg.slow, agg.slowDed, generalWeightVersionId);
-      }
+
+  const agg = stationRows[0];
+  if (agg) {
+    await upsertScore('cozinha_geral', dateStr,
+      parseFloat(agg.final_score || '5.0'),
+      parseInt(agg.total_demands || '0', 10),
+      parseInt(agg.sla_breaches || '0', 10),
+      parseFloat(agg.sla_breach_deduction || '0'),
+      parseInt(agg.cancellations || '0', 10),
+      parseFloat(agg.cancellation_deduction || '0'),
+      parseInt(agg.stockouts || '0', 10),
+      parseFloat(agg.stockout_deduction || '0'),
+      parseInt(agg.slow_items || '0', 10),
+      parseFloat(agg.slow_item_deduction || '0'));
   }
 }
 
@@ -373,158 +223,32 @@ export function buildDetractors(score: PerformanceScoreRow): PerformanceDetracto
     list.push({ label: 'Zerados', count: score.stockouts, deduction: score.stockout_deduction });
   }
   if (score.slow_items > 0) {
-    list.push({
-      label: score.entity === 'salao' ? 'Retirada lenta' : 'Preparo lento',
-      count: score.slow_items,
-      deduction: score.slow_item_deduction,
-    });
+    list.push({ label: 'Preparo/Retirada lenta', count: score.slow_items, deduction: score.slow_item_deduction });
   }
-  list.sort((a, b) => (b.deduction || 0) - (a.deduction || 0));
+  list.sort((a, b) => b.deduction - a.deduction);
   return list;
 }
 
-export type DetractorDate = PerformanceOccurrence;
-
-export async function enriquecerOcorrencias(
-  entity: PerformanceEntity,
-  ocorrencias: OcorrenciaBruta[],
-  weightCache?: PerformanceWeightCache
-): Promise<PerformanceOccurrence[]> {
-  const isKitchen = entity !== 'salao';
-  return Promise.all(ocorrencias.map(async occurrence => {
-    const occurrenceDate = String(occurrence.date).slice(0, 10);
-    const version = await cachedWeightVersion(occurrenceDate, weightCache);
-    const resultEntity = occurrence.entity || entity;
-    const key = occurrence.type === 'Estouro de SLA'
-      ? (isKitchen ? 'sla_breach_cozinha' : 'sla_breach_salao')
-      : occurrence.type === 'Cancelamento'
-        ? (isKitchen ? 'cancellation_cozinha' : 'cancellation_salao')
-        : occurrence.type === 'Zerado'
-          ? (isKitchen ? null : 'stockout_salao')
-          : (isKitchen ? 'slow_item_cozinha' : 'slow_pickup_salao');
-    const weight = key ? version[key] : 0;
-    return {
-      ...occurrence,
-      entity: resultEntity,
-      station: occurrence.station ?? (isKitchen ? resultEntity.replace('cozinha_', '') : null),
-      weight,
-      deduction: weight,
-      weight_version_id: version.id,
-    };
-  }));
+export interface DetractorDate {
+  type: string;
+  date: string;
+  demand_id: string;
+  product_name: string;
+  detail: string;
 }
 
-export async function ensureValidScoresForDate(dateStr: string, cache: PerformanceWeightCache): Promise<void> {
-  const entities: PerformanceEntity[] = ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'salao'];
-  const rows = await query<{ entity: PerformanceEntity; final_score: number | null; weight_version_id: string | null }>(
-    `SELECT entity, final_score, weight_version_id FROM performance_scores WHERE date = $1 AND entity = ANY($2)`,
-    [dateStr, entities]
-  );
-  const expectedVersion = cache.get(dateStr);
-  const stationRows = rows.filter(row => row.entity !== 'cozinha_geral');
-  const generalRows = rows.filter(row => row.entity === 'cozinha_geral');
-  const validGeneral = generalRows.some(row => consolidacaoGeralValida(stationRows, row));
-  const valid = Boolean(expectedVersion)
-    && entities.filter(entity => entity !== 'cozinha_geral').every(entity => rows.some(row =>
-      row.entity === entity && (row.weight_version_id === expectedVersion!.id || row.weight_version_id === null)))
-    && validGeneral;
-  if (!valid) await computeDailyScores(dateStr);
-}
-
-export function buildCriterionSummaries(
-  score: PerformanceScoreRow,
-  weights: PerformanceWeights,
-  isKitchen: boolean,
-  eligibleBases: Partial<Record<string, number | null>> = {},
-  eligibleBaseStatuses: Partial<Record<string, PerformanceCriterionSummary['eligible_base_status']>> = {}
-): PerformanceCriterionSummary[] {
-  const criteria: [string, number, number | null][] = isKitchen
-    ? [
-      ['sla_breach_cozinha', score.sla_breaches, score.sla_breach_deduction],
-      ['cancellation_cozinha', score.cancellations, score.cancellation_deduction],
-      ['stockout_cozinha', score.stockouts, score.stockout_deduction],
-      ['slow_item_cozinha', score.slow_items, score.slow_item_deduction],
-    ]
-    : [
-      ['sla_breach_salao', score.sla_breaches, score.sla_breach_deduction],
-      ['cancellation_salao', score.cancellations, score.cancellation_deduction],
-      ['stockout_salao', score.stockouts, score.stockout_deduction],
-      ['slow_pickup_salao', score.slow_items, score.slow_item_deduction],
-    ];
-  return criteria.map(([criterion, count, deduction]) => {
-    const total = eligibleBases[criterion] ?? null;
-    const baseStatus = eligibleBaseStatuses[criterion]
-      || (total === null ? 'indisponivel_sem_denominador' : 'aplicavel');
-    const weight = criterion === 'stockout_cozinha'
-      ? 0
-      : getCriterionWeight(criterion, weights);
-    return {
-      criterion, count, eligible_base: total, eligible_base_status: baseStatus,
-      rate: total === null || total === 0 ? (total === 0 ? 0 : null) : count / total,
-       weight, weights_status: 'aplicado', deduction: criterion === 'stockout_cozinha' && deduction !== null ? 0 : deduction,
-    };
-  });
-}
-
-function getCriterionWeight(criterion: string, weights: PerformanceWeights): number {
-  if (criterion === 'stockout_cozinha') return 0;
-  if (criterion in weights) return weights[criterion as keyof PerformanceWeights];
-  throw new Error(`Critério de desempenho desconhecido: ${criterion}`);
-}
-
-export async function getCriterionEligibleBases(entity: string, dateStr: string, stationCode?: string): Promise<Record<string, number | null>> {
-  const isGeneral = entity === 'cozinha_geral';
-  const stationFilter = entity === 'salao' ? '' : 'AND kitchen_station_id IN (SELECT id FROM kitchen_stations WHERE code = ANY($2))';
-  const stationCodes = isGeneral
-    ? (stationCode ? [stationCode] : ['quente_a', 'quente_b', 'fria'])
-    : [stationCode || entityFromStationCode(entity.replace('cozinha_', ''))];
-  const params = entity === 'salao' ? [dateStr] : [dateStr, stationCodes];
-  const [row] = await query<{
-    total_demands: string;
-    sla_cozinha: string;
-    sla_salao: string;
-    slow_cozinha: string;
-    slow_salao: string;
-  }>(
-    `SELECT
-       COUNT(*)::int AS total_demands,
-        COUNT(*) FILTER (WHERE sla_minutes IS NOT NULL AND ready_at IS NOT NULL)::int AS sla_cozinha,
-        COUNT(*) FILTER (WHERE ready_at IS NOT NULL AND retrieved_at IS NOT NULL)::int AS sla_salao,
-       COUNT(*) FILTER (WHERE ready_at IS NOT NULL AND sla_minutes IS NOT NULL)::int AS slow_cozinha,
-       COUNT(*) FILTER (WHERE ready_at IS NOT NULL AND retrieved_at IS NOT NULL)::int AS slow_salao
-     FROM demands
-      WHERE ${DATA_OPERACIONAL_SQL} = $1 AND status != 'annulled' ${stationFilter}`,
-    params
-  );
-  const values = row || { total_demands: '0', sla_cozinha: '0', sla_salao: '0', slow_cozinha: '0', slow_salao: '0' };
-  const hasCompleteGeneral = !isGeneral || stationCodes.length === 3;
-  const total = Number(values.total_demands);
-  return {
-    total_demands: Number(values.total_demands),
-    sla_breach_cozinha: Number(values.sla_cozinha),
-    sla_breach_salao: Number(values.sla_salao),
-    cancellation_cozinha: entity === 'salao' ? null : (hasCompleteGeneral ? total : null),
-    cancellation_salao: entity === 'salao' ? total : null,
-    stockout_cozinha: null,
-    stockout_salao: entity === 'salao' ? total : null,
-    slow_item_cozinha: Number(values.slow_cozinha),
-    slow_pickup_salao: Number(values.slow_salao),
-  };
-}
-
-export async function getDetractorDates(entity: string, dateFrom: string, dateTo: string, weightCache?: PerformanceWeightCache, stationCode?: string): Promise<PerformanceOccurrence[]> {
-  const results: OcorrenciaBruta[] = [];
+export async function getDetractorDates(entity: string, dateFrom: string, dateTo: string): Promise<DetractorDate[]> {
+  const results: DetractorDate[] = [];
 
   if (entity === 'cozinha_quente_a' || entity === 'cozinha_quente_b' || entity === 'cozinha_fria') {
-    const selectedStationCode = stationCode || (entity === 'cozinha_quente_a' ? 'quente_a'
-      : entity === 'cozinha_quente_b' ? 'quente_b' : 'fria');
+    const stationCode = entity === 'cozinha_quente_a' ? 'quente_a'
+      : entity === 'cozinha_quente_b' ? 'quente_b' : 'fria';
 
     const slaRows = await query<{ id: string; product_name: string; created_at: string; sla_breach_minutes_cozinha: number }>(
-       `SELECT d.id, d.product_name, d.created_at, d.sla_breach_minutes_cozinha
-        FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
-         WHERE ks.code = $1 AND ${DATA_OPERACIONAL_D_SQL} >= $2 AND ${DATA_OPERACIONAL_D_SQL} <= $3 AND d.sla_breached_cozinha = true AND d.status != 'annulled'
-          AND d.sla_minutes IS NOT NULL AND d.ready_at IS NOT NULL`,
-      [selectedStationCode, dateFrom, dateTo]
+      `SELECT d.id, d.product_name, d.created_at, d.sla_breach_minutes_cozinha
+       FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
+       WHERE ks.code = $1 AND d.created_at::date >= $2 AND d.created_at::date <= $3 AND d.sla_breached_cozinha = true AND d.status != 'annulled'`,
+      [stationCode, dateFrom, dateTo]
     );
     slaRows.forEach(r => results.push({
       type: 'Estouro de SLA',
@@ -536,8 +260,8 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
     const cancelRows = await query<{ id: string; product_name: string; created_at: string; cancel_reason: string | null }>(
       `SELECT d.id, d.product_name, d.created_at, d.cancel_reason
        FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
-        WHERE ks.code = $1 AND ${DATA_OPERACIONAL_D_SQL} >= $2 AND ${DATA_OPERACIONAL_D_SQL} <= $3 AND d.status = 'cancelled_cozinha'`,
-      [selectedStationCode, dateFrom, dateTo]
+       WHERE ks.code = $1 AND d.created_at::date >= $2 AND d.created_at::date <= $3 AND d.status = 'cancelled_cozinha'`,
+      [stationCode, dateFrom, dateTo]
     );
     cancelRows.forEach(r => results.push({
       type: 'Cancelamento', date: (r.created_at as any) instanceof Date ? (r.created_at as any).toISOString() : String(r.created_at),
@@ -548,8 +272,8 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
     const stockRows = await query<{ id: string; product_name: string; created_at: string }>(
       `SELECT d.id, d.product_name, d.created_at
        FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
-        WHERE ks.code = $1 AND ${DATA_OPERACIONAL_D_SQL} >= $2 AND ${DATA_OPERACIONAL_D_SQL} <= $3 AND d.stockout_reported = true AND d.status != 'annulled'`,
-      [selectedStationCode, dateFrom, dateTo]
+       WHERE ks.code = $1 AND d.created_at::date >= $2 AND d.created_at::date <= $3 AND d.stockout_reported = true AND d.status != 'annulled'`,
+      [stationCode, dateFrom, dateTo]
     );
     stockRows.forEach(r => results.push({
       type: 'Zerado', date: (r.created_at as any) instanceof Date ? (r.created_at as any).toISOString() : String(r.created_at),
@@ -559,13 +283,13 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
     const slowRows = await query<{ id: string; product_name: string; created_at: string; sla_minutes: number }>(
       `SELECT d.id, d.product_name, d.created_at, d.sla_minutes
        FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
-        WHERE ks.code = $1 AND ${DATA_OPERACIONAL_D_SQL} >= $2 AND ${DATA_OPERACIONAL_D_SQL} <= $3 AND d.status != 'annulled'
+       WHERE ks.code = $1 AND d.created_at::date >= $2 AND d.created_at::date <= $3 AND d.status != 'annulled'
          AND d.ready_at IS NOT NULL AND d.sla_minutes IS NOT NULL
          AND EXTRACT(EPOCH FROM (d.ready_at - d.created_at))/60 > d.sla_minutes * 1.5`,
-      [selectedStationCode, dateFrom, dateTo]
+      [stationCode, dateFrom, dateTo]
     );
     slowRows.forEach(r => results.push({
-       type: 'Preparo lento', date: (r.created_at as any) instanceof Date ? (r.created_at as any).toISOString() : String(r.created_at),
+      type: 'Item lento', date: (r.created_at as any) instanceof Date ? (r.created_at as any).toISOString() : String(r.created_at),
       demand_id: r.id, product_name: r.product_name,
       detail: `SLA: ${r.sla_minutes} min`,
     }));
@@ -574,8 +298,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
   if (entity === 'salao') {
     const sSlaRows = await query<{ id: string; product_name: string; created_at: string; sla_breach_minutes_salao: number }>(
       `SELECT id, product_name, created_at, sla_breach_minutes_salao
-         FROM demands WHERE ${DATA_OPERACIONAL_SQL} >= $1 AND ${DATA_OPERACIONAL_SQL} <= $2 AND sla_breached_salao = true AND status != 'annulled'
-          AND ready_at IS NOT NULL AND retrieved_at IS NOT NULL`,
+       FROM demands WHERE created_at::date >= $1 AND created_at::date <= $2 AND sla_breached_salao = true AND status != 'annulled'`,
       [dateFrom, dateTo]
     );
     sSlaRows.forEach(r => results.push({
@@ -586,7 +309,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
 
     const sCancelRows = await query<{ id: string; product_name: string; created_at: string; cancel_reason: string | null }>(
       `SELECT id, product_name, created_at, cancel_reason
-        FROM demands WHERE ${DATA_OPERACIONAL_SQL} >= $1 AND ${DATA_OPERACIONAL_SQL} <= $2 AND status = 'cancelled_salao'`,
+       FROM demands WHERE created_at::date >= $1 AND created_at::date <= $2 AND status = 'cancelled_salao'`,
       [dateFrom, dateTo]
     );
     sCancelRows.forEach(r => results.push({
@@ -597,7 +320,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
 
     const sStockRows = await query<{ id: string; product_name: string; created_at: string }>(
       `SELECT id, product_name, created_at
-        FROM demands WHERE ${DATA_OPERACIONAL_SQL} >= $1 AND ${DATA_OPERACIONAL_SQL} <= $2 AND stockout_reported = true AND status != 'annulled'`,
+       FROM demands WHERE created_at::date >= $1 AND created_at::date <= $2 AND stockout_reported = true AND status != 'annulled'`,
       [dateFrom, dateTo]
     );
     sStockRows.forEach(r => results.push({
@@ -612,298 +335,29 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
 
     const sSlowRows = await query<{ id: string; product_name: string; created_at: string }>(
       `SELECT id, product_name, created_at
-        FROM demands WHERE ${DATA_OPERACIONAL_SQL} >= $1 AND ${DATA_OPERACIONAL_SQL} <= $2 AND status != 'annulled'
+       FROM demands WHERE created_at::date >= $1 AND created_at::date <= $2 AND status != 'annulled'
          AND retrieved_at IS NOT NULL AND ready_at IS NOT NULL
          AND EXTRACT(EPOCH FROM (retrieved_at - ready_at))/60 > $3`,
       [dateFrom, dateTo, tolerance * 2]
     );
     sSlowRows.forEach(r => results.push({
-       type: 'Retirada lenta', date: (r.created_at as any) instanceof Date ? (r.created_at as any).toISOString() : String(r.created_at),
+      type: 'Item lento', date: (r.created_at as any) instanceof Date ? (r.created_at as any).toISOString() : String(r.created_at),
       demand_id: r.id, product_name: r.product_name,
       detail: `Retirada > ${tolerance * 2} min`,
     }));
   }
 
   if (entity === 'cozinha_geral') {
-    const stationCodes = stationCode ? [stationCode] : ['quente_a', 'quente_b', 'fria'];
+    const stationCodes = ['quente_a', 'quente_b', 'fria'];
     for (const code of stationCodes) {
       const subResults = await getDetractorDates(
         code === 'quente_a' ? 'cozinha_quente_a' : code === 'quente_b' ? 'cozinha_quente_b' : 'cozinha_fria',
-        dateFrom, dateTo, weightCache, code
+        dateFrom, dateTo
       );
       results.push(...subResults);
     }
   }
 
   results.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  if (!['salao', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'cozinha_geral'].includes(entity)) {
-    throw new Error(`Entidade de desempenho desconhecida: ${entity}`);
-  }
-  return enriquecerOcorrencias(entity as PerformanceEntity, results, weightCache);
-}
-
-export interface PerformanceDetails {
-  entity: PerformanceEntity;
-  criteria: PerformanceCriterionSummary[];
-  occurrences: PerformanceOccurrence[];
-  weight_versions: PerformanceWeightVersion[];
-  total_demands: number | null;
-  open_demands: number;
-  total_deduction: number | null;
-  legacy_unversioned: boolean;
-}
-
-export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom: string, dateTo: string, weightCache?: PerformanceWeightCache, stationCode?: string): Promise<PerformanceDetails> {
-  const cache = weightCache || await createPerformanceWeightCache(dateFrom, dateTo);
-  const occurrences = await getDetractorDates(entity, dateFrom, dateTo, cache, stationCode);
-  const scoreRows = await query<{ date: string; entity: PerformanceEntity; weight_version_id: string | null }>(
-    `SELECT date, weight_version_id FROM performance_scores
-     WHERE date >= $1 AND date <= $2 AND entity = ANY($3)`,
-    [dateFrom, dateTo, entity === 'cozinha_geral'
-      ? ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria']
-      : [entity]]
-  );
-  occurrences.forEach(occurrence => {
-    const occurrenceDate = dataOperacional(occurrence.date);
-    const occurrenceStation = occurrence.station || (occurrence.entity && occurrence.entity !== 'salao'
-      ? occurrence.entity.replace('cozinha_', '') : null);
-    const isLegacyForOccurrence = scoreRows.some(row => row.weight_version_id === null
-      && dataOperacional(row.date) === occurrenceDate
-      && (entity !== 'cozinha_geral'
-        ? row.entity === entity
-        : occurrenceStation === row.entity.replace('cozinha_', '')));
-    if (isLegacyForOccurrence) {
-      occurrence.weight = null;
-      occurrence.deduction = null;
-      occurrence.weight_version_id = null;
-    }
-  });
-  const bases: Record<string, number | null> = {};
-  const baseStatuses: Partial<Record<string, PerformanceCriterionSummary['eligible_base_status']>> = {};
-  const versions = new Map<string, PerformanceWeightVersion>();
-  const from = intervaloUtc(dateFrom);
-  const to = intervaloUtc(dateTo);
-  for (const date = new Date(from); date <= to; date.setUTCDate(date.getUTCDate() + 1)) {
-    const dateStr = date.toISOString().slice(0, 10);
-    const dailyBases = await getCriterionEligibleBases(entity, dateStr, stationCode);
-    for (const [criterion, base] of Object.entries(dailyBases)) {
-      if (base === null) {
-        bases[criterion] = null;
-        baseStatuses[criterion] = entity === 'cozinha_geral' ? 'incompleta_cozinha_geral' : 'indisponivel_sem_denominador';
-      } else if (bases[criterion] !== null) {
-        bases[criterion] = (bases[criterion] || 0) + base;
-      }
-    }
-    const version = cache.get(dateStr)!;
-    versions.set(version.id, version);
-  }
-  const counts = new Map<string, number>();
-  const deductions = new Map<string, number | null>();
-  const criterionWeights = new Map<string, Map<string, { weight: number; count: number; deduction: number }>>();
-  for (const occurrence of occurrences) {
-    const criterion = occurrence.type === 'Estouro de SLA'
-      ? (entity === 'salao' ? 'sla_breach_salao' : 'sla_breach_cozinha')
-      : occurrence.type === 'Cancelamento'
-        ? (entity === 'salao' ? 'cancellation_salao' : 'cancellation_cozinha')
-        : occurrence.type === 'Zerado'
-          ? (entity === 'salao' ? 'stockout_salao' : 'stockout_cozinha')
-          : (entity === 'salao' ? 'slow_pickup_salao' : 'slow_item_cozinha');
-    counts.set(criterion, (counts.get(criterion) || 0) + 1);
-    const currentDeduction = deductions.get(criterion);
-    deductions.set(criterion, currentDeduction === null || occurrence.deduction === null
-      ? null : (currentDeduction || 0) + occurrence.deduction);
-    if (occurrence.weight_version_id) {
-      if (!criterionWeights.has(criterion)) criterionWeights.set(criterion, new Map());
-      const version = criterionWeights.get(criterion)!;
-      const current = version.get(occurrence.weight_version_id) || { weight: occurrence.weight || 0, count: 0, deduction: 0 };
-      current.count += 1;
-      current.deduction += occurrence.deduction || 0;
-      version.set(occurrence.weight_version_id, current);
-    }
-  }
-  const latest = cache.get(dateTo)!;
-  const criteria = buildCriterionSummaries({
-    total_demands: bases.total_demands,
-    sla_breaches: counts.get(entity === 'salao' ? 'sla_breach_salao' : 'sla_breach_cozinha') || 0,
-    sla_breach_deduction: deductions.has(entity === 'salao' ? 'sla_breach_salao' : 'sla_breach_cozinha') ? deductions.get(entity === 'salao' ? 'sla_breach_salao' : 'sla_breach_cozinha')! : 0,
-    cancellations: counts.get(entity === 'salao' ? 'cancellation_salao' : 'cancellation_cozinha') || 0,
-    cancellation_deduction: deductions.has(entity === 'salao' ? 'cancellation_salao' : 'cancellation_cozinha') ? deductions.get(entity === 'salao' ? 'cancellation_salao' : 'cancellation_cozinha')! : 0,
-    stockouts: counts.get(entity === 'salao' ? 'stockout_salao' : 'stockout_cozinha') || 0,
-    stockout_deduction: deductions.has(entity === 'salao' ? 'stockout_salao' : 'stockout_cozinha') ? deductions.get(entity === 'salao' ? 'stockout_salao' : 'stockout_cozinha')! : 0,
-    slow_items: counts.get(entity === 'salao' ? 'slow_pickup_salao' : 'slow_item_cozinha') || 0,
-    slow_item_deduction: deductions.has(entity === 'salao' ? 'slow_pickup_salao' : 'slow_item_cozinha') ? deductions.get(entity === 'salao' ? 'slow_pickup_salao' : 'slow_item_cozinha')! : 0,
-  } as PerformanceScoreRow, latest, entity !== 'salao', bases, baseStatuses);
-  for (const criterion of criteria) {
-    const observedWeights = criterionWeights.get(criterion.criterion) || new Map();
-    const criterionOccurrenceKeys = new Set(occurrences
-      .filter(occurrence => {
-        const occurrenceCriterion = occurrence.type === 'Estouro de SLA'
-          ? (entity === 'salao' ? 'sla_breach_salao' : 'sla_breach_cozinha')
-          : occurrence.type === 'Cancelamento'
-            ? (entity === 'salao' ? 'cancellation_salao' : 'cancellation_cozinha')
-            : occurrence.type === 'Zerado'
-              ? (entity === 'salao' ? 'stockout_salao' : 'stockout_cozinha')
-              : (entity === 'salao' ? 'slow_pickup_salao' : 'slow_item_cozinha');
-        return occurrenceCriterion === criterion.criterion;
-      })
-      .map(occurrence => `${dataOperacional(occurrence.date)}:${occurrence.entity}:${occurrence.station || ''}:${criterion.criterion}`));
-    const hasLegacySnapshot = scoreRows.some(row => row.weight_version_id === null
-      && criterionOccurrenceKeys.has(`${dataOperacional(row.date)}:${row.entity}:${row.entity === 'salao' ? '' : row.entity.replace('cozinha_', '')}:${criterion.criterion}`));
-    criterion.weights_status = hasLegacySnapshot
-      ? 'indisponivel_snapshot_legado'
-      : (observedWeights.size > 0 ? 'aplicado' : 'vigente_intervalo');
-    if (criterion.weights_status === 'indisponivel_snapshot_legado') {
-      criterion.weights = [];
-      criterion.weight = null;
-    } else {
-      criterion.weights = Array.from(versions.values()).map(version => {
-        const observed = observedWeights.get(version.id);
-        return {
-          weight_version_id: version.id,
-          weight: criterion.criterion === 'stockout_cozinha' ? 0 : getCriterionWeight(criterion.criterion, version),
-          count: observed?.count || 0,
-          deduction: observed?.deduction || 0,
-        };
-      });
-      criterion.weight = criterion.weights.length === 1 ? criterion.weights[0].weight : null;
-    }
-  }
-  const [openRow] = await query<{ count: string }>(
-    `SELECT COUNT(*)::int AS count FROM demands
-      WHERE ${DATA_OPERACIONAL_SQL} >= $1 AND ${DATA_OPERACIONAL_SQL} <= $2
-       AND status IN ('pending', 'ready')
-       AND status != 'annulled'
-       ${entity === 'salao' ? '' : entity === 'cozinha_geral'
-         ? "AND kitchen_station_id IN (SELECT id FROM kitchen_stations WHERE code = ANY($3))"
-         : "AND kitchen_station_id = (SELECT id FROM kitchen_stations WHERE code = $3)"}`,
-    entity === 'salao' ? [dateFrom, dateTo] : entity === 'cozinha_geral'
-      ? [dateFrom, dateTo, stationCode ? [stationCode] : ['quente_a', 'quente_b', 'fria']]
-      : [dateFrom, dateTo, stationCode || entityFromStationCode(entity.replace('cozinha_', ''))]
-  );
-  return {
-    entity,
-    criteria,
-    occurrences,
-    weight_versions: Array.from(versions.values()),
-    total_demands: bases.total_demands,
-    open_demands: Number(openRow?.count || 0),
-    total_deduction: occurrences.some(occurrence => occurrence.deduction === null)
-      ? null : round1(occurrences.reduce((sum, occurrence) => sum + (occurrence.deduction || 0), 0)),
-    legacy_unversioned: scoreRows.some(row => row.weight_version_id === null),
-  };
-}
-
-export function aggregatePerformance(
-  entity: PerformanceEntity,
-  rows: PerformanceScoreRow[],
-  details: PerformanceDetails,
-  dailyAverageRows: PerformanceScoreRow[] = rows
-): EntityPerformance {
-  const dailyAverages = new Map<string, Map<string, number | null>>();
-  for (const row of dailyAverageRows) {
-    if (!dailyAverages.has(row.date)) dailyAverages.set(row.date, new Map<string, number | null>());
-    dailyAverages.get(row.date)!.set(row.entity, scoreValido(row.final_score));
-  }
-  const expectedKitchenEntities = new Set<PerformanceEntity>(['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria']);
-  const completeDailyAverages = entity === 'cozinha_geral'
-    ? Array.from(dailyAverages.values()).filter(scores =>
-      scores.size === expectedKitchenEntities.size
-      && Array.from(expectedKitchenEntities).every(expected => scores.has(expected) && scores.get(expected) !== null))
-    : Array.from(dailyAverages.values());
-  const dailyAverageComplete = entity !== 'cozinha_geral'
-    ? dailyAverages.size > 0 && Array.from(dailyAverages.values()).every(scores =>
-      Array.from(scores.values()).every(score => score !== null))
-    : dailyAverages.size > 0 && completeDailyAverages.length === dailyAverages.size;
-  const dailyAverage = dailyAverageComplete && completeDailyAverages.length
-    ? round1(completeDailyAverages.reduce<number>((sum, scores) =>
-    sum + Array.from(scores.values()).reduce<number>((dailySum, score) => dailySum + (score === null ? 0 : score), 0) / scores.size, 0) / completeDailyAverages.length)
-    : null;
-  const criteria = details.criteria.map(criterion => ({
-    ...criterion,
-    multi_version: (criterion.weights?.length || 0) > 1,
-  }));
-  const hasInvalidScore = rows.length === 0 || rows.some(row => scoreValido(row.final_score) === null);
-  const generalIncomplete = entity === 'cozinha_geral' && !dailyAverageComplete;
-  const operationalUnavailable = generalIncomplete || hasInvalidScore || details.legacy_unversioned;
-  return {
-    entity,
-    operational_score: operationalUnavailable || details.total_deduction === null ? null : round1(5 - details.total_deduction),
-    daily_average_score: dailyAverage,
-    daily_average_complete: dailyAverageComplete,
-    total_demands: generalIncomplete ? null : details.total_demands,
-    open_demands: details.open_demands,
-    total_deduction: details.total_deduction,
-    criteria,
-    occurrences: details.occurrences,
-    weight_versions: details.weight_versions,
-    weight_version: details.weight_versions.length === 1 ? details.weight_versions[0] : null,
-    legacy_unversioned: details.legacy_unversioned,
-  };
-}
-
-export function aggregateScoreAlias(entity: PerformanceEntity, rows: PerformanceScoreRow[]): EntityScore {
-  const sum = (field: keyof PerformanceScoreRow): number => rows.reduce((total, row) => total + Number(row[field] || 0), 0);
-  const deductionFields: (keyof PerformanceScoreRow)[] = ['sla_breach_deduction', 'cancellation_deduction', 'stockout_deduction', 'slow_item_deduction'];
-  const hasUnknownDeduction = rows.some(row => deductionFields.some(field => row[field] === null));
-  const hasInvalidScore = rows.some(row => scoreValido(row.final_score) === null);
-  const totalDeduction = hasUnknownDeduction ? null : deductionFields.reduce((total, field) => total + sum(field), 0);
-  const latest = rows[rows.length - 1];
-  if (entity === 'cozinha_geral') {
-    // A linha geral persistida já contém a nota operacional agregada.
-    if (rows.every(row => row.entity === 'cozinha_geral')) {
-      return {
-        entity,
-        final_score: rows.length && !hasUnknownDeduction && !hasInvalidScore
-          ? round1(rows.reduce((total, row) => total + (scoreValido(row.final_score) as number), 0) / rows.length)
-          : null,
-        base_score: latest ? Number(latest.base_score) : null,
-        total_demands: rows.length ? sum('total_demands') : null,
-        sla_breaches: sum('sla_breaches'),
-        sla_breach_deduction: hasUnknownDeduction ? null : sum('sla_breach_deduction'),
-        cancellations: sum('cancellations'),
-        cancellation_deduction: hasUnknownDeduction ? null : sum('cancellation_deduction'),
-        stockouts: sum('stockouts'),
-        stockout_deduction: hasUnknownDeduction ? null : sum('stockout_deduction'),
-        slow_items: sum('slow_items'),
-        slow_item_deduction: hasUnknownDeduction ? null : sum('slow_item_deduction'),
-        detractors: latest && totalDeduction !== null ? buildDetractors({ ...latest, entity, final_score: latest.final_score, total_demands: sum('total_demands') } as PerformanceScoreRow) : [],
-      };
-    }
-    const expected = ['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria'];
-    const byDate = new Map<string, PerformanceScoreRow[]>();
-    rows.forEach(row => {
-      const date = String(row.date).slice(0, 10);
-      byDate.set(date, [...(byDate.get(date) || []), row]);
-    });
-    const completeRows = Array.from(byDate.values()).filter(group => expected.every(item => group.some(row => {
-      const score = row.entity === item ? scoreValido(row.final_score) : null;
-      return row.entity === item && score !== null;
-    })));
-    if (!rows.length || hasInvalidScore || completeRows.length !== byDate.size) {
-      return {
-        entity, final_score: null, base_score: null, total_demands: null,
-        sla_breaches: 0, sla_breach_deduction: null, cancellations: 0,
-        cancellation_deduction: null, stockouts: 0, stockout_deduction: null,
-        slow_items: 0, slow_item_deduction: null, detractors: [],
-      };
-    }
-    rows = completeRows.flat();
-  }
-  return {
-    entity,
-    final_score: rows.length && !hasUnknownDeduction && !hasInvalidScore
-      ? round1(rows.reduce((total, row) => total + (scoreValido(row.final_score) as number), 0) / rows.length)
-      : null,
-    base_score: latest ? Number(latest.base_score) : null,
-    total_demands: sum('total_demands'),
-    sla_breaches: sum('sla_breaches'),
-    sla_breach_deduction: hasUnknownDeduction ? null : sum('sla_breach_deduction'),
-    cancellations: sum('cancellations'),
-    cancellation_deduction: hasUnknownDeduction ? null : sum('cancellation_deduction'),
-    stockouts: sum('stockouts'),
-    stockout_deduction: hasUnknownDeduction ? null : sum('stockout_deduction'),
-    slow_items: sum('slow_items'),
-    slow_item_deduction: hasUnknownDeduction ? null : sum('slow_item_deduction'),
-    detractors: latest && totalDeduction !== null ? buildDetractors({ ...latest, entity, final_score: round1(5 - totalDeduction), total_demands: sum('total_demands') } as PerformanceScoreRow) : [],
-  };
+  return results;
 }

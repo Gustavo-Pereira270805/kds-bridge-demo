@@ -297,25 +297,30 @@
     <!-- Painel: Critérios de Avaliação (Pesos de Performance) -->
     <div class="panel" id="panel-weights">
         <h2>Critérios de Avaliação (Pesos da Nota de Performance)</h2>
-        <p class="hint">As vigências de pesos usam a data civil em UTC. O fim da vigência é exclusivo; alterações passam a valer na data operacional UTC informada.</p>
         <p style="color:var(--c-text-secondary); font-size:14px; margin-bottom: 24px;">
-             Ajuste o impacto (penalidade) de cada tipo de evento no cálculo automático da nota diária do restaurante. Os valores alteram novas apurações e não recalculam notas históricas.
+            Ajuste o impacto (penalidade) de cada tipo de evento no cálculo automático da nota diária do restaurante. A nota base é 5.0; cada ocorrência subtrai o valor definido abaixo. As alterações recalcularão as notas já geradas.
        </p>
-         <form id="weightsForm" style="max-width: 720px; display: flex; flex-direction: column; gap: 14px;">
-             <div id="weightsFields" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;"></div>
-             <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap;">
-                 <span id="weightsFeedback" role="status" aria-live="polite" style="font-size:14px;color:var(--c-text-secondary);"></span>
-                 <button type="submit" class="btn-success" id="saveWeightsButton">Salvar nova versão</button>
-            </div>
-        </form>
-        <div class="divider"></div>
-        <h3>Versão vigente</h3>
-        <div id="currentWeights" style="color:var(--c-text-secondary);">Carregando versão vigente...</div>
-        <h3 style="margin-top:24px;">Histórico de versões</h3>
-        <div style="overflow-x:auto;"><table id="weightsHistoryTable">
-            <thead><tr><th>Início da vigência (UTC)</th><th>Fim da vigência (UTC, exclusivo)</th><th>SLA cozinha</th><th>SLA salão</th><th>Cancel. cozinha</th><th>Cancel. salão</th><th>Zerado salão</th><th>Preparo lento cozinha</th><th>Retirada lenta salão</th></tr></thead>
-            <tbody><tr><td colspan="9">Carregando histórico...</td></tr></tbody>
-        </table></div>
+        <div style="max-width: 620px; display: flex; flex-direction: column; gap: 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                <label style="flex:1; font-weight:600; color:var(--c-text-body);">Estouro de SLA (Cozinha)</label>
+                <input type="number" step="0.01" min="0" max="5" id="weightSlaBreach" class="sla-input" style="width:110px;">
+           </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                <label style="flex:1; font-weight:600; color:var(--c-text-body);">Cancelamento de Pedido</label>
+                <input type="number" step="0.01" min="0" max="5" id="weightCancellation" class="sla-input" style="width:110px;">
+           </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                <label style="flex:1; font-weight:600; color:var(--c-text-body);">Zerou (Reportado pelo Salão)</label>
+                <input type="number" step="0.01" min="0" max="5" id="weightStockoutSalao" class="sla-input" style="width:110px;">
+           </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                <label style="flex:1; font-weight:600; color:var(--c-text-body);">Item Lento</label>
+                <input type="number" step="0.01" min="0" max="5" id="weightSlowItem" class="sla-input" style="width:110px;">
+           </div>
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:8px;">
+                <button class="btn-success" onclick="saveWeights()">Salvar e Recalcular</button>
+           </div>
+       </div>
    </div>
 
 <script>
@@ -408,162 +413,30 @@ function switchTab(name) {
 }
 
 // === PESOS DE PERFORMANCE ===
-var weightFields = [
-    ['sla_breach_cozinha', 'SLA cozinha'],
-    ['sla_breach_salao', 'SLA salão'],
-    ['cancellation_cozinha', 'Cancelamento cozinha'],
-    ['cancellation_salao', 'Cancelamento salão'],
-    ['stockout_salao', 'Zerado salão'],
-    ['slow_item_cozinha', 'Preparo lento cozinha'],
-    ['slow_pickup_salao', 'Retirada lenta salão']
-];
-
-function formatWeightDate(value) {
-    if (!value) return 'Em aberto';
-    var date = new Date(value);
-    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('pt-BR', { timeZone: 'UTC' }) + ' UTC';
+function loadWeights() {
+    api('/api/v1/admin/settings/weights').then(function(data) {
+        document.getElementById('weightSlaBreach').value = data.sla_breach;
+        document.getElementById('weightCancellation').value = data.cancellation;
+        document.getElementById('weightStockoutSalao').value = data.stockout_salao;
+        document.getElementById('weightSlowItem').value = data.slow_item;
+    }).catch(function(err) { toast(err.message, false); });
 }
 
-function renderWeightFields(version) {
-    var container = document.getElementById('weightsFields');
-    container.textContent = '';
-    weightFields.forEach(function(field) {
-        var row = document.createElement('div');
-        row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;background:var(--c-bg-page);border-radius:10px;';
-        var label = document.createElement('label');
-        label.htmlFor = 'weight-' + field[0];
-        label.style.cssText = 'font-weight:600;color:var(--c-text-body);';
-        label.textContent = field[1];
-        var input = document.createElement('input');
-        input.type = 'number';
-        input.step = '0.01';
-        input.min = '0';
-        input.max = '5';
-        input.id = 'weight-' + field[0];
-        input.setAttribute('data-weight-key', field[0]);
-        input.className = 'sla-input';
-        input.style.width = '110px';
-        input.value = String(version[field[0]]);
-        row.appendChild(label);
-        row.appendChild(input);
-        container.appendChild(row);
-    });
-}
-
-function renderWeightVersion(version) {
-    var container = document.getElementById('currentWeights');
-    container.textContent = '';
-    var validity = document.createElement('p');
-    validity.style.marginBottom = '8px';
-    var validityLabel = document.createElement('strong');
-    validityLabel.textContent = 'Vigência: ';
-    validity.appendChild(validityLabel);
-    validity.appendChild(document.createTextNode(formatWeightDate(version.valid_from) + ' até ' + formatWeightDate(version.valid_to)));
-    var values = document.createElement('p');
-    weightFields.forEach(function(field, index) {
-        var label = document.createElement('strong');
-        label.textContent = field[1] + ': ';
-        values.appendChild(label);
-        values.appendChild(document.createTextNode(String(version[field[0]])));
-        if (index < weightFields.length - 1) values.appendChild(document.createTextNode(' · '));
-    });
-    container.appendChild(validity);
-    container.appendChild(values);
-}
-
-function renderWeightsHistory(versions) {
-    var tbody = document.querySelector('#weightsHistoryTable tbody');
-    tbody.textContent = '';
-    if (!versions.length) {
-        var emptyRow = document.createElement('tr');
-        var emptyCell = document.createElement('td');
-        emptyCell.colSpan = 9;
-        emptyCell.textContent = 'Nenhuma versão encontrada.';
-        emptyRow.appendChild(emptyCell);
-        tbody.appendChild(emptyRow);
-        return;
-    }
-    versions.forEach(function(version) {
-        var row = document.createElement('tr');
-        [formatWeightDate(version.valid_from), formatWeightDate(version.valid_to)].concat(weightFields.map(function(field) { return version[field[0]]; })).forEach(function(value) {
-            var cell = document.createElement('td');
-            cell.textContent = String(value);
-            row.appendChild(cell);
-        });
-        tbody.appendChild(row);
-    });
-}
-
-function showWeightsFeedback(message, ok) {
-    var feedback = document.getElementById('weightsFeedback');
-    feedback.textContent = message;
-    feedback.setAttribute('data-state', message ? (ok ? 'sucesso' : 'erro') : '');
-    feedback.style.color = ok ? 'var(--c-accent-warm)' : 'var(--c-danger)';
-}
-
-function showWeightsSaving() {
-    var feedback = document.getElementById('weightsFeedback');
-    feedback.textContent = 'Salvando nova versão...';
-    feedback.setAttribute('data-state', 'salvando');
-    feedback.style.color = 'var(--c-text-secondary)';
-}
-
-function showWeightsLoading() {
-    var feedback = document.getElementById('weightsFeedback');
-    feedback.textContent = 'Carregando pesos...';
-    feedback.setAttribute('data-state', 'carregando');
-    feedback.style.color = 'var(--c-text-secondary)';
-    document.getElementById('currentWeights').textContent = 'Carregando versão vigente...';
-    document.querySelector('#weightsHistoryTable tbody').textContent = 'Carregando histórico...';
-}
-
-function loadWeights(preserveFeedback) {
-    if (!preserveFeedback) showWeightsLoading();
-    Promise.all([api('/api/v1/admin/settings/weights/current'), api('/api/v1/admin/settings/weights/history')]).then(function(results) {
-        var current = results[0];
-        renderWeightFields(current);
-        renderWeightVersion(current);
-        renderWeightsHistory(results[1]);
-        if (!preserveFeedback) showWeightsFeedback('Pesos carregados.', true);
-    }).catch(function(err) {
-        showWeightsFeedback('Erro ao carregar pesos: ' + err.message, false);
-        toast('Erro ao carregar pesos: ' + err.message, false);
-    });
-}
-
-document.getElementById('weightsForm').addEventListener('submit', function(event) {
-    event.preventDefault();
-    var body = {};
-    var invalid = null;
-    document.querySelectorAll('#weightsFields [data-weight-key]').forEach(function(input) {
-        var rawValue = input.value.trim();
-        var value = Number(rawValue);
-        if (!rawValue || !Number.isFinite(value) || value < 0 || value > 5) invalid = input;
-        body[input.getAttribute('data-weight-key')] = value;
-    });
-    if (invalid) {
-        showWeightsFeedback('Preencha todos os pesos com valores numéricos entre 0 e 5.', false);
-        invalid.focus();
-        return;
-    }
-    var button = document.getElementById('saveWeightsButton');
-    button.disabled = true;
-    showWeightsSaving();
+function saveWeights() {
+    var body = {
+        sla_breach: parseFloat(document.getElementById('weightSlaBreach').value),
+        cancellation: parseFloat(document.getElementById('weightCancellation').value),
+        stockout_salao: parseFloat(document.getElementById('weightStockoutSalao').value),
+        slow_item: parseFloat(document.getElementById('weightSlowItem').value)
+    };
     api('/api/v1/admin/settings/weights', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
-    }).then(function() {
-        showWeightsFeedback('Nova versão salva. Ela vale para novas apurações; notas históricas não foram recalculadas.', true);
-        toast('Nova versão de pesos salva.', true);
-        loadWeights(true);
-    }).catch(function(err) {
-        showWeightsFeedback('Erro ao salvar pesos: ' + err.message, false);
-        toast('Erro ao salvar pesos: ' + err.message, false);
-    }).then(function() {
-        button.disabled = false;
-    });
-});
+    }).then(function(data) {
+        toast('Pesos salvos! As notas de todas as datas serão recalculadas.', true);
+    }).catch(function(err) { toast(err.message, false); });
+}
 
 // === PRODUTOS ===
 var allStations = [];

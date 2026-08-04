@@ -33,8 +33,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
         });
 
         if (error) {
-          request.log.warn(error);
-          return reply.code(401).send({ error: 'E-mail ou senha inválidos' });
+          return reply.code(401).send({ error: error.message });
         }
 
         return {

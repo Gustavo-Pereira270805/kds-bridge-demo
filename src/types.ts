@@ -81,8 +81,6 @@ export interface DailyMenuEffective {
   origin: 'base' | 'manual_add';
 }
 
-// `pending` e `ready` são demandas abertas; elas permanecem no total geral,
-// mas só entram em bases de SLA quando os timestamps exigidos estão presentes.
 export type DemandStatus =
   | 'pending'
   | 'ready'
@@ -251,7 +249,7 @@ export interface QtyVsTimeRow {
   product_name: string;
   qty: number;
   actual_min: number;
-  sla_min: number | null;
+  sla_min: number;
 }
 export interface HeatmapRow {
   hora: number;
@@ -312,127 +310,42 @@ export interface PerformanceScoreRow {
   id: string;
   entity: string;
   date: string;
-  weight_version_id?: string | null;
   base_score: number;
-  final_score: number | null;
+  final_score: number;
   total_demands: number;
   sla_breaches: number;
-  sla_breach_deduction: number | null;
+  sla_breach_deduction: number;
   cancellations: number;
-  cancellation_deduction: number | null;
+  cancellation_deduction: number;
   stockouts: number;
-  stockout_deduction: number | null;
+  stockout_deduction: number;
   slow_items: number;
-  slow_item_deduction: number | null;
+  slow_item_deduction: number;
 }
 
 export interface PerformanceDetractor {
   label: string;
   count: number;
-  deduction: number | null;
+  deduction: number;
 }
 
 export interface EntityScore {
-  entity: PerformanceEntity;
-  final_score: number | null;
-  base_score: number | null;
-  total_demands: number | null;
+  entity: string;
+  final_score: number;
+  base_score: number;
+  total_demands: number;
   sla_breaches: number;
-  sla_breach_deduction: number | null;
+  sla_breach_deduction: number;
   cancellations: number;
-  cancellation_deduction: number | null;
+  cancellation_deduction: number;
   stockouts: number;
-  stockout_deduction: number | null;
+  stockout_deduction: number;
   slow_items: number;
-  slow_item_deduction: number | null;
+  slow_item_deduction: number;
   detractors: PerformanceDetractor[];
-}
-
-export type PerformanceEntity =
-  | 'salao'
-  | 'cozinha_quente_a'
-  | 'cozinha_quente_b'
-  | 'cozinha_fria'
-  | 'cozinha_geral';
-
-export interface PerformanceWeights {
-  sla_breach_cozinha: number;
-  sla_breach_salao: number;
-  cancellation_cozinha: number;
-  cancellation_salao: number;
-  stockout_salao: number;
-  slow_item_cozinha: number;
-  slow_pickup_salao: number;
-}
-
-export interface PerformanceWeightVersion extends PerformanceWeights {
-  id: string;
-  valid_from: string;
-  valid_to: string | null;
-  created_at?: string;
-  updated_at?: string;
-}
-
-export interface PerformanceCriterionSummary {
-  criterion: string;
-  count: number;
-  eligible_base: number | null;
-  // O total geral inclui demandas abertas; bases de SLA só incluem demandas aplicáveis.
-  eligible_base_status: 'aplicavel' | 'indisponivel_sem_denominador' | 'incompleta_cozinha_geral';
-  rate: number | null;
-  weight: number | null;
-  weights?: { weight_version_id: string; weight: number; count: number; deduction: number }[];
-  weights_status: 'aplicado' | 'vigente_intervalo' | 'indisponivel_snapshot_legado';
-  multi_version?: boolean;
-  deduction: number | null;
-}
-
-export interface PerformanceOccurrence {
-  entity: PerformanceEntity;
-  station: string | null;
-  type: string;
-  date: string;
-  demand_id: string;
-  product_name: string;
-  detail: string;
-  weight: number | null;
-  deduction: number | null;
-  weight_version_id: string | null;
-}
-
-export interface EntityPerformance {
-  entity: PerformanceEntity;
-  operational_score: number | null;
-  daily_average_score: number | null;
-  daily_average_complete: boolean;
-  total_demands: number | null;
-  open_demands: number;
-  total_deduction: number | null;
-  criteria: PerformanceCriterionSummary[];
-  occurrences: PerformanceOccurrence[];
-  weight_versions: PerformanceWeightVersion[];
-  weight_version?: PerformanceWeightVersion | null;
-  legacy_unversioned: boolean;
-}
-
-export interface PerformanceAverage {
-  entity: PerformanceEntity;
-  final_score: number | null;
-  total_demands: number | null;
-  sla_breaches: number;
-  cancellations: number;
-  stockouts: number;
-  slow_items: number;
 }
 
 export interface PerformanceResponse {
   current: Record<string, EntityScore>;
-  history: { date: string; [entity: string]: number | string | null }[];
-  averages?: Record<string, EntityScore>;
-  operational?: Record<string, EntityPerformance>;
-  validity?: PerformanceWeightVersion[];
-  detractor_dates?: Record<string, PerformanceOccurrence[]>;
-  date_from?: string;
-  date_to?: string;
-  weight_versions?: PerformanceWeightVersion[];
+  history: { date: string; [entity: string]: number | string }[];
 }

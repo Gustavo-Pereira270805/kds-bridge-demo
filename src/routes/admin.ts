@@ -3,9 +3,8 @@ import { query, pool } from '../db/client';
 import { DailyMenu, Demand, Menu, Product } from '../types';
 import { runCleanup } from '../services/cleanup.service';
 import { logDemandEvent } from '../services/demand-events.service';
-import { computeDailyScores, ensureWeightVersion, getWeightVersions, PESOS_PADRAO } from '../services/performance.service';
+import { computeDailyScores } from '../services/performance.service';
 import { recomputeStationQueue } from '../services/queue.service';
-import { requireAdminOrManager } from '../middleware/auth';
 
 export default async function adminRoutes(fastify: FastifyInstance) {
   // Produtos: criar
@@ -430,11 +429,19 @@ export default async function adminRoutes(fastify: FastifyInstance) {
   });
 
   // GET: Configuração dos Pesos de Desempenho
-  fastify.get('/settings/weights', { preHandler: requireAdminOrManager }, async (request, reply) => {
+  fastify.get('/settings/weights', async (request, reply) => {
     try {
-      const version = await ensureWeightVersion();
+      const rows = await query<{ key: string; value: string }>(
+        `SELECT key, value FROM system_settings WHERE key LIKE 'score_weight_%'`
+      );
+      const map: Record<string, number> = {};
+      rows.forEach(r => { map[r.key] = parseFloat(r.value); });
+
       return {
-        ...version,
+        sla_breach: map.score_weight_sla_breach ?? 0.15,
+        cancellation: map.score_weight_cancellation ?? 0.30,
+        stockout_salao: map.score_weight_stockout_salao ?? 0.10,
+        slow_item: map.score_weight_slow_item ?? 0.10,
       };
     } catch (error) {
       request.log.error(error);
@@ -442,76 +449,52 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.get('/settings/weights/current', { preHandler: requireAdminOrManager }, async (request, reply) => {
-    try {
-      return await ensureWeightVersion();
-    } catch (error) {
-      request.log.error(error);
-      reply.code(500).send({ error: 'Erro ao buscar versão vigente dos pesos' });
-    }
-  });
-
-  fastify.get('/settings/weights/history', { preHandler: requireAdminOrManager }, async (request, reply) => {
-    try {
-      return await getWeightVersions();
-    } catch (error) {
-      request.log.error(error);
-      reply.code(500).send({ error: 'Erro ao buscar histórico de pesos' });
-    }
-  });
-
   // PUT: Atualiza a configuração de pesos de desempenho
   fastify.put<{
-    Body: Partial<typeof PESOS_PADRAO>
-  }>('/settings/weights', {
-    preHandler: requireAdminOrManager
-  }, async (request, reply) => {
-    const body = request.body || {};
-    const pesos = {
-      sla_breach_cozinha: body.sla_breach_cozinha,
-      sla_breach_salao: body.sla_breach_salao,
-      cancellation_cozinha: body.cancellation_cozinha,
-      cancellation_salao: body.cancellation_salao,
-      stockout_salao: body.stockout_salao,
-      slow_item_cozinha: body.slow_item_cozinha,
-      slow_pickup_salao: body.slow_pickup_salao,
-    };
-    const faltantes = Object.keys(pesos).filter(key => {
-      const value = pesos[key as keyof typeof pesos];
-      return typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 5;
-    });
-    if (faltantes.length > 0) {
-      return reply.code(400).send({ error: `Pesos ausentes ou inválidos: ${faltantes.join(', ')}` });
+    Body: {
+      sla_breach: number;
+      cancellation: number;
+      stockout_salao: number;
+      slow_item: number;
     }
-
-    const client = await pool.connect();
+  }>('/settings/weights', async (request, reply) => {
     try {
-      await client.query('BEGIN');
-      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended('performance_weight_versions', 0))`);
-      const [open] = (await client.query(
-        `SELECT id FROM performance_weight_versions WHERE valid_to IS NULL
-         ORDER BY valid_from DESC LIMIT 1 FOR UPDATE`
-      )).rows;
-      if (open) {
-        await client.query(
-          `UPDATE performance_weight_versions SET valid_to = now(), updated_at = now() WHERE id = $1`,
-          [open.id]
-        );
+      const { sla_breach, cancellation, stockout_salao, slow_item } = request.body;
+
+      const queries = [
+        { key: 'score_weight_sla_breach', val: sla_breach },
+        { key: 'score_weight_cancellation', val: cancellation },
+        { key: 'score_weight_stockout_salao', val: stockout_salao },
+        { key: 'score_weight_slow_item', val: slow_item }
+      ];
+
+      for (const q of queries) {
+        if (typeof q.val === 'number' && !isNaN(q.val)) {
+          await query(
+            `INSERT INTO system_settings (key, value) VALUES ($1, $2)
+             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+            [q.key, q.val.toString()]
+          );
+        }
       }
-      const keys = Object.keys(pesos);
-      const values = keys.map((key, index) => `$${index + 1}`).join(', ');
-      const [created] = (await client.query(
-        `INSERT INTO performance_weight_versions (${keys.join(', ')}) VALUES (${values}) RETURNING *`,
-        keys.map(key => pesos[key as keyof typeof pesos])
-      )).rows;
-      await client.query('COMMIT');
-      return { success: true, version: created };
+
+      // Recálculo retroativo: dispara o recálculo em background
+      // sem travar a request HTTP do usuário
+      query<{ date: any }>(
+        `SELECT DISTINCT date FROM performance_scores ORDER BY date`
+      ).then(async (dates) => {
+        request.log.info(`Iniciando recálculo retroativo para ${dates.length} datas...`);
+        for (const row of dates) {
+          const dateStr = row.date instanceof Date ? row.date.toISOString().slice(0, 10) : String(row.date);
+          await computeDailyScores(dateStr).catch(e => request.log.error(e));
+        }
+        request.log.info('Recálculo retroativo concluído.');
+      }).catch(e => request.log.error('Erro ao buscar datas para recálculo', e));
+
+      return { success: true, message: 'Recálculo em background iniciado.' };
     } catch (error) {
-      await client.query('ROLLBACK').catch(() => {});
       request.log.error(error);
       reply.code(500).send({ error: 'Erro ao salvar pesos' });
-    } finally {
-      client.release();
     }
   });
 
