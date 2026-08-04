@@ -1,25 +1,63 @@
 import { query } from '../db/client';
-import { PerformanceScoreRow, PerformanceDetractor } from '../types';
+import { PerformanceScoreRow, PerformanceDetractor, PerformanceWeights, PerformanceWeightVersion, PerformanceOccurrence } from '../types';
 
-interface Weights {
-  sla_breach: number;
-  cancellation: number;
-  stockout_salao: number;
-  slow_item: number;
+export const PESOS_PADRAO: PerformanceWeights = {
+  sla_breach_cozinha: 0.15,
+  sla_breach_salao: 0.15,
+  cancellation_cozinha: 0.30,
+  cancellation_salao: 0.30,
+  stockout_salao: 0.10,
+  slow_item_cozinha: 0.10,
+  slow_pickup_salao: 0.10,
+};
+
+export async function ensureWeightVersion(): Promise<PerformanceWeightVersion> {
+  const [existing] = await query<PerformanceWeightVersion>(
+    `SELECT * FROM performance_weight_versions
+     WHERE valid_to IS NULL ORDER BY valid_from DESC LIMIT 1`
+  );
+  if (existing) return existing;
+
+  const columns = Object.keys(PESOS_PADRAO);
+  const values = columns.map((_, index) => `$${index + 1}`).join(', ');
+  await query(
+    `INSERT INTO performance_weight_versions (${columns.join(', ')})
+     VALUES (${values}) ON CONFLICT DO NOTHING`,
+    columns.map(key => PESOS_PADRAO[key as keyof PerformanceWeights])
+  );
+  const [created] = await query<PerformanceWeightVersion>(
+    `SELECT * FROM performance_weight_versions
+     WHERE valid_to IS NULL ORDER BY valid_from DESC LIMIT 1`
+  );
+  if (!created) throw new Error('Não foi possível garantir a versão de pesos vigente');
+  return created;
 }
 
-async function getWeights(): Promise<Weights> {
-  const rows = await query<{ key: string; value: string }>(
-    `SELECT key, value FROM system_settings WHERE key LIKE 'score_weight_%'`
+export async function getWeightVersionForDate(dateStr: string): Promise<PerformanceWeightVersion> {
+  await ensureWeightVersion();
+  const [version] = await query<PerformanceWeightVersion>(
+    `SELECT * FROM performance_weight_versions
+     WHERE valid_from <= ($1::date + INTERVAL '1 day')
+       AND (valid_to IS NULL OR valid_to > $1::date)
+     ORDER BY valid_from DESC LIMIT 1`,
+    [dateStr]
   );
-  const map: Record<string, number> = {};
-  rows.forEach(r => { map[r.key] = parseFloat(r.value); });
-  return {
-    sla_breach: map.score_weight_sla_breach ?? 0.15,
-    cancellation: map.score_weight_cancellation ?? 0.30,
-    stockout_salao: map.score_weight_stockout_salao ?? 0.10,
-    slow_item: map.score_weight_slow_item ?? 0.10,
-  };
+  if (!version) throw new Error('Não foi encontrada uma versão de pesos para a data');
+  return version;
+}
+
+export async function getWeightVersions(): Promise<PerformanceWeightVersion[]> {
+  return query<PerformanceWeightVersion>(
+    `SELECT * FROM performance_weight_versions ORDER BY valid_from DESC`
+  );
+}
+
+function round1(value: number): number {
+  return Math.max(0, Math.round(value * 10) / 10);
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 function entityFromStationCode(code: string): string {
@@ -33,14 +71,15 @@ async function upsertScore(
   slaBreaches: number, slaDed: number,
   cancellations: number, cancelDed: number,
   stockouts: number, stockDed: number,
-  slowItems: number, slowDed: number
+  slowItems: number, slowDed: number, weightVersionId: string
 ): Promise<void> {
   await query(
     `INSERT INTO performance_scores (entity, date, base_score, final_score, total_demands,
        sla_breaches, sla_breach_deduction, cancellations, cancellation_deduction,
-       stockouts, stockout_deduction, slow_items, slow_item_deduction, updated_at)
-     VALUES ($1, $2, 5.0, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
+       stockouts, stockout_deduction, slow_items, slow_item_deduction, weight_version_id, updated_at)
+     VALUES ($1, $2, 5.0, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now())
      ON CONFLICT (entity, date) DO UPDATE SET
+        weight_version_id = EXCLUDED.weight_version_id,
        final_score = EXCLUDED.final_score,
        total_demands = EXCLUDED.total_demands,
        sla_breaches = EXCLUDED.sla_breaches,
@@ -52,9 +91,9 @@ async function upsertScore(
        slow_items = EXCLUDED.slow_items,
        slow_item_deduction = EXCLUDED.slow_item_deduction,
        updated_at = now()`,
-    [entity, dateStr, finalScore, total,
-     slaBreaches, slaDed, cancellations, cancelDed,
-     stockouts, stockDed, slowItems, slowDed]
+     [entity, dateStr, finalScore, total,
+      slaBreaches, slaDed, cancellations, cancelDed,
+      stockouts, stockDed, slowItems, slowDed, weightVersionId]
   );
 }
 
@@ -64,7 +103,7 @@ async function safeCount(sql: string, params: unknown[]): Promise<number> {
 }
 
 export async function computeDailyScores(dateStr: string): Promise<void> {
-  const weights = await getWeights();
+  const version = await getWeightVersionForDate(dateStr);
 
   const stations = await query<{ id: string; code: string }>(
     `SELECT id, code FROM kitchen_stations`
@@ -108,15 +147,15 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
       [sid, dateStr]
     );
 
-    const slaDed = Math.round(slaBreaches * weights.sla_breach * 100) / 100;
-    const cancelDed = Math.round(cancellations * weights.cancellation * 100) / 100;
+    const slaDed = round2(slaBreaches * version.sla_breach_cozinha);
+    const cancelDed = round2(cancellations * version.cancellation_cozinha);
     const stockDed = 0; // Removido o peso para cozinha: "Zerou" não tira nota da cozinha
-    const slowDed = Math.round(slowItems * weights.slow_item * 100) / 100;
+    const slowDed = round2(slowItems * version.slow_item_cozinha);
     const totalDed = slaDed + cancelDed + stockDed + slowDed;
-    const finalScore = Math.max(0, Math.round((5.0 - totalDed) * 10) / 10);
+    const finalScore = round1(5.0 - totalDed);
 
     await upsertScore(entity, dateStr, finalScore, total,
-      slaBreaches, slaDed, cancellations, cancelDed, stockouts, stockDed, slowItems, slowDed);
+      slaBreaches, slaDed, cancellations, cancelDed, stockouts, stockDed, slowItems, slowDed, version.id);
   }
 
   // -- Salão --
@@ -151,15 +190,15 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
     [dateStr]
   );
 
-  const sSlaDed = Math.round(sSla * weights.sla_breach * 100) / 100;
-  const sCancelDed = Math.round(sCancel * weights.cancellation * 100) / 100;
-  const sStockDed = Math.round(sStock * weights.stockout_salao * 100) / 100;
-  const sSlowDed = Math.round(sSlow * weights.slow_item * 100) / 100;
+  const sSlaDed = round2(sSla * version.sla_breach_salao);
+  const sCancelDed = round2(sCancel * version.cancellation_salao);
+  const sStockDed = round2(sStock * version.stockout_salao);
+  const sSlowDed = round2(sSlow * version.slow_pickup_salao);
   const sTotalDed = sSlaDed + sCancelDed + sStockDed + sSlowDed;
-  const sFinal = Math.max(0, Math.round((5.0 - sTotalDed) * 10) / 10);
+  const sFinal = round1(5.0 - sTotalDed);
 
   await upsertScore('salao', dateStr, sFinal, sTotal,
-    sSla, sSlaDed, sCancel, sCancelDed, sStock, sStockDed, sSlow, sSlowDed);
+    sSla, sSlaDed, sCancel, sCancelDed, sStock, sStockDed, sSlow, sSlowDed, version.id);
 
   // -- Cozinha Geral = média das 3 estações --
   const stationRows = await query<{
@@ -197,7 +236,7 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
       parseInt(agg.stockouts || '0', 10),
       parseFloat(agg.stockout_deduction || '0'),
       parseInt(agg.slow_items || '0', 10),
-      parseFloat(agg.slow_item_deduction || '0'));
+       parseFloat(agg.slow_item_deduction || '0'), version.id);
   }
 }
 
@@ -230,11 +269,38 @@ export function buildDetractors(score: PerformanceScoreRow): PerformanceDetracto
 }
 
 export interface DetractorDate {
+  entity?: string;
+  station?: string | null;
   type: string;
   date: string;
   demand_id: string;
   product_name: string;
   detail: string;
+  weight?: number;
+  deduction?: number;
+}
+
+export function buildCriterionSummaries(score: PerformanceScoreRow, weights: PerformanceWeights, isKitchen: boolean) {
+  const criteria: [string, number, number][] = isKitchen
+    ? [
+      ['sla_breach_cozinha', score.sla_breaches, score.sla_breach_deduction],
+      ['cancellation_cozinha', score.cancellations, score.cancellation_deduction],
+      ['stockout_cozinha', score.stockouts, score.stockout_deduction],
+      ['slow_item_cozinha', score.slow_items, score.slow_item_deduction],
+    ]
+    : [
+      ['sla_breach_salao', score.sla_breaches, score.sla_breach_deduction],
+      ['cancellation_salao', score.cancellations, score.cancellation_deduction],
+      ['stockout_salao', score.stockouts, score.stockout_deduction],
+      ['slow_pickup_salao', score.slow_items, score.slow_item_deduction],
+    ];
+  return criteria.map(([criterion, count, deduction]) => {
+    const total = Number(score.total_demands) || 0;
+    return {
+      criterion, count, eligible_base: total, rate: total ? count / total : 0,
+      weight: weights[criterion as keyof PerformanceWeights], deduction,
+    };
+  });
 }
 
 export async function getDetractorDates(entity: string, dateFrom: string, dateTo: string): Promise<DetractorDate[]> {
@@ -359,5 +425,24 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
   }
 
   results.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  return results;
+  const isKitchen = entity !== 'salao';
+  const weights = await getWeightVersionForDate(dateTo);
+  return results.map(result => {
+    const resultEntity = result.entity || entity;
+    const key = result.type === 'Estouro de SLA'
+      ? (isKitchen ? 'sla_breach_cozinha' : 'sla_breach_salao')
+      : result.type === 'Cancelamento'
+        ? (isKitchen ? 'cancellation_cozinha' : 'cancellation_salao')
+        : result.type === 'Zerado'
+          ? (isKitchen ? null : 'stockout_salao')
+          : (isKitchen ? 'slow_item_cozinha' : 'slow_pickup_salao');
+    const weight = key ? weights[key] : 0;
+    return {
+      ...result,
+      entity: resultEntity,
+      station: result.station ?? (isKitchen ? resultEntity.replace('cozinha_', '') : null),
+      weight,
+      deduction: weight,
+    };
+  });
 }
