@@ -1827,9 +1827,10 @@ if (document.readyState === 'loading') {
     }
 
     function task6RequireNumber(value, path, allowNull) {
-        if (value === null || value === undefined) {
+        if (value === undefined) throw new Error('Payload inválido: campo ausente em ' + path + '.');
+        if (value === null) {
             if (allowNull) return null;
-            throw new Error('Payload inválido: valor ausente em ' + path + '.');
+            throw new Error('Payload inválido: campo nulo em ' + path + '.');
         }
         if (typeof value === 'string' && value.trim() === '') throw new Error('Payload inválido: valor vazio em ' + path + '.');
         var number = Number(value);

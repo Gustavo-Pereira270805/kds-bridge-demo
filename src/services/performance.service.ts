@@ -2,6 +2,8 @@ import { query, pool } from '../db/client';
 import { PerformanceScoreRow, PerformanceDetractor, PerformanceWeights, PerformanceWeightVersion, PerformanceOccurrence, PerformanceCriterionSummary, PerformanceEntity, EntityPerformance, EntityScore } from '../types';
 import { dataOperacional, DATA_OPERACIONAL_SQL, intervaloUtc } from './operational-date.service';
 
+const DATA_OPERACIONAL_D_SQL = DATA_OPERACIONAL_SQL.replace(/\bcreated_at\b/g, 'd.created_at');
+
 export interface NotaCozinhaGeral {
   operational_score: number | null;
   daily_average_score: number | null;
@@ -473,9 +475,9 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
       : entity === 'cozinha_quente_b' ? 'quente_b' : 'fria');
 
     const slaRows = await query<{ id: string; product_name: string; created_at: string; sla_breach_minutes_cozinha: number }>(
-      `SELECT d.id, d.product_name, d.created_at, d.sla_breach_minutes_cozinha
-       FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
-       WHERE ks.code = $1 AND (d.created_at AT TIME ZONE 'UTC')::date >= $2 AND (d.created_at AT TIME ZONE 'UTC')::date <= $3 AND d.sla_breached_cozinha = true AND d.status != 'annulled'`,
+       `SELECT d.id, d.product_name, d.created_at, d.sla_breach_minutes_cozinha
+        FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
+        WHERE ks.code = $1 AND ${DATA_OPERACIONAL_D_SQL} >= $2 AND ${DATA_OPERACIONAL_D_SQL} <= $3 AND d.sla_breached_cozinha = true AND d.status != 'annulled'`,
       [selectedStationCode, dateFrom, dateTo]
     );
     slaRows.forEach(r => results.push({
@@ -488,7 +490,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
     const cancelRows = await query<{ id: string; product_name: string; created_at: string; cancel_reason: string | null }>(
       `SELECT d.id, d.product_name, d.created_at, d.cancel_reason
        FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
-       WHERE ks.code = $1 AND (d.created_at AT TIME ZONE 'UTC')::date >= $2 AND (d.created_at AT TIME ZONE 'UTC')::date <= $3 AND d.status = 'cancelled_cozinha'`,
+        WHERE ks.code = $1 AND ${DATA_OPERACIONAL_D_SQL} >= $2 AND ${DATA_OPERACIONAL_D_SQL} <= $3 AND d.status = 'cancelled_cozinha'`,
       [selectedStationCode, dateFrom, dateTo]
     );
     cancelRows.forEach(r => results.push({
@@ -500,7 +502,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
     const stockRows = await query<{ id: string; product_name: string; created_at: string }>(
       `SELECT d.id, d.product_name, d.created_at
        FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
-       WHERE ks.code = $1 AND (d.created_at AT TIME ZONE 'UTC')::date >= $2 AND (d.created_at AT TIME ZONE 'UTC')::date <= $3 AND d.stockout_reported = true AND d.status != 'annulled'`,
+        WHERE ks.code = $1 AND ${DATA_OPERACIONAL_D_SQL} >= $2 AND ${DATA_OPERACIONAL_D_SQL} <= $3 AND d.stockout_reported = true AND d.status != 'annulled'`,
       [selectedStationCode, dateFrom, dateTo]
     );
     stockRows.forEach(r => results.push({
@@ -511,7 +513,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
     const slowRows = await query<{ id: string; product_name: string; created_at: string; sla_minutes: number }>(
       `SELECT d.id, d.product_name, d.created_at, d.sla_minutes
        FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
-       WHERE ks.code = $1 AND (d.created_at AT TIME ZONE 'UTC')::date >= $2 AND (d.created_at AT TIME ZONE 'UTC')::date <= $3 AND d.status != 'annulled'
+        WHERE ks.code = $1 AND ${DATA_OPERACIONAL_D_SQL} >= $2 AND ${DATA_OPERACIONAL_D_SQL} <= $3 AND d.status != 'annulled'
          AND d.ready_at IS NOT NULL AND d.sla_minutes IS NOT NULL
          AND EXTRACT(EPOCH FROM (d.ready_at - d.created_at))/60 > d.sla_minutes * 1.5`,
       [selectedStationCode, dateFrom, dateTo]
@@ -526,7 +528,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
   if (entity === 'salao') {
     const sSlaRows = await query<{ id: string; product_name: string; created_at: string; sla_breach_minutes_salao: number }>(
       `SELECT id, product_name, created_at, sla_breach_minutes_salao
-        FROM demands WHERE (created_at AT TIME ZONE 'UTC')::date >= $1 AND (created_at AT TIME ZONE 'UTC')::date <= $2 AND sla_breached_salao = true AND status != 'annulled'`,
+        FROM demands WHERE ${DATA_OPERACIONAL_SQL} >= $1 AND ${DATA_OPERACIONAL_SQL} <= $2 AND sla_breached_salao = true AND status != 'annulled'`,
       [dateFrom, dateTo]
     );
     sSlaRows.forEach(r => results.push({
@@ -537,7 +539,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
 
     const sCancelRows = await query<{ id: string; product_name: string; created_at: string; cancel_reason: string | null }>(
       `SELECT id, product_name, created_at, cancel_reason
-        FROM demands WHERE (created_at AT TIME ZONE 'UTC')::date >= $1 AND (created_at AT TIME ZONE 'UTC')::date <= $2 AND status = 'cancelled_salao'`,
+        FROM demands WHERE ${DATA_OPERACIONAL_SQL} >= $1 AND ${DATA_OPERACIONAL_SQL} <= $2 AND status = 'cancelled_salao'`,
       [dateFrom, dateTo]
     );
     sCancelRows.forEach(r => results.push({
@@ -548,7 +550,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
 
     const sStockRows = await query<{ id: string; product_name: string; created_at: string }>(
       `SELECT id, product_name, created_at
-        FROM demands WHERE (created_at AT TIME ZONE 'UTC')::date >= $1 AND (created_at AT TIME ZONE 'UTC')::date <= $2 AND stockout_reported = true AND status != 'annulled'`,
+        FROM demands WHERE ${DATA_OPERACIONAL_SQL} >= $1 AND ${DATA_OPERACIONAL_SQL} <= $2 AND stockout_reported = true AND status != 'annulled'`,
       [dateFrom, dateTo]
     );
     sStockRows.forEach(r => results.push({
@@ -563,7 +565,7 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
 
     const sSlowRows = await query<{ id: string; product_name: string; created_at: string }>(
       `SELECT id, product_name, created_at
-        FROM demands WHERE (created_at AT TIME ZONE 'UTC')::date >= $1 AND (created_at AT TIME ZONE 'UTC')::date <= $2 AND status != 'annulled'
+        FROM demands WHERE ${DATA_OPERACIONAL_SQL} >= $1 AND ${DATA_OPERACIONAL_SQL} <= $2 AND status != 'annulled'
          AND retrieved_at IS NOT NULL AND ready_at IS NOT NULL
          AND EXTRACT(EPOCH FROM (retrieved_at - ready_at))/60 > $3`,
       [dateFrom, dateTo, tolerance * 2]
@@ -719,7 +721,7 @@ export async function getPerformanceDetails(entity: PerformanceEntity, dateFrom:
   }
   const [openRow] = await query<{ count: string }>(
     `SELECT COUNT(*)::int AS count FROM demands
-      WHERE (created_at AT TIME ZONE 'UTC')::date >= $1 AND (created_at AT TIME ZONE 'UTC')::date <= $2
+      WHERE ${DATA_OPERACIONAL_SQL} >= $1 AND ${DATA_OPERACIONAL_SQL} <= $2
        AND status IN ('pending', 'ready')
        AND status != 'annulled'
        ${entity === 'salao' ? '' : entity === 'cozinha_geral'

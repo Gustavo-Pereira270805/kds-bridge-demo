@@ -29,6 +29,8 @@ import {
 import { createPerformanceWeightCache, ensureValidScoresForDate, aggregatePerformance, aggregateScoreAlias, getPerformanceDetails } from '../services/performance.service';
 import { DATA_OPERACIONAL_SQL } from '../services/operational-date.service';
 
+const DATA_UTC_ATUAL_SQL = "(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date";
+
 // v2.5 (§5.6) — indicadores diários embutidos em cada dia do week_comparison;
 // a data fica no objeto externo, então `day` é omitida do sub-objeto
 type DayIndicatorValues = Omit<DayIndicators, 'day'>;
@@ -45,7 +47,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         const params: string[] = [];
 
         if (from && to) {
-          whereClause = 'WHERE created_at >= $1 AND created_at <= $2';
+          whereClause = `WHERE ${DATA_OPERACIONAL_SQL} >= $1::date AND ${DATA_OPERACIONAL_SQL} <= $2::date`;
           params.push(from, to);
         }
         // §4.2 — excluir demandas anuladas das agregações
@@ -61,7 +63,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
            FROM demands
            WHERE status IN ('ready', 'retrieved')
              AND ready_at IS NOT NULL
-             ${from && to ? 'AND created_at >= $1 AND created_at <= $2' : ''}`,
+             ${from && to ? `AND ${DATA_OPERACIONAL_SQL} >= $1::date AND ${DATA_OPERACIONAL_SQL} <= $2::date` : ''}`,
           params
         );
 
@@ -92,10 +94,11 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
 
         const rows = await query<PeakHourRow>(
           `SELECT
-            EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo')::int AS hora,
+            EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC')::int AS hora,
             COUNT(*)::int AS total
            FROM demands
-           WHERE created_at >= NOW() - INTERVAL '1 day' * $1
+            WHERE ${DATA_OPERACIONAL_SQL} >= ${DATA_UTC_ATUAL_SQL} - ($1::int - 1)
+              AND ${DATA_OPERACIONAL_SQL} <= ${DATA_UTC_ATUAL_SQL}
              AND status != 'annulled'
            GROUP BY 1 ORDER BY 1`,
           [days]
@@ -122,7 +125,8 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
             ROUND(AVG(EXTRACT(EPOCH FROM (ready_at - created_at)) / 60), 1) AS tempo_medio_min
            FROM demands
            WHERE status IN ('ready', 'retrieved')
-             AND created_at >= NOW() - INTERVAL '1 day' * $1
+              AND ${DATA_OPERACIONAL_SQL} >= ${DATA_UTC_ATUAL_SQL} - ($1::int - 1)
+              AND ${DATA_OPERACIONAL_SQL} <= ${DATA_UTC_ATUAL_SQL}
            GROUP BY product_name
            ORDER BY total_demandas DESC
            LIMIT 10`,
@@ -143,9 +147,9 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       const rawRows = await query<ShiftStatsRow>(
         `SELECT
           CASE
-            WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo') BETWEEN 6 AND 11 THEN 'Manhã'
-            WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo') BETWEEN 12 AND 14 THEN 'Almoço'
-            WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo') BETWEEN 15 AND 17 THEN 'Tarde'
+             WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC') BETWEEN 6 AND 11 THEN 'Manhã'
+             WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC') BETWEEN 12 AND 14 THEN 'Almoço'
+             WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC') BETWEEN 15 AND 17 THEN 'Tarde'
             ELSE 'Jantar'
           END AS turno,
           ROUND(AVG(EXTRACT(EPOCH FROM (ready_at - created_at)) / 60), 1) AS tempo_medio_min,
@@ -182,7 +186,8 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
             ROUND(AVG(COALESCE(sla_breach_minutes_cozinha, sla_breach_minutes_salao)), 1) AS media_min_excedidos
           FROM demands
           WHERE (sla_breached_cozinha OR sla_breached_salao)
-            AND created_at >= NOW() - INTERVAL '1 day' * $1
+             AND ${DATA_OPERACIONAL_SQL} >= ${DATA_UTC_ATUAL_SQL} - ($1::int - 1)
+             AND ${DATA_OPERACIONAL_SQL} <= ${DATA_UTC_ATUAL_SQL}
             AND status != 'annulled'
           GROUP BY 1`,
           [days]
@@ -212,7 +217,8 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
             cancel_reason
           FROM demands
           WHERE status IN ('cancelled_salao', 'cancelled_cozinha')
-            AND created_at >= NOW() - INTERVAL '1 day' * $1
+             AND ${DATA_OPERACIONAL_SQL} >= ${DATA_UTC_ATUAL_SQL} - ($1::int - 1)
+             AND ${DATA_OPERACIONAL_SQL} <= ${DATA_UTC_ATUAL_SQL}
           GROUP BY status, cancel_reason
           ORDER BY total DESC`,
           [days]
@@ -239,7 +245,8 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           `SELECT product_name, COUNT(*)::int AS total_roturas
           FROM demands
           WHERE stockout_reported = true
-            AND created_at >= NOW() - INTERVAL '1 day' * $1
+             AND ${DATA_OPERACIONAL_SQL} >= ${DATA_UTC_ATUAL_SQL} - ($1::int - 1)
+             AND ${DATA_OPERACIONAL_SQL} <= ${DATA_UTC_ATUAL_SQL}
             AND status != 'annulled'
           GROUP BY product_name
           ORDER BY total_roturas DESC`,
@@ -411,7 +418,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
 
         // ── 4. Velocidade da cozinha por hora ──
         const speedByHour = await safeQuery<SpeedByHourRow>('4.SpeedByHour',
-          `SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo')::int AS hora,
+           `SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC')::int AS hora,
             ROUND(AVG(EXTRACT(EPOCH FROM (ready_at - created_at))/60)::numeric, 1) AS avg_min,
             COUNT(*)::int AS count
            FROM demands WHERE ${dateFilter} AND ready_at IS NOT NULL AND status IN ('ready','retrieved') ${stationFilter}
@@ -434,9 +441,9 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         const occRaw = await safeQuery<{ turno: string; pct_ociosa: string }>('6.Occupancy',
           `SELECT
             CASE
-              WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo') BETWEEN 6 AND 11 THEN 'Manhã'
-              WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo') BETWEEN 12 AND 14 THEN 'Almoço'
-              WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo') BETWEEN 15 AND 17 THEN 'Tarde'
+             WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC') BETWEEN 6 AND 11 THEN 'Manhã'
+             WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC') BETWEEN 12 AND 14 THEN 'Almoço'
+             WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC') BETWEEN 15 AND 17 THEN 'Tarde'
               ELSE 'Jantar'
             END AS turno,
             ROUND((1 - (COUNT(*) FILTER (WHERE status = 'pending')::numeric / NULLIF(COUNT(*),0))) * 100, 1) AS pct_ociosa
@@ -469,7 +476,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
 
         // ── 9. Tempo de retirada por hora ──
         const pickupByHour = await safeQuery<PickupByHourRow>('9.PickupByHour',
-          `SELECT EXTRACT(HOUR FROM ready_at AT TIME ZONE 'America/Sao_Paulo')::int AS hora,
+           `SELECT EXTRACT(HOUR FROM ready_at AT TIME ZONE 'UTC')::int AS hora,
             ROUND(AVG(EXTRACT(EPOCH FROM (retrieved_at - ready_at))/60)::numeric, 1) AS avg_min,
             COUNT(*)::int AS count
            FROM demands WHERE ${dateFilter} AND retrieved_at IS NOT NULL AND ready_at IS NOT NULL AND status != 'annulled' ${stationFilter}
@@ -493,7 +500,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         // ── 11. Sazonalidade dia da semana ──
         const diasSemana = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
         const weekdayRaw = await safeQuery<{ dow: string; total: string }>('11.Weekday',
-          `SELECT EXTRACT(DOW FROM created_at)::int AS dow, COUNT(*)::int AS total
+           `SELECT EXTRACT(DOW FROM created_at AT TIME ZONE 'UTC')::int AS dow, COUNT(*)::int AS total
            FROM demands WHERE ${dateFilter} AND status != 'annulled' ${stationFilter} GROUP BY 1 ORDER BY 1`, baseParams
         );
         const weekdayData: WeekdayRow[] = diasSemana.map((dia, idx) => {
@@ -512,8 +519,8 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
 
         // ── 13. Heatmap hora × dia da semana ──
         const heatmap = await safeQuery<HeatmapRow>('13.Heatmap',
-          `SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo')::int AS hora,
-            EXTRACT(DOW FROM created_at)::int AS dia_semana,
+           `SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC')::int AS hora,
+             EXTRACT(DOW FROM created_at AT TIME ZONE 'UTC')::int AS dia_semana,
             COUNT(*)::int AS total
            FROM demands WHERE ${dateFilter} AND status != 'annulled' ${stationFilter}
            GROUP BY 1, 2 ORDER BY 2, 1`, baseParams
@@ -625,7 +632,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         // ── 17. Tempo de fila por estação × hora (§5.5) ──
         const queueTimeByHour = await safeQuery<QueueTimeByHourRow>('17.QueueTimeByHour',
           `SELECT ks.name AS estacao,
-            EXTRACT(HOUR FROM d.created_at AT TIME ZONE 'America/Sao_Paulo')::int AS hora,
+             EXTRACT(HOUR FROM d.created_at AT TIME ZONE 'UTC')::int AS hora,
             ROUND(AVG(EXTRACT(EPOCH FROM (d.ready_at - d.created_at)) / 60))::int AS tempo_medio_min
            FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
            WHERE ${dateFilterD} AND d.status IN ('ready','retrieved') AND d.ready_at IS NOT NULL

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { buildCriterionSummaries, calcularNotasCozinhaGeral, aggregateScoreAlias } from '../src/services/performance.service';
 import { PerformanceScoreRow } from '../src/types';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 
 const incomplete = calcularNotasCozinhaGeral([
   { entity: 'cozinha_quente_a', total: 2, deduction: 1 },
@@ -52,5 +53,25 @@ assert.ok(!dashboardSource.includes('Number(item.total_demands || 0)'));
 const performanceSource = readFileSync(new URL('../src/services/performance.service.ts', import.meta.url), 'utf8');
 assert.ok(performanceSource.includes("weights_status = hasLegacySnapshot"));
 assert.ok(performanceSource.includes("'indisponivel_snapshot_legado'"));
+
+const dashboardSource = readFileSync(new URL('../src/views/dashboard.html', import.meta.url), 'utf8');
+const requireNumberSource = dashboardSource.match(/function task6RequireNumber\([\s\S]*?\n    \}/)?.[0];
+assert.ok(requireNumberSource, 'task6RequireNumber deve existir no dashboard');
+const task6RequireNumber = vm.runInNewContext('(' + requireNumberSource + ')') as (value: unknown, path: string, allowNull?: boolean) => number | null;
+assert.throws(() => task6RequireNumber(undefined, 'campo.obrigatorio'), /campo ausente/);
+assert.throws(() => task6RequireNumber(null, 'campo.obrigatorio'), /campo nulo/);
+assert.equal(task6RequireNumber(null, 'campo.nullable', true), null);
+assert.equal(task6RequireNumber('2.5', 'campo.numero'), 2.5);
+
+const analyticsSource = readFileSync(new URL('../src/routes/analytics.ts', import.meta.url), 'utf8');
+assert.ok(analyticsSource.includes('DATA_OPERACIONAL_SQL'), 'analytics deve usar a data operacional comum');
+assert.ok(!analyticsSource.includes("AT TIME ZONE 'America/Sao_Paulo'"), 'analytics não pode usar o fuso legado');
+assert.ok(!/created_at\s*::date/.test(analyticsSource), 'analytics não pode usar created_at::date direto');
+assert.ok(!/EXTRACT\(DOW FROM created_at\)/.test(analyticsSource), 'weekday deve usar o dia operacional UTC');
+assert.ok(!/WHERE created_at\s*[<>=]/.test(analyticsSource), 'filtros críticos não podem usar created_at bruto');
+
+assert.ok(performanceSource.includes('DATA_OPERACIONAL_SQL'), 'performance deve usar a data operacional comum');
+assert.ok(!performanceSource.includes("AT TIME ZONE 'America/Sao_Paulo'"), 'performance não pode usar o fuso legado');
+assert.ok(!/created_at\s*::date/.test(performanceSource), 'performance não pode usar created_at::date direto');
 
 console.log('Verificações isoladas de performance: OK');
