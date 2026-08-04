@@ -24,7 +24,7 @@ export interface OcorrenciaBruta {
   station?: string | null;
 }
 
-export function calcularNotasCozinhaGeral(stations: { entity: PerformanceEntity; total: number; deduction: number | null; final?: number }[]): NotaCozinhaGeral {
+export function calcularNotasCozinhaGeral(stations: { entity: PerformanceEntity; total: number; deduction: number | null; final?: number | null }[]): NotaCozinhaGeral {
   const expectedEntities = new Set<PerformanceEntity>(['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria']);
   const stationEntities = new Set(stations.map(station => station.entity));
   const hasExactlyThreeStations = stations.length === 3
@@ -34,11 +34,12 @@ export function calcularNotasCozinhaGeral(stations: { entity: PerformanceEntity;
   const deduction = stations.some(station => station.deduction === null)
     ? null
     : stations.reduce((sum, station) => sum + (station.deduction as number), 0);
-  const operationalScore = hasExactlyThreeStations && deduction !== null ? round1(5 - deduction) : null;
-  const dailyAverageComplete = hasExactlyThreeStations;
+  const hasCompleteFinals = hasExactlyThreeStations
+    && stations.every(station => scoreValido(station.final ?? null) !== null);
+  const operationalScore = hasCompleteFinals && deduction !== null ? round1(5 - deduction) : null;
+  const dailyAverageComplete = hasCompleteFinals;
   const dailyAverageScore = dailyAverageComplete
-    ? stations.some(station => station.deduction === null) ? null
-      : round1(stations.reduce((sum, station) => sum + (station.final ?? round1(5 - (station.deduction as number))), 0) / stations.length)
+    ? round1(stations.reduce((sum, station) => sum + scoreValido(station.final ?? null)!, 0) / stations.length)
     : null;
   return {
     operational_score: operationalScore,
@@ -309,7 +310,7 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
        deduction: [row.sla_breach_deduction, row.cancellation_deduction, row.stockout_deduction, row.slow_item_deduction]
          .some(value => value === null) ? null : (row.sla_breach_deduction as number) + (row.cancellation_deduction as number)
            + (row.stockout_deduction as number) + (row.slow_item_deduction as number),
-       final: scoreValido(row.final_score) ?? undefined,
+        final: scoreValido(row.final_score),
     })));
     const agg = stationRows.reduce((sum, row) => ({
       total: sum.total + Number(row.total_demands),
@@ -318,9 +319,11 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
        stock: sum.stock + Number(row.stockouts), stockDed: sum.stockDed === null || row.stockout_deduction === null ? null : sum.stockDed + row.stockout_deduction,
        slow: sum.slow + Number(row.slow_items), slowDed: sum.slowDed === null || row.slow_item_deduction === null ? null : sum.slowDed + row.slow_item_deduction,
      }), { total: 0, sla: 0, slaDed: 0 as number | null, cancel: 0, cancelDed: 0 as number | null, stock: 0, stockDed: 0 as number | null, slow: 0, slowDed: 0 as number | null });
-    await upsertScore('cozinha_geral', dateStr,
-       aggregate.operational_score!, agg.total, agg.sla, agg.slaDed,
-       agg.cancel, agg.cancelDed, agg.stock, agg.stockDed, agg.slow, agg.slowDed, version.id);
+     if (aggregate.operational_score !== null && aggregate.daily_average_complete) {
+       await upsertScore('cozinha_geral', dateStr,
+          aggregate.operational_score, agg.total, agg.sla, agg.slaDed,
+          agg.cancel, agg.cancelDed, agg.stock, agg.stockDed, agg.slow, agg.slowDed, version.id);
+     }
   }
 }
 

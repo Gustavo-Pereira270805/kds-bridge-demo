@@ -646,7 +646,7 @@ if (document.readyState === 'loading') {
 
     function renderKpis(data, trend) {
         var k = (data && data.kpis) || {};
-        var displayMetric = function(value, suffix) { return value === null || value === undefined ? 'Indisponível' : Number(value).toFixed(1) + (suffix || ''); };
+        var displayMetric = function(value, suffix) { return task6DisplayNumber(value, 1) + (suffix || ''); };
         var totalPedidos = k.total_pedidos || 0;
         var atrasosCozinha = k.atrasos_cozinha || 0;
         var atrasosSalao = k.atrasos_salao || 0;
@@ -1226,6 +1226,17 @@ if (document.readyState === 'loading') {
             .replace(/'/g, '&#39;');
     }
 
+    function task6NullableNumber(value) {
+        if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null;
+        var number = Number(value);
+        return Number.isFinite(number) ? number : null;
+    }
+
+    function task6DisplayNumber(value, decimals) {
+        var number = task6NullableNumber(value);
+        return number === null ? 'Indisponível' : number.toFixed(decimals);
+    }
+
     function formatPerfDate(value) {
         var raw = String(value === null || value === undefined ? '' : value);
         var timestampIndex = raw.indexOf('T');
@@ -1245,8 +1256,8 @@ if (document.readyState === 'loading') {
         for(var i=0; i<order.length; i++) {
             var s = source[order[i]];
             if(!s) continue;
-            var sc = s.operational_score === null ? null : Number(s.operational_score);
-            var daily = s.daily_average_score === null ? null : Number(s.daily_average_score);
+            var sc = task6NullableNumber(s.operational_score);
+            var daily = task6NullableNumber(s.daily_average_score);
             var cls = scoreClass(sc);
             h += '<div class="score-card" data-entity="'+order[i]+'" title="Clique para ver detalhamento">';
             h += '<div class="score-entity">'+labels[order[i]]+'</div>';
@@ -1272,12 +1283,13 @@ if (document.readyState === 'loading') {
             var bars = '<div style="overflow-x:auto;"><table class="criteria-table"><thead><tr><th>Critério</th><th>Contagem</th><th>Base elegível</th><th>Taxa</th><th>Peso / desconto</th></tr></thead><tbody>';
             criteria.forEach(function(c) {
                 var weights = c.weights || [];
-                var weightText = c.weights_status === 'indisponivel_snapshot_legado' ? 'Snapshot indisponível' : (weights.length ? weights.map(function(w) { return Number(w.weight).toFixed(2) + ' (' + escapePerfHtml(String(w.weight_version_id || '').substring(0, 8)) + ')'; }).join('<br>') : (c.weight === null ? 'Várias versões vigentes no intervalo' : Number(c.weight || 0).toFixed(2)));
+                var weightText = c.weights_status === 'indisponivel_snapshot_legado' ? 'Snapshot indisponível' : (weights.length ? weights.map(function(w) { return task6DisplayNumber(w.weight, 2) + ' (' + escapePerfHtml(String(w.weight_version_id || '').substring(0, 8)) + ')'; }).join('<br>') : (c.weight === null ? 'Várias versões vigentes no intervalo' : task6DisplayNumber(c.weight, 2)));
                 var criterionLabels = { sla_breach_cozinha:'Preparo lento / SLA cozinha', sla_breach_salao:'Retirada lenta / SLA salão', cancellation_cozinha:'Cancelamento cozinha', cancellation_salao:'Cancelamento salão', stockout_cozinha:'Zerado informativo (cozinha)', stockout_salao:'Zerado salão', slow_item_cozinha:'Preparo lento', slow_pickup_salao:'Retirada lenta' };
-                bars += '<tr><td>'+ escapePerfHtml(criterionLabels[c.criterion] || c.criterion) +'</td><td>'+Number(c.count)+'</td><td>'+(c.eligible_base === null ? 'Indisponível' : String(c.eligible_base))+'</td><td>'+(c.rate === null ? 'Indisponível' : (Number(c.rate) * 100).toFixed(1)+'%')+'</td><td>'+weightText+'<br>Status: '+escapePerfHtml(c.weights_status || 'vigente_intervalo')+'<br>Desconto: '+(c.weights_status === 'indisponivel_snapshot_legado' ? 'Snapshot indisponível' : Number(c.deduction).toFixed(2))+'</td></tr>';
+                var rate = task6NullableNumber(c.rate);
+                bars += '<tr><td>'+ escapePerfHtml(criterionLabels[c.criterion] || c.criterion) +'</td><td>'+task6DisplayNumber(c.count, 0)+'</td><td>'+task6DisplayNumber(c.eligible_base, 0)+'</td><td>'+(rate === null ? 'Indisponível' : task6DisplayNumber(rate * 100, 1)+'%')+'</td><td>'+weightText+'<br>Status: '+escapePerfHtml(c.weights_status || 'vigente_intervalo')+'<br>Desconto: '+(c.weights_status === 'indisponivel_snapshot_legado' ? 'Snapshot indisponível' : task6DisplayNumber(c.deduction, 2))+'</td></tr>';
             });
             bars += '</tbody></table></div>';
-            var sc = Number(s.operational_score), daily = s.daily_average_score === null ? null : Number(s.daily_average_score);
+            var sc = task6NullableNumber(s.operational_score), daily = task6NullableNumber(s.daily_average_score);
             var datesList = s.occurrences || [];
             if (datesList.length > 0) {
                 bars += '<div style="margin-top:8px;border-top:1px solid var(--c-border-light);padding-top:8px;">' +
@@ -1293,11 +1305,11 @@ if (document.readyState === 'loading') {
                         '<td style="padding:3px 4px;">' + escapePerfHtml(occ.product_name || '-') + '</td>' +
                         '<td style="padding:3px 4px;color:var(--c-text-muted);">' + escapePerfHtml(occ.detail) + '</td>' +
                         '<td style="padding:3px 4px;">' + escapePerfHtml(occ.station || (order[i] === 'cozinha_geral' ? 'Cozinha' : '-')) + '</td>' +
-                         '<td style="padding:3px 4px;">' + (occ.weight === null ? 'snapshot indisponível' : Number(occ.weight || 0).toFixed(2) + ' / -' + Number(occ.deduction || 0).toFixed(2)) + '<br><small>' + escapePerfHtml(String(occ.weight_version_id || '').substring(0, 8)) + '</small></td></tr>';
+                         '<td style="padding:3px 4px;">' + (occ.weight === null || occ.weight === undefined || occ.deduction === null || occ.deduction === undefined ? 'Indisponível' : task6DisplayNumber(occ.weight, 2) + ' / -' + task6DisplayNumber(occ.deduction, 2)) + '<br><small>' + escapePerfHtml(String(occ.weight_version_id || '').substring(0, 8)) + '</small></td></tr>';
                 });
                 bars += '</tbody></table></div></div>';
             }
-             h += '<div class="panel score-detail-panel" data-entity="'+order[i]+'" style="display:none;"><div class="section-title">Detalhamento - '+labels[order[i]]+' <span style="font-size:12px;font-weight:400;color:#9ca3af;">(Operacional: '+(sc === null ? 'Indisponível' : sc.toFixed(1))+' · Média diária: '+(daily === null ? 'Indisponível' : daily.toFixed(1))+(s.legacy_unversioned ? ' · histórico legado sem snapshot de pesos' : '')+' · Abertas: '+Number(s.open_demands)+' · Desconto: '+(s.total_deduction === null ? 'Indisponível' : Number(s.total_deduction).toFixed(2))+')</span></div><div style="max-height:420px;overflow-y:auto;">'+bars+'</div></div>';
+             h += '<div class="panel score-detail-panel" data-entity="'+order[i]+'" style="display:none;"><div class="section-title">Detalhamento - '+labels[order[i]]+' <span style="font-size:12px;font-weight:400;color:#9ca3af;">(Operacional: '+task6DisplayNumber(sc, 1)+' · Média diária: '+task6DisplayNumber(daily, 1)+(s.legacy_unversioned ? ' · histórico legado sem snapshot de pesos' : '')+' · Abertas: '+task6DisplayNumber(s.open_demands, 0)+' · Desconto: '+task6DisplayNumber(s.total_deduction, 2)+')</span></div><div style="max-height:420px;overflow-y:auto;">'+bars+'</div></div>';
         }
         return h + '</div>';
     }
@@ -1845,6 +1857,39 @@ if (document.readyState === 'loading') {
         [['trend', ['total', 'entregues', 'cancelados', 'roturas', 'atrasos_cozinha', 'atrasos_salao']], ['occupancy_by_shift', ['pct_ociosa']], ['produtos', ['total_qty', 'total_demandas']], ['replacements', ['total', 'replacements', 'replacement_pct']]].forEach(function(spec) {
             (data[spec[0]] || []).forEach(function(row, index) { spec[1].forEach(function(key) { task6RequireNumber(row[key], 'dashboard.' + spec[0] + '[' + index + '].' + key); }); });
         });
+        task6ValidateCriticalArrays(data);
+    }
+
+    function task6ValidateCriticalArrays(data) {
+        var specs = {
+            speed_by_hour: { required: ['hora', 'count'], nullable: ['avg_min'] },
+            queue_time_by_station: { required: ['count'], nullable: ['avg_wait_min', 'avg_cooking_min'] },
+            queue_time_by_hour: { required: ['hora'], nullable: ['tempo_medio_min'] },
+            sla_by_product: { required: ['total', 'breached'], nullable: ['pct_ok', 'avg_overage_min'] },
+            cancel_reasons: { required: ['total'] },
+            pickup_by_hour: { required: ['hora', 'count'], nullable: ['avg_min'] },
+            volume_ma: { required: ['total', 'ma7'] },
+            weekday_seasonality: { required: ['total', 'avg'] },
+            funnel: { object: true, required: ['created', 'ready', 'retrieved', 'cancelled', 'pending_now'] },
+            week_comparison: { required: ['this_week', 'last_week'], nullable: ['indicators.sla_pct', 'indicators.avg_time_min', 'indicators.cancel_rate', 'indicators.urgent_pct'] },
+            heatmap: { required: ['hora', 'dia_semana', 'total'] },
+            qty_vs_time: { required: ['qty', 'actual_min', 'sla_min'] },
+            scatter_roturas: { required: ['total_demandas', 'total_roturas'] }
+        };
+        Object.keys(specs).forEach(function(name) {
+            var spec = specs[name];
+            var rows = spec.object ? [data[name]] : data[name];
+            if (spec.object ? (!data[name] || typeof data[name] !== 'object' || Array.isArray(data[name])) : !Array.isArray(rows)) throw new Error('Payload inválido: estrutura ausente em dashboard.' + name + '.');
+            rows.forEach(function(row, index) {
+                spec.required.forEach(function(key) { task6RequireNumber(row[key], 'dashboard.' + name + '[' + index + '].' + key); });
+                (spec.nullable || []).forEach(function(key) {
+                    var parts = key.split('.');
+                    var value = row;
+                    parts.forEach(function(part) { value = value === null || value === undefined ? undefined : value[part]; });
+                    task6RequireNumber(value, 'dashboard.' + name + '[' + index + '].' + key, true);
+                });
+            });
+        });
     }
 
     async function task6FetchPerformance(from, to) {
@@ -1878,11 +1923,11 @@ if (document.readyState === 'loading') {
         html += '<h2 style="font-size:16px;border-bottom:2px solid #1d3557;padding-bottom:5px;">Resumo</h2><table style="width:100%;border-collapse:collapse;font-size:12px;"><tbody>';
         [['Pedidos', k.total_pedidos], ['Entregues (%)', k.pct_entregues], ['Cancelados', k.total_cancelados], ['Zerados', k.total_roturas], ['SLA (%)', k.pct_dentro_sla], ['Atrasos cozinha', k.atrasos_cozinha], ['Atrasos salão', k.atrasos_salao], ['Urgentes', k.urgentes_puros]].forEach(function(row) { html += '<tr><td style="padding:4px;border-bottom:1px solid #e4e4e7;">' + escapePerfHtml(row[0]) + '</td><td style="padding:4px;border-bottom:1px solid #e4e4e7;font-weight:bold;">' + escapePerfHtml(row[1]) + '</td></tr>'; });
         html += '</tbody></table><h2 style="font-size:16px;border-bottom:2px solid #1d3557;padding-bottom:5px;margin-top:18px;">Notas operacionais</h2>';
-        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; var scoreText = item.operational_score === null ? 'Indisponível' : Number(item.operational_score).toFixed(1); var demandText = item.total_demands === null ? 'Indisponível' : String(item.total_demands); html += '<h3 style="font-size:14px;margin:12px 0 4px;">' + escapePerfHtml(labels[entity] || entity) + ' | Nota: ' + scoreText + ' | Média diária: ' + (item.daily_average_score === null ? 'Indisponível' : Number(item.daily_average_score).toFixed(1)) + (item.legacy_unversioned ? ' | histórico legado sem snapshot de pesos' : '') + ' | Demandas: ' + demandText + '</h3><table style="width:100%;border-collapse:collapse;font-size:10px;"><thead><tr style="background:#e5e7eb;"><th>Critério</th><th>Contagem</th><th>Base</th><th>Taxa</th><th>Peso / desconto</th></tr></thead><tbody>'; (item.criteria || []).forEach(function(c) { var weights = c.weights_status === 'indisponivel_snapshot_legado' ? 'Snapshot indisponível' : (c.weights || []).map(function(w) { return escapePerfHtml(w.weight_version_id) + ': peso ' + Number(w.weight).toFixed(2) + ', contagem ' + Number(w.count) + ', desconto -' + Number(w.deduction).toFixed(2); }).join('; '); var deductionText = c.weights_status === 'indisponivel_snapshot_legado' ? 'Snapshot indisponível' : Number(c.deduction).toFixed(2); html += '<tr><td>' + escapePerfHtml(c.criterion) + '</td><td>' + Number(c.count) + '</td><td>' + (c.eligible_base === null ? 'Indisponível' : String(c.eligible_base)) + '</td><td>' + (c.rate === null ? 'Indisponível' : (Number(c.rate) * 100).toFixed(1) + '%') + '</td><td>' + weights + '<br>Status: ' + escapePerfHtml(c.weights_status || 'vigente_intervalo') + ', desconto -' + deductionText + '</td></tr>'; }); html += '</tbody></table>'; });
+        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; var scoreText = task6DisplayNumber(item.operational_score, 1); var demandText = task6DisplayNumber(item.total_demands, 0); html += '<h3 style="font-size:14px;margin:12px 0 4px;">' + escapePerfHtml(labels[entity] || entity) + ' | Nota: ' + scoreText + ' | Média diária: ' + task6DisplayNumber(item.daily_average_score, 1) + (item.legacy_unversioned ? ' | histórico legado sem snapshot de pesos' : '') + ' | Demandas: ' + demandText + '</h3><table style="width:100%;border-collapse:collapse;font-size:10px;"><thead><tr style="background:#e5e7eb;"><th>Critério</th><th>Contagem</th><th>Base</th><th>Taxa</th><th>Peso / desconto</th></tr></thead><tbody>'; (item.criteria || []).forEach(function(c) { var weights = c.weights_status === 'indisponivel_snapshot_legado' ? 'Snapshot indisponível' : (c.weights || []).map(function(w) { return escapePerfHtml(w.weight_version_id) + ': peso ' + task6DisplayNumber(w.weight, 2) + ', contagem ' + task6DisplayNumber(w.count, 0) + ', desconto -' + task6DisplayNumber(w.deduction, 2); }).join('; '); var rate = task6NullableNumber(c.rate); var deductionText = c.weights_status === 'indisponivel_snapshot_legado' ? 'Snapshot indisponível' : task6DisplayNumber(c.deduction, 2); html += '<tr><td>' + escapePerfHtml(c.criterion) + '</td><td>' + task6DisplayNumber(c.count, 0) + '</td><td>' + task6DisplayNumber(c.eligible_base, 0) + '</td><td>' + (rate === null ? 'Indisponível' : task6DisplayNumber(rate * 100, 1) + '%') + '</td><td>' + weights + '<br>Status: ' + escapePerfHtml(c.weights_status || 'vigente_intervalo') + ', desconto -' + deductionText + '</td></tr>'; }); html += '</tbody></table>'; });
         html += '<h2 style="font-size:16px;border-bottom:2px solid #1d3557;padding-bottom:5px;margin-top:18px;">Vigências dos pesos</h2><table style="width:100%;border-collapse:collapse;font-size:10px;"><thead><tr style="background:#e5e7eb;"><th>Versão</th><th>Vigência inicial</th><th>Vigência final</th></tr></thead><tbody>';
         (performance.weight_versions || []).forEach(function(v) { html += '<tr><td>' + escapePerfHtml(v.id) + '</td><td>' + escapePerfHtml(v.valid_from) + '</td><td>' + escapePerfHtml(v.valid_to || 'Em vigor') + '</td></tr>'; });
         html += '</tbody></table><h2 style="font-size:16px;border-bottom:2px solid #1d3557;padding-bottom:5px;margin-top:18px;">Ocorrências reais</h2><table style="width:100%;border-collapse:collapse;font-size:9px;"><thead><tr style="background:#e5e7eb;"><th>Entidade</th><th>Estação de origem</th><th>Tipo</th><th>Data/hora</th><th>Demand ID</th><th>Produto</th><th>Detalhe</th><th>Peso</th><th>Desconto</th><th>Versão do peso</th></tr></thead><tbody>';
-        Object.keys(performance.operational).forEach(function(entity) { (performance.operational[entity].occurrences || []).forEach(function(o) { var snapshot = o.weight !== null && o.deduction !== null && o.weight_version_id !== null; html += '<tr><td>' + escapePerfHtml(o.entity || entity) + '</td><td>' + escapePerfHtml(o.station || '-') + '</td><td>' + escapePerfHtml(o.type) + '</td><td>' + escapePerfHtml(o.date) + '</td><td>' + escapePerfHtml(o.demand_id) + '</td><td>' + escapePerfHtml(o.product_name) + '</td><td>' + escapePerfHtml(o.detail) + '</td><td>' + (snapshot ? Number(o.weight).toFixed(2) : 'Snapshot indisponível') + '</td><td>' + (snapshot ? Number(o.deduction).toFixed(2) : 'Snapshot indisponível') + '</td><td>' + (snapshot ? escapePerfHtml(o.weight_version_id) : 'Snapshot indisponível') + '</td></tr>'; }); });
+         Object.keys(performance.operational).forEach(function(entity) { (performance.operational[entity].occurrences || []).forEach(function(o) { var snapshot = task6NullableNumber(o.weight) !== null && task6NullableNumber(o.deduction) !== null && o.weight_version_id !== null && o.weight_version_id !== undefined; html += '<tr><td>' + escapePerfHtml(o.entity || entity) + '</td><td>' + escapePerfHtml(o.station || '-') + '</td><td>' + escapePerfHtml(o.type) + '</td><td>' + escapePerfHtml(o.date) + '</td><td>' + escapePerfHtml(o.demand_id) + '</td><td>' + escapePerfHtml(o.product_name) + '</td><td>' + escapePerfHtml(o.detail) + '</td><td>' + (snapshot ? task6DisplayNumber(o.weight, 2) : 'Indisponível') + '</td><td>' + (snapshot ? task6DisplayNumber(o.deduction, 2) : 'Indisponível') + '</td><td>' + (snapshot ? escapePerfHtml(o.weight_version_id) : 'Indisponível') + '</td></tr>'; }); });
         return html + '</tbody></table></div>';
     }
 
@@ -1896,7 +1941,7 @@ if (document.readyState === 'loading') {
         var add = function(rows, name) { XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), (prefix + name).substring(0, 31)); };
         add(task6PerformanceRows(performance), 'Performance');
         var criteria = [], occurrences = [];
-        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; (item.criteria || []).forEach(function(c) { var weightsAvailable = c.weights_status !== 'indisponivel_snapshot_legado'; criteria.push({ Entidade: entity, Critério: c.criterion, Contagem: c.count, 'Base elegível': c.eligible_base === null ? 'Indisponível' : c.eligible_base, Taxa: c.rate === null ? 'Indisponível' : c.rate, Desconto: weightsAvailable ? c.deduction : 'Snapshot indisponível', 'Status dos pesos': c.weights_status, 'Pesos por versão': weightsAvailable ? (c.weights || []).map(function(w) { return w.weight_version_id + ': peso ' + w.weight.toFixed(2) + ' (' + w.count + ', -' + w.deduction.toFixed(2) + ')'; }).join('; ') : 'Snapshot indisponível' }); }); (item.occurrences || []).forEach(function(o) { var snapshot = o.weight !== null && o.deduction !== null && o.weight_version_id !== null; occurrences.push({ Entidade: o.entity || entity, 'Estação de origem': o.station || '-', Tipo: o.type, 'Data/hora': o.date, 'Demand ID': o.demand_id, Produto: o.product_name, Detalhe: o.detail, Peso: snapshot ? o.weight : 'Snapshot indisponível', Desconto: snapshot ? o.deduction : 'Snapshot indisponível', 'Versão do peso': snapshot ? o.weight_version_id : 'Snapshot indisponível' }); }); });
+        Object.keys(performance.operational).forEach(function(entity) { var item = performance.operational[entity]; (item.criteria || []).forEach(function(c) { var weightsAvailable = c.weights_status !== 'indisponivel_snapshot_legado'; criteria.push({ Entidade: entity, Critério: c.criterion, Contagem: c.count, 'Base elegível': task6NullableNumber(c.eligible_base) === null ? 'Indisponível' : c.eligible_base, Taxa: task6NullableNumber(c.rate) === null ? 'Indisponível' : c.rate, Desconto: weightsAvailable ? (task6NullableNumber(c.deduction) === null ? 'Indisponível' : c.deduction) : 'Snapshot indisponível', 'Status dos pesos': c.weights_status, 'Pesos por versão': weightsAvailable ? (c.weights || []).map(function(w) { return w.weight_version_id + ': peso ' + task6DisplayNumber(w.weight, 2) + ' (' + task6DisplayNumber(w.count, 0) + ', -' + task6DisplayNumber(w.deduction, 2) + ')'; }).join('; ') : 'Snapshot indisponível' }); }); (item.occurrences || []).forEach(function(o) { var snapshot = task6NullableNumber(o.weight) !== null && task6NullableNumber(o.deduction) !== null && o.weight_version_id !== null && o.weight_version_id !== undefined; occurrences.push({ Entidade: o.entity || entity, 'Estação de origem': o.station || '-', Tipo: o.type, 'Data/hora': o.date, 'Demand ID': o.demand_id, Produto: o.product_name, Detalhe: o.detail, Peso: snapshot ? o.weight : 'Indisponível', Desconto: snapshot ? o.deduction : 'Indisponível', 'Versão do peso': snapshot ? o.weight_version_id : 'Indisponível' }); }); });
         add(criteria, 'Critérios'); add(occurrences, 'Ocorrências'); add((performance.weight_versions || []).map(function(v) { return { Versão: v.id, 'Vigência inicial': v.valid_from, 'Vigência final': v.valid_to || 'Em vigor' }; }), 'Vigências');
         var k = data.kpis || {}; XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Métrica', 'Valor'], ['Pedidos', k.total_pedidos], ['Entregues (%)', k.pct_entregues], ['Cancelados', k.total_cancelados], ['Zerados', k.total_roturas], ['SLA (%)', k.pct_dentro_sla], ['Atrasos cozinha', k.atrasos_cozinha], ['Atrasos salão', k.atrasos_salao], ['Urgentes', k.urgentes_puros]]), (prefix + 'Resumo').substring(0, 31));
     }

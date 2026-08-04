@@ -20,6 +20,14 @@ const incomplete = calcularNotasCozinhaGeral([
 assert.equal(incomplete.operational_score, null);
 assert.equal(incomplete.total_demands, null);
 
+const missingFinal = calcularNotasCozinhaGeral([
+  { entity: 'cozinha_quente_a', total: 2, deduction: 1, final: undefined },
+  { entity: 'cozinha_quente_b', total: 2, deduction: 0, final: 5 },
+  { entity: 'cozinha_fria', total: 2, deduction: 0, final: 5 },
+]);
+assert.equal(missingFinal.operational_score, null, 'cozinha geral não pode derivar score ausente');
+assert.equal(missingFinal.daily_average_score, null, 'média da cozinha geral não pode derivar score ausente');
+
 const criteria = buildCriterionSummaries({
   total_demands: 10,
   sla_breaches: 1,
@@ -120,6 +128,7 @@ assert.throws(() => task6RequireNumber(undefined, 'campo.obrigatorio'), /campo a
 assert.throws(() => task6RequireNumber(null, 'campo.obrigatorio'), /campo nulo/);
 assert.equal(task6RequireNumber(null, 'campo.nullable', true), null);
 assert.equal(task6RequireNumber('2.5', 'campo.numero'), 2.5);
+assert.equal(task6RequireNumber(0, 'campo.zero'), 0);
 
 const analyticsSource = readFileSync(new URL('../src/routes/analytics.ts', import.meta.url), 'utf8');
 assert.ok(analyticsSource.includes('DATA_OPERACIONAL_SQL'), 'analytics deve usar a data operacional comum');
@@ -175,6 +184,15 @@ assert.ok(dashboardSource.includes('task6RequireNumber(kpis.tempo_medio_cozinha_
 assert.ok(dashboardSource.includes('task6RequireNumber(kpis.tempo_medio_retirada_min'), 'dashboard deve validar tempo médio de retirada');
 assert.ok(dashboardSource.includes('task6RequireNumber(item.operational_score'), 'exportação deve validar notas operacionais');
 assert.ok(!performanceSource.includes('Number(row.final_score)'), 'agregadores não podem converter score nulo sem guarda');
+assert.ok(!performanceSource.includes('aggregate.operational_score!'), 'cozinha geral não pode persistir score com non-null assertion');
+assert.ok(performanceSource.includes('aggregate.operational_score !== null && aggregate.daily_average_complete'), 'cozinha geral deve persistir apenas consolidação completa');
+assert.ok(dashboardSource.includes('function task6DisplayNumber'), 'dashboard deve usar helper seguro para exibição numérica');
+assert.ok(dashboardSource.includes('function task6ValidateCriticalArrays'), 'dashboard deve validar arrays críticos');
+assert.ok(dashboardSource.includes("'speed_by_hour'"), 'exportação deve validar velocidade');
+assert.ok(dashboardSource.includes("'week_comparison'"), 'exportação deve validar comparativos');
+assert.ok(!dashboardSource.includes('Number(s.operational_score)'), 'detalhamento não pode converter score nulo diretamente');
+assert.ok(!dashboardSource.includes('Number(o.weight || 0)'), 'detrator não pode converter peso ausente em zero');
+assert.ok(!dashboardSource.includes('Number(o.deduction || 0)'), 'detrator não pode converter desconto ausente em zero');
 assert.equal(janela.inicio.toISOString(), '2026-08-03T00:00:00.000Z');
 assert.equal(new Date('2026-08-04T00:00:00.000Z').getTime() - new Date('2026-08-03T00:00:00.000Z').getTime(), 86400000);
 
