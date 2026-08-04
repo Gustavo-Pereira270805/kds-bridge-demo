@@ -12,6 +12,7 @@
 
 - Dashboard, analytics e performance usam UTC em conversões, agrupamentos por hora, weekday e comparativos; filtros relativos preservam janelas móveis de 24 horas.
 - Cálculos relativos inline do dashboard (today, yesterday, week, month e datas de performance/exportação) usam o helper `addUtcDays`, sem aritmética local com `setDate()`.
+- Parsing de datas de calendário do dashboard (filtros, validação customizada e exportações) usa `T00:00:00Z`, preservando timestamps que já informam o fuso.
 - A validação `task6RequireNumber` diferencia campo ausente (`undefined`) de campo explicitamente nulo (`null`), aceitando `null` somente quando o contrato permite.
 - `scripts/verificar-performance-final.ts` cobre a distinção de nulidade, verifica os cinco endpoints relativos e testa bordas de janela UTC sem abrir conexão com o banco.
 

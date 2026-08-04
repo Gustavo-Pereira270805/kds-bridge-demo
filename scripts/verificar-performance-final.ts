@@ -98,5 +98,6 @@ assert.ok((dashboardSource.match(/setUTCDate\(d\.getUTCDate\(\) \+ 1\)/g) || [])
 assert.ok(dashboardSource.includes('cursor.setUTCDate(cursor.getUTCDate() + 1)'), 'dias exportáveis devem usar aritmética UTC');
 assert.ok(dashboardSource.includes('function addUtcDays(date, days)'), 'dashboard deve centralizar deslocamentos relativos em UTC');
 assert.ok(!dashboardSource.includes('.setDate('), 'dashboard não pode usar aritmética de data local');
+assert.ok(!/T00:00:00['"]/.test(dashboardSource), 'datas de calendário do dashboard devem ser interpretadas explicitamente em UTC');
 
 console.log('Verificações isoladas de performance: OK');

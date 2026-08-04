@@ -1398,7 +1398,7 @@ if (document.readyState === 'loading') {
 
     function filterForPerf() {
         if (state.filter.range) return state.filter.range === 'today' || state.filter.range === 'yesterday' ? 'week' : state.filter.range;
-        var d1 = new Date(state.filter.from + 'T00:00:00'), d2 = new Date((state.filter.to || state.filter.from) + 'T00:00:00');
+        var d1 = new Date(state.filter.from + 'T00:00:00Z'), d2 = new Date((state.filter.to || state.filter.from) + 'T00:00:00Z');
         return ((d2 - d1) / 86400000) > 7 ? 'month' : 'week';
     }
 
@@ -1406,7 +1406,7 @@ if (document.readyState === 'loading') {
         if (state.filter.range === 'today' || state.filter.range === 'yesterday') return 1;
         if (state.filter.range === 'week') return 7;
         if (state.filter.range === 'month') return 30;
-        var d1 = new Date(state.filter.from + 'T00:00:00'), d2 = new Date((state.filter.to || state.filter.from) + 'T00:00:00');
+        var d1 = new Date(state.filter.from + 'T00:00:00Z'), d2 = new Date((state.filter.to || state.filter.from) + 'T00:00:00Z');
         return Math.round((d2 - d1) / 86400000) + 1;
     }
 
@@ -1588,7 +1588,7 @@ if (document.readyState === 'loading') {
             var from = document.getElementById('dateFrom').value;
             var to = document.getElementById('dateTo').value || from;
             if (!from) { showToast('Selecione a data de in\u00EDcio.', 'warn'); return; }
-            var d1 = new Date(from + 'T00:00:00'), d2 = new Date(to + 'T00:00:00');
+            var d1 = new Date(from + 'T00:00:00Z'), d2 = new Date(to + 'T00:00:00Z');
             if (isNaN(d1.getTime()) || isNaN(d2.getTime())) { showToast('Datas inv\u00E1lidas.', 'warn'); return; }
             if (d1 > d2) { showToast('A data de in\u00EDcio deve ser anterior \u00E0 data final.', 'warn'); return; }
             var diff = Math.round((d2 - d1) / 86400000);
@@ -1706,8 +1706,8 @@ if (document.readyState === 'loading') {
             }
 
             if (byDay) {
-                var fromD = new Date(from + 'T00:00:00');
-                var toD = new Date(to + 'T00:00:00');
+                var fromD = new Date(from + 'T00:00:00Z');
+                var toD = new Date(to + 'T00:00:00Z');
                 var days = [];
                 for (var d = new Date(fromD); d <= toD; d.setUTCDate(d.getUTCDate() + 1)) { days.push(new Date(d)); }
                 var firstPage = true;
@@ -1760,8 +1760,8 @@ if (document.readyState === 'loading') {
             task6ValidateDashboardNumbers(data);
 
             if (byDay) {
-                var fromD = new Date(from + 'T00:00:00');
-                var toD = new Date(to + 'T00:00:00');
+                var fromD = new Date(from + 'T00:00:00Z');
+                var toD = new Date(to + 'T00:00:00Z');
                 var days = [];
                 for (var d = new Date(fromD); d <= toD; d.setUTCDate(d.getUTCDate() + 1)) { days.push(new Date(d)); }
                 if (days.length > 31) { showToast('Por dia limitado a 31 dias.', 'warn'); state.exporting = false; if (exportProgress) exportProgress.style.display = 'none'; return; }
@@ -1821,7 +1821,7 @@ if (document.readyState === 'loading') {
 
     // Exportação da Tarefa 6: contrato único de performance operacional.
     function task6ExportDays(from, to) {
-        var days = [], cursor = new Date(from + 'T00:00:00'), end = new Date(to + 'T00:00:00');
+        var days = [], cursor = new Date(from + 'T00:00:00Z'), end = new Date(to + 'T00:00:00Z');
         for (; cursor <= end; cursor.setUTCDate(cursor.getUTCDate() + 1)) days.push(cursor.toISOString().split('T')[0]);
         return days;
     }
