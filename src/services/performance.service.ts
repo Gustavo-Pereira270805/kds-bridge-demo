@@ -50,6 +50,16 @@ export function calcularNotasCozinhaGeral(stations: { entity: PerformanceEntity;
   };
 }
 
+export function consolidacaoGeralValida(rows: Pick<PerformanceScoreRow, 'entity' | 'final_score'>[]): boolean {
+  const expectedEntities = new Set<PerformanceEntity>(['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria']);
+  const stationRows = rows.filter(row => expectedEntities.has(row.entity as PerformanceEntity));
+  const stationEntities = new Set(stationRows.map(row => row.entity));
+  return stationRows.length === 3
+    && stationEntities.size === 3
+    && Array.from(expectedEntities).every(entity => stationRows.some(row => row.entity === entity))
+    && stationRows.every(row => scoreValido(row.final_score) !== null);
+}
+
 export const PESOS_PADRAO: PerformanceWeights = {
   sla_breach_cozinha: 0.15,
   sla_breach_salao: 0.15,
@@ -392,13 +402,19 @@ export async function enriquecerOcorrencias(
 
 export async function ensureValidScoresForDate(dateStr: string, cache: PerformanceWeightCache): Promise<void> {
   const entities: PerformanceEntity[] = ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'salao'];
-  const rows = await query<{ entity: PerformanceEntity; weight_version_id: string | null }>(
-    `SELECT entity, weight_version_id FROM performance_scores WHERE date = $1 AND entity = ANY($2)`,
+  const rows = await query<{ entity: PerformanceEntity; final_score: number | null; weight_version_id: string | null }>(
+    `SELECT entity, final_score, weight_version_id FROM performance_scores WHERE date = $1 AND entity = ANY($2)`,
     [dateStr, entities]
   );
   const expectedVersion = cache.get(dateStr);
-  const valid = Boolean(expectedVersion) && entities.every(entity => rows.some(row =>
-    row.entity === entity && (row.weight_version_id === expectedVersion!.id || row.weight_version_id === null)));
+  const stationRows = rows.filter(row => row.entity !== 'cozinha_geral');
+  const generalRows = rows.filter(row => row.entity === 'cozinha_geral');
+  const validGeneral = consolidacaoGeralValida(stationRows)
+    && generalRows.some(row => scoreValido(row.final_score) !== null);
+  const valid = Boolean(expectedVersion)
+    && entities.filter(entity => entity !== 'cozinha_geral').every(entity => rows.some(row =>
+      row.entity === entity && (row.weight_version_id === expectedVersion!.id || row.weight_version_id === null)))
+    && validGeneral;
   if (!valid) await computeDailyScores(dateStr);
 }
 

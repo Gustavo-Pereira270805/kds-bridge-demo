@@ -249,7 +249,7 @@ export interface QtyVsTimeRow {
   product_name: string;
   qty: number;
   actual_min: number;
-  sla_min: number;
+  sla_min: number | null;
 }
 export interface HeatmapRow {
   hora: number;

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { buildCriterionSummaries, calcularNotasCozinhaGeral, aggregatePerformance, aggregateScoreAlias } from '../src/services/performance.service';
+import { buildCriterionSummaries, calcularNotasCozinhaGeral, aggregatePerformance, aggregateScoreAlias, consolidacaoGeralValida } from '../src/services/performance.service';
 import { validarIntervaloInclusivo } from '../src/services/operational-date.service';
 import { PerformanceScoreRow } from '../src/types';
 import { readFileSync } from 'node:fs';
@@ -129,6 +129,22 @@ assert.throws(() => task6RequireNumber(null, 'campo.obrigatorio'), /campo nulo/)
 assert.equal(task6RequireNumber(null, 'campo.nullable', true), null);
 assert.equal(task6RequireNumber('2.5', 'campo.numero'), 2.5);
 assert.equal(task6RequireNumber(0, 'campo.zero'), 0);
+assert.equal(task6RequireNumber(null, 'campo.scatter.sla_min', true), null);
+assert.throws(() => task6RequireNumber(null, 'campo.scatter.sla_min'), /campo nulo/);
+const criticalArraysSource = dashboardSource.match(/function task6ValidateCriticalArrays\([\s\S]*?\n    \}/)?.[0];
+assert.ok(criticalArraysSource, 'task6ValidateCriticalArrays deve existir');
+const task6ValidateCriticalArrays = vm.runInNewContext(`(function(task6RequireNumber) { ${criticalArraysSource}; return task6ValidateCriticalArrays; })`)(task6RequireNumber) as (data: unknown) => void;
+assert.throws(() => task6ValidateCriticalArrays({ speed_by_hour: [null] }), /item nulo ou inválido em dashboard\.speed_by_hour\[0\]/);
+assert.equal(consolidacaoGeralValida([
+  { entity: 'cozinha_quente_a', final_score: 5 },
+  { entity: 'cozinha_quente_b', final_score: 5 },
+  { entity: 'cozinha_fria', final_score: 5 },
+]), true);
+assert.equal(consolidacaoGeralValida([
+  { entity: 'cozinha_quente_a', final_score: 5 },
+  { entity: 'cozinha_quente_b', final_score: null },
+  { entity: 'cozinha_fria', final_score: 5 },
+]), false);
 
 const analyticsSource = readFileSync(new URL('../src/routes/analytics.ts', import.meta.url), 'utf8');
 assert.ok(analyticsSource.includes('DATA_OPERACIONAL_SQL'), 'analytics deve usar a data operacional comum');
@@ -193,6 +209,11 @@ assert.ok(dashboardSource.includes("'week_comparison'"), 'exportação deve vali
 assert.ok(!dashboardSource.includes('Number(s.operational_score)'), 'detalhamento não pode converter score nulo diretamente');
 assert.ok(!dashboardSource.includes('Number(o.weight || 0)'), 'detrator não pode converter peso ausente em zero');
 assert.ok(!dashboardSource.includes('Number(o.deduction || 0)'), 'detrator não pode converter desconto ausente em zero');
+assert.ok(dashboardSource.includes("qty_vs_time: { required: ['qty', 'actual_min'], nullable: ['sla_min'] }"), 'sla_min nulo deve ser aceito no scatter');
+assert.ok(dashboardSource.includes('Array.isArray(row)'), 'arrays críticos devem rejeitar itens que não são objetos');
+assert.ok(dashboardSource.includes('item nulo ou inválido'), 'arrays críticos devem informar item inválido com caminho');
+assert.ok(performanceSource.includes('final_score: number | null'), 'validação geral deve considerar score operacional');
+assert.ok(performanceSource.includes("stationEntities.every(entity => stationRows.some(row => row.entity === entity"), 'validação geral deve exigir as três estações');
 assert.equal(janela.inicio.toISOString(), '2026-08-03T00:00:00.000Z');
 assert.equal(new Date('2026-08-04T00:00:00.000Z').getTime() - new Date('2026-08-03T00:00:00.000Z').getTime(), 86400000);
 

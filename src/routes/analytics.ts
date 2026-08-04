@@ -26,7 +26,7 @@ import {
   PerformanceEntity,
   PerformanceWeightVersion,
 } from '../types';
-import { createPerformanceWeightCache, ensureValidScoresForDate, aggregatePerformance, aggregateScoreAlias, getPerformanceDetails } from '../services/performance.service';
+import { createPerformanceWeightCache, ensureValidScoresForDate, aggregatePerformance, aggregateScoreAlias, getPerformanceDetails, consolidacaoGeralValida } from '../services/performance.service';
 import { DATA_OPERACIONAL_SQL, diasInclusivos, deslocarDataUtc, validarDataCalendario, validarIntervaloInclusivo } from '../services/operational-date.service';
 
 // v2.5 (§5.6) — indicadores diários embutidos em cada dia do week_comparison;
@@ -722,7 +722,13 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           `SELECT * FROM performance_scores WHERE date >= $1 AND date <= $2 AND entity = ANY($3) ORDER BY date, entity`,
           [dateFrom, dateTo, entities]
         );
-        const current: Record<string, EntityScore> = {};
+         const validGeneralDates = new Set(
+           Array.from(new Set(scoreRows.filter(row => row.entity !== 'cozinha_geral').map(row => String(row.date).slice(0, 10))))
+             .filter(date => consolidacaoGeralValida(scoreRows.filter(row => row.entity !== 'cozinha_geral' && String(row.date).slice(0, 10) === date)))
+             .filter(date => scoreRows.some(row => row.entity === 'cozinha_geral' && String(row.date).slice(0, 10) === date && Number.isFinite(Number(row.final_score)) && row.final_score !== null))
+         );
+         const scoreRowsValidos = scoreRows.filter(row => row.entity !== 'cozinha_geral' || validGeneralDates.has(String(row.date).slice(0, 10)));
+         const current: Record<string, EntityScore> = {};
         const historyMap = new Map<string, { date: string; [entity: string]: number | string | null }>();
         for (let index = 0; index < days; index += 1) {
           const date = deslocarDataUtc(dateFrom, index);
@@ -730,9 +736,9 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         }
          const averages: Record<string, EntityScore> = {};
          for (const entity of entities) {
-           const rows = scoreRows.filter(row => row.entity === entity);
+           const rows = scoreRowsValidos.filter(row => row.entity === entity);
            const aliasRows = entity === 'cozinha_geral'
-             ? scoreRows.filter(row => ['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria'].includes(row.entity))
+              ? scoreRowsValidos.filter(row => validGeneralDates.has(String(row.date).slice(0, 10)) && ['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria'].includes(row.entity))
              : rows;
            const completeDates = entity === 'cozinha_geral'
              ? Array.from(new Set(aliasRows.map(row => String(row.date).slice(0, 10))))
@@ -765,10 +771,10 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         const operational: Record<string, EntityPerformance> = {};
         for (const entity of entities) {
           const details = await getPerformanceDetails(entity, dateFrom, dateTo, weightCache, stationCode);
-          const rows = scoreRows.filter(row => row.entity === entity);
-          const dailyAverageRows = entity === 'cozinha_geral'
-            ? scoreRows.filter(row => ['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria'].includes(row.entity))
-            : rows;
+           const rows = scoreRowsValidos.filter(row => row.entity === entity);
+           const dailyAverageRows = entity === 'cozinha_geral'
+             ? scoreRowsValidos.filter(row => ['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria'].includes(row.entity))
+             : rows;
           operational[entity] = aggregatePerformance(entity as PerformanceEntity, rows, details, dailyAverageRows);
         }
         const versions = new Map<string, PerformanceWeightVersion>();
