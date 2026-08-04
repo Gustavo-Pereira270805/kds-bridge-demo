@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { buildCriterionSummaries, calcularNotasCozinhaGeral, aggregateScoreAlias } from '../src/services/performance.service';
+import { validarIntervaloInclusivo } from '../src/services/operational-date.service';
 import { PerformanceScoreRow } from '../src/types';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
@@ -37,6 +38,30 @@ const partialAlias = aggregateScoreAlias('cozinha_geral', [
 ]);
 assert.equal(partialAlias.final_score, null);
 assert.equal(partialAlias.total_demands, null);
+assert.equal(partialAlias.sla_breach_deduction, null);
+assert.equal(partialAlias.cancellation_deduction, null);
+assert.equal(partialAlias.stockout_deduction, null);
+assert.equal(partialAlias.slow_item_deduction, null);
+
+const legacyStockout = buildCriterionSummaries({
+  total_demands: 10,
+  sla_breaches: 0,
+  sla_breach_deduction: 0,
+  cancellations: 0,
+  cancellation_deduction: 0,
+  stockouts: 1,
+  stockout_deduction: null,
+  slow_items: 0,
+  slow_item_deduction: 0,
+} as PerformanceScoreRow, {
+  sla_breach_cozinha: 0.15, sla_breach_salao: 0.15,
+  cancellation_cozinha: 0.3, cancellation_salao: 0.3,
+  stockout_salao: 0.1, slow_item_cozinha: 0.1, slow_pickup_salao: 0.1,
+}, true, { stockout_cozinha: 10 }, { stockout_cozinha: 'indisponivel_snapshot_legado' });
+assert.equal(legacyStockout.find(item => item.criterion === 'stockout_cozinha')?.deduction, null);
+
+assert.equal(validarIntervaloInclusivo('2026-08-01', '2026-08-31'), null);
+assert.equal(validarIntervaloInclusivo('2026-08-01', '2026-09-01'), 'O período máximo é de 31 dias');
 
 const authSource = readFileSync(new URL('../src/middleware/auth.ts', import.meta.url), 'utf8');
 assert.ok(!authSource.includes('user_metadata?.role'), 'user_metadata não pode conceder papel');
@@ -101,9 +126,15 @@ assert.ok(!dashboardSource.includes('.setDate('), 'dashboard não pode usar arit
 assert.ok(!/T00:00:00['"]/.test(dashboardSource), 'datas de calendário do dashboard devem ser interpretadas explicitamente em UTC');
 assert.ok(analyticsSource.includes("reply.code(500).send({ error: 'Erro ao buscar dados do dashboard' })"), 'dashboard não deve expor detalhe do erro');
 assert.ok(!analyticsSource.includes("'Erro ao buscar dados do dashboard: ' + msg"), 'dashboard não deve concatenar mensagem crua');
+assert.ok(analyticsSource.includes('validarDataCalendario'), 'dashboard deve validar datas civis antes das queries');
+assert.ok(analyticsSource.includes('A data deve estar no formato ISO YYYY-MM-DD e ser válida'), 'dashboard deve usar erro fixo para data inválida');
+assert.ok(!analyticsSource.includes('schema: {'), 'pesos não devem ser rejeitados pelo schema antes da mensagem fixa');
 assert.ok(!readFileSync(new URL('../src/routes/admin.ts', import.meta.url), 'utf8').includes('sla_breach: version.sla_breach_cozinha'), 'contrato novo não deve expor alias ambíguo');
 assert.ok(readFileSync(new URL('../src/views/admin.html', import.meta.url), 'utf8').includes("input.max = '5'"), 'frontend deve limitar pesos a 5');
 assert.ok(readFileSync(new URL('../src/services/performance.service.ts', import.meta.url), 'utf8').includes('total_deduction: number | null'), 'desconto agregado deve aceitar indisponibilidade');
+assert.ok(performanceSource.includes('valid_to exclusivo'), 'vigência deve documentar data UTC e fim exclusivo');
+assert.ok(analyticsSource.includes('historyMap.set(date, { date, ...Object.fromEntries'), 'histórico deve preservar dias incompletos');
+assert.ok(dashboardSource.includes('function task6ExportDays(from, to)'), 'exportações devem compartilhar o iterador de dias');
 assert.equal(janela.inicio.toISOString(), '2026-08-03T00:00:00.000Z');
 assert.equal(new Date('2026-08-04T00:00:00.000Z').getTime() - new Date('2026-08-03T00:00:00.000Z').getTime(), 86400000);
 

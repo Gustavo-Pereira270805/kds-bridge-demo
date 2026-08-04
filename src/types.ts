@@ -312,7 +312,7 @@ export interface PerformanceScoreRow {
   date: string;
   weight_version_id?: string | null;
   base_score: number;
-  final_score: number;
+  final_score: number | null;
   total_demands: number;
   sla_breaches: number;
   sla_breach_deduction: number | null;
@@ -424,7 +424,7 @@ export interface PerformanceAverage {
 
 export interface PerformanceResponse {
   current: Record<string, EntityScore>;
-  history: { date: string; [entity: string]: number | string }[];
+  history: { date: string; [entity: string]: number | string | null }[];
   averages?: Record<string, EntityScore>;
   operational?: Record<string, EntityPerformance>;
   validity?: PerformanceWeightVersion[];

@@ -12,6 +12,8 @@ export interface NotaCozinhaGeral {
   kitchen_stockout_weight: number;
 }
 
+// A vigência usa a data civil UTC de valid_from e termina na data civil UTC de valid_to (fim exclusivo).
+
 export interface OcorrenciaBruta {
   type: string;
   date: string;
@@ -94,6 +96,7 @@ export async function ensureWeightVersion(): Promise<PerformanceWeightVersion> {
 
 export async function getWeightVersionForDate(dateStr: string): Promise<PerformanceWeightVersion> {
   await ensureWeightVersion();
+  // A versão vale pela data civil UTC de valid_from até a data civil UTC de valid_to (fim exclusivo).
   const [version] = await query<PerformanceWeightVersion>(
     `SELECT * FROM performance_weight_versions
       WHERE (valid_from AT TIME ZONE 'UTC')::date <= $1::date
@@ -420,7 +423,7 @@ export function buildCriterionSummaries(
     return {
       criterion, count, eligible_base: total, eligible_base_status: baseStatus,
       rate: total === null || total === 0 ? (total === 0 ? 0 : null) : count / total,
-       weight, weights_status: 'aplicado', deduction: criterion === 'stockout_cozinha' ? 0 : deduction,
+       weight, weights_status: 'aplicado', deduction: criterion === 'stockout_cozinha' && deduction !== null ? 0 : deduction,
     };
   });
 }
@@ -813,9 +816,9 @@ export function aggregateScoreAlias(entity: PerformanceEntity, rows: Performance
     if (!rows.length || completeRows.length !== byDate.size) {
       return {
         entity, final_score: null, base_score: null, total_demands: null,
-        sla_breaches: 0, sla_breach_deduction: 0, cancellations: 0,
-        cancellation_deduction: 0, stockouts: 0, stockout_deduction: 0,
-        slow_items: 0, slow_item_deduction: 0, detractors: [],
+        sla_breaches: 0, sla_breach_deduction: null, cancellations: 0,
+        cancellation_deduction: null, stockouts: 0, stockout_deduction: null,
+        slow_items: 0, slow_item_deduction: null, detractors: [],
       };
     }
     rows = completeRows.flat();

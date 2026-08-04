@@ -1706,10 +1706,7 @@ if (document.readyState === 'loading') {
             }
 
             if (byDay) {
-                var fromD = new Date(from + 'T00:00:00Z');
-                var toD = new Date(to + 'T00:00:00Z');
-                var days = [];
-                for (var d = new Date(fromD); d <= toD; d.setUTCDate(d.getUTCDate() + 1)) { days.push(new Date(d)); }
+                var days = task6ExportDays(from, to).map(function(ds) { return new Date(ds + 'T00:00:00Z'); });
                 var firstPage = true;
                 for (var i = 0; i < days.length; i++) {
                     if (exportProgress) exportProgress.textContent = 'Gerando p\u00E1gina ' + (i + 1) + ' de ' + days.length + '...';
@@ -1760,10 +1757,7 @@ if (document.readyState === 'loading') {
             task6ValidateDashboardNumbers(data);
 
             if (byDay) {
-                var fromD = new Date(from + 'T00:00:00Z');
-                var toD = new Date(to + 'T00:00:00Z');
-                var days = [];
-                for (var d = new Date(fromD); d <= toD; d.setUTCDate(d.getUTCDate() + 1)) { days.push(new Date(d)); }
+                var days = task6ExportDays(from, to).map(function(ds) { return new Date(ds + 'T00:00:00Z'); });
                 if (days.length > 31) { showToast('Por dia limitado a 31 dias.', 'warn'); state.exporting = false; if (exportProgress) exportProgress.style.display = 'none'; return; }
                 var sheetsAdded = 0;
                 for (var i = 0; i < days.length; i++) {

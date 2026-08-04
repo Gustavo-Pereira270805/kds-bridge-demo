@@ -27,7 +27,7 @@ import {
   PerformanceWeightVersion,
 } from '../types';
 import { createPerformanceWeightCache, ensureValidScoresForDate, aggregatePerformance, aggregateScoreAlias, getPerformanceDetails } from '../services/performance.service';
-import { DATA_OPERACIONAL_SQL, diasInclusivos, deslocarDataUtc, validarIntervaloInclusivo } from '../services/operational-date.service';
+import { DATA_OPERACIONAL_SQL, diasInclusivos, deslocarDataUtc, validarDataCalendario, validarIntervaloInclusivo } from '../services/operational-date.service';
 
 // v2.5 (§5.6) — indicadores diários embutidos em cada dia do week_comparison;
 // a data fica no objeto externo, então `day` é omitida do sub-objeto
@@ -268,6 +268,9 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           // §5.1 — período customizado; se só `from` presente, assume dia único (to = from)
           dateFrom = (from || to) as string;
           dateTo = (to || from) as string;
+          if (!validarDataCalendario(dateFrom) || !validarDataCalendario(dateTo)) {
+            return reply.code(400).send({ error: 'A data deve estar no formato ISO YYYY-MM-DD e ser válida' });
+          }
           const intervalError = validarIntervaloInclusivo(dateFrom, dateTo);
           if (intervalError) return reply.code(400).send({ error: intervalError });
         } else if (range === 'week') {
@@ -671,12 +674,6 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       try {
         const { range, from, to, station_id: stationId } = request.query;
         const today = new Date();
-        const isoDate = /^\d{4}-\d{2}-\d{2}$/;
-        const validDate = (value: string): boolean => {
-          if (!isoDate.test(value)) return false;
-          const parsed = new Date(`${value}T00:00:00Z`);
-          return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
-        };
         const shiftDate = (days: number): string => {
           const date = new Date(today);
           date.setUTCDate(date.getUTCDate() + days);
@@ -688,7 +685,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         if (range && (from || to)) return reply.code(400).send({ error: 'Use range ou from/to, não os dois' });
         if (range === 'week') { dateFrom = shiftDate(-6); dateTo = shiftDate(0); }
         if (range === 'month') { dateFrom = shiftDate(-29); dateTo = shiftDate(0); }
-        if (!validDate(dateFrom) || !validDate(dateTo)) return reply.code(400).send({ error: 'As datas devem estar no formato ISO YYYY-MM-DD e ser válidas' });
+        if (!validarDataCalendario(dateFrom) || !validarDataCalendario(dateTo)) return reply.code(400).send({ error: 'A data deve estar no formato ISO YYYY-MM-DD e ser válida' });
         const start = new Date(`${dateFrom}T00:00:00Z`).getTime();
         const end = new Date(`${dateTo}T00:00:00Z`).getTime();
         const days = diasInclusivos(dateFrom, dateTo);
@@ -720,14 +717,27 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           [dateFrom, dateTo, entities]
         );
         const current: Record<string, EntityScore> = {};
-        const historyMap = new Map<string, { date: string; [entity: string]: number | string }>();
+        const historyMap = new Map<string, { date: string; [entity: string]: number | string | null }>();
+        for (let index = 0; index < days; index += 1) {
+          const date = deslocarDataUtc(dateFrom, index);
+          historyMap.set(date, { date, ...Object.fromEntries(entities.map(entity => [entity, null])) });
+        }
          const averages: Record<string, EntityScore> = {};
          for (const entity of entities) {
            const rows = scoreRows.filter(row => row.entity === entity);
            const aliasRows = entity === 'cozinha_geral'
              ? scoreRows.filter(row => ['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria'].includes(row.entity))
              : rows;
-           const latest = rows[rows.length - 1] || aliasRows[aliasRows.length - 1];
+           const completeDates = entity === 'cozinha_geral'
+             ? Array.from(new Set(aliasRows.map(row => String(row.date).slice(0, 10))))
+               .filter(date => ['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria'].every(station =>
+                 aliasRows.some(row => String(row.date).slice(0, 10) === date && row.entity === station)))
+             : [];
+           const sortedCompleteDates = completeDates.sort();
+           const latestGeneralDate = sortedCompleteDates[sortedCompleteDates.length - 1];
+           const latest = entity === 'cozinha_geral'
+             ? (latestGeneralDate ? aliasRows.find(row => String(row.date).slice(0, 10) === latestGeneralDate) : undefined)
+             : rows[rows.length - 1];
            averages[entity] = aggregateScoreAlias(entity as PerformanceEntity, aliasRows);
            const currentRows = entity === 'cozinha_geral'
              ? (latest ? aliasRows.filter(row => String(row.date).slice(0, 10) === String(latest.date).slice(0, 10)) : [])
@@ -737,15 +747,12 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
              const dates = Array.from(new Set(aliasRows.map(row => String(row.date).slice(0, 10))));
              for (const date of dates) {
                const dailyAlias = aggregateScoreAlias(entity, aliasRows.filter(row => String(row.date).slice(0, 10) === date));
-               if (dailyAlias.final_score === null) continue;
-               if (!historyMap.has(date)) historyMap.set(date, { date });
-               historyMap.get(date)![entity] = dailyAlias.final_score;
+                historyMap.get(date)![entity] = dailyAlias.final_score;
              }
            } else {
              for (const row of rows) {
                const date = String(row.date).slice(0, 10);
-               if (!historyMap.has(date)) historyMap.set(date, { date });
-               historyMap.get(date)![entity] = Number(row.final_score);
+                historyMap.get(date)![entity] = row.final_score === null ? null : Number(row.final_score);
              }
            }
         }

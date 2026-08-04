@@ -464,14 +464,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
   fastify.put<{
     Body: Partial<typeof PESOS_PADRAO>
   }>('/settings/weights', {
-    preHandler: requireAdminOrManager,
-    schema: {
-      body: {
-        type: 'object',
-        required: ['sla_breach_cozinha', 'sla_breach_salao', 'cancellation_cozinha', 'cancellation_salao', 'stockout_salao', 'slow_item_cozinha', 'slow_pickup_salao'],
-        properties: Object.fromEntries(Object.keys(PESOS_PADRAO).map(key => [key, { type: 'number', minimum: 0, maximum: 5 }]))
-      }
-    }
+    preHandler: requireAdminOrManager
   }, async (request, reply) => {
     const body = request.body || {};
     const pesos = {

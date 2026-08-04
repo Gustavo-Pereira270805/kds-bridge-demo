@@ -18,6 +18,8 @@
 - As janelas relativas são inclusivas: `week` = 7 dias (`to - 6`), `month` = 30 dias (`to - 29`); intervalos customizados usam `from/to` exatos e rejeitam mais de 31 dias inclusivos.
 - O contrato de desconto legado usa `null` quando qualquer componente não possui snapshot; dashboard, PDF e Excel exibem `Indisponível` sem recalcular a nota histórica.
 - O endpoint de dashboard registra o erro detalhado apenas no log e responde mensagem fixa em pt-BR; pesos aceitam somente valores numéricos entre 0 e 5.
+- A vigência dos pesos é definida pela data civil UTC de `valid_from`; `valid_to` é exclusivo. A alteração vale a partir da data operacional UTC correspondente.
+- O histórico de performance contém todas as datas solicitadas, usando `null` para score ausente ou consolidação incompleta; `current` da Cozinha Geral só usa uma data com as três estações.
 
 ## Verificações
 
