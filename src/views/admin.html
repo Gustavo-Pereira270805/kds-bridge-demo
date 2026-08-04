@@ -424,40 +424,98 @@ function formatWeightDate(value) {
 }
 
 function renderWeightFields(version) {
-    document.getElementById('weightsFields').innerHTML = weightFields.map(function(field) {
-        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;background:var(--c-bg-page);border-radius:10px;">' +
-            '<label for="weight-' + field[0] + '" style="font-weight:600;color:var(--c-text-body);">' + field[1] + '</label>' +
-            '<input type="number" step="0.01" min="0" id="weight-' + field[0] + '" data-weight-key="' + field[0] + '" class="sla-input" style="width:110px;" value="' + version[field[0]] + '">' +
-            '</div>';
-    }).join('');
+    var container = document.getElementById('weightsFields');
+    container.textContent = '';
+    weightFields.forEach(function(field) {
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;background:var(--c-bg-page);border-radius:10px;';
+        var label = document.createElement('label');
+        label.htmlFor = 'weight-' + field[0];
+        label.style.cssText = 'font-weight:600;color:var(--c-text-body);';
+        label.textContent = field[1];
+        var input = document.createElement('input');
+        input.type = 'number';
+        input.step = '0.01';
+        input.min = '0';
+        input.id = 'weight-' + field[0];
+        input.setAttribute('data-weight-key', field[0]);
+        input.className = 'sla-input';
+        input.style.width = '110px';
+        input.value = String(version[field[0]]);
+        row.appendChild(label);
+        row.appendChild(input);
+        container.appendChild(row);
+    });
 }
 
 function renderWeightVersion(version) {
-    var values = weightFields.map(function(field) { return '<strong>' + field[1] + ':</strong> ' + version[field[0]]; }).join(' · ');
-    return '<p style="margin-bottom:8px;"><strong>Vigência:</strong> ' + formatWeightDate(version.valid_from) + ' até ' + formatWeightDate(version.valid_to) + '</p><p>' + values + '</p>';
+    var container = document.getElementById('currentWeights');
+    container.textContent = '';
+    var validity = document.createElement('p');
+    validity.style.marginBottom = '8px';
+    var validityLabel = document.createElement('strong');
+    validityLabel.textContent = 'Vigência: ';
+    validity.appendChild(validityLabel);
+    validity.appendChild(document.createTextNode(formatWeightDate(version.valid_from) + ' até ' + formatWeightDate(version.valid_to)));
+    var values = document.createElement('p');
+    weightFields.forEach(function(field, index) {
+        var label = document.createElement('strong');
+        label.textContent = field[1] + ': ';
+        values.appendChild(label);
+        values.appendChild(document.createTextNode(String(version[field[0]])));
+        if (index < weightFields.length - 1) values.appendChild(document.createTextNode(' · '));
+    });
+    container.appendChild(validity);
+    container.appendChild(values);
 }
 
 function renderWeightsHistory(versions) {
     var tbody = document.querySelector('#weightsHistoryTable tbody');
-    tbody.innerHTML = versions.length ? versions.map(function(version) {
-        return '<tr><td>' + formatWeightDate(version.valid_from) + '</td><td>' + formatWeightDate(version.valid_to) + '</td>' +
-            weightFields.map(function(field) { return '<td>' + version[field[0]] + '</td>'; }).join('') + '</tr>';
-    }).join('') : '<tr><td colspan="9">Nenhuma versão encontrada.</td></tr>';
+    tbody.textContent = '';
+    if (!versions.length) {
+        var emptyRow = document.createElement('tr');
+        var emptyCell = document.createElement('td');
+        emptyCell.colSpan = 9;
+        emptyCell.textContent = 'Nenhuma versão encontrada.';
+        emptyRow.appendChild(emptyCell);
+        tbody.appendChild(emptyRow);
+        return;
+    }
+    versions.forEach(function(version) {
+        var row = document.createElement('tr');
+        [formatWeightDate(version.valid_from), formatWeightDate(version.valid_to)].concat(weightFields.map(function(field) { return version[field[0]]; })).forEach(function(value) {
+            var cell = document.createElement('td');
+            cell.textContent = String(value);
+            row.appendChild(cell);
+        });
+        tbody.appendChild(row);
+    });
 }
 
 function showWeightsFeedback(message, ok) {
     var feedback = document.getElementById('weightsFeedback');
     feedback.textContent = message;
+    feedback.setAttribute('data-state', message ? (ok ? 'sucesso' : 'erro') : '');
     feedback.style.color = ok ? 'var(--c-accent-warm)' : 'var(--c-danger)';
 }
 
-function loadWeights() {
+function showWeightsLoading() {
+    var feedback = document.getElementById('weightsFeedback');
+    feedback.textContent = 'Carregando pesos...';
+    feedback.setAttribute('data-state', 'carregando');
+    feedback.style.color = 'var(--c-text-secondary)';
+    document.getElementById('currentWeights').textContent = 'Carregando versão vigente...';
+    document.querySelector('#weightsHistoryTable tbody').textContent = 'Carregando histórico...';
+}
+
+function loadWeights(preserveFeedback) {
+    if (!preserveFeedback) showWeightsLoading();
     Promise.all([api('/api/v1/admin/settings/weights/current'), api('/api/v1/admin/settings/weights/history')]).then(function(results) {
         var current = results[0];
         renderWeightFields(current);
-        document.getElementById('currentWeights').innerHTML = renderWeightVersion(current);
+        renderWeightVersion(current);
         renderWeightsHistory(results[1]);
-        showWeightsFeedback('', true);
+        if (!preserveFeedback) showWeightsFeedback('Pesos carregados.', true);
     }).catch(function(err) {
         showWeightsFeedback('Erro ao carregar pesos: ' + err.message, false);
         toast('Erro ao carregar pesos: ' + err.message, false);
@@ -469,12 +527,13 @@ document.getElementById('weightsForm').addEventListener('submit', function(event
     var body = {};
     var invalid = null;
     document.querySelectorAll('#weightsFields [data-weight-key]').forEach(function(input) {
-        var value = Number(input.value);
-        if (!Number.isFinite(value) || value < 0) invalid = input;
+        var rawValue = input.value.trim();
+        var value = Number(rawValue);
+        if (!rawValue || !Number.isFinite(value) || value < 0) invalid = input;
         body[input.getAttribute('data-weight-key')] = value;
     });
     if (invalid) {
-        showWeightsFeedback('Informe valores numéricos finitos e não negativos.', false);
+        showWeightsFeedback('Preencha todos os pesos com valores numéricos finitos e não negativos.', false);
         invalid.focus();
         return;
     }
@@ -488,7 +547,7 @@ document.getElementById('weightsForm').addEventListener('submit', function(event
     }).then(function() {
         showWeightsFeedback('Nova versão salva. Ela vale para novas apurações; notas históricas não foram recalculadas.', true);
         toast('Nova versão de pesos salva.', true);
-        loadWeights();
+        loadWeights(true);
     }).catch(function(err) {
         showWeightsFeedback('Erro ao salvar pesos: ' + err.message, false);
         toast('Erro ao salvar pesos: ' + err.message, false);
