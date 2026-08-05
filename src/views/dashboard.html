@@ -701,8 +701,8 @@ if (document.readyState === 'loading') {
             { key: 'cancelados', label: 'CANCELADOS', value: (k.total_cancelados || 0).toLocaleString('pt-BR') },
             { key: 'pct-urgentes', label: '% URGENTES', value: (k.pct_urgentes || 0).toFixed(1) + '%' },
             { key: 'urgentes', label: 'URGENTES', value: (k.urgentes_puros || 0).toLocaleString('pt-BR') },
-            { key: 'tempo-cozinha', label: 'TEMPO PREPARO', value: (k.tempo_medio_cozinha_min || 0).toFixed(1) },
-            { key: 'tempo-retirada', label: 'TEMPO RETIRADA', value: (k.tempo_medio_retirada_min || 0).toFixed(1) },
+            { key: 'tempo-cozinha', label: 'TEMPO PREPARO', value: (k.tempo_medio_cozinha_min || 0).toFixed(1) + ' min' },
+            { key: 'tempo-retirada', label: 'TEMPO RETIRADA', value: (k.tempo_medio_retirada_min || 0).toFixed(1) + ' min' },
             { key: 'ocupacao', label: 'CAPACIDADE OCIOSA', value: occMedia.toFixed(1) + '%' },
         ];
 
@@ -1318,7 +1318,7 @@ if (document.readyState === 'loading') {
         if(!source) return '';
         var order = ['cozinha_geral','salao','cozinha_quente_a','cozinha_quente_b','cozinha_fria'];
         var labels = { cozinha_geral:'Cozinha Geral', cozinha_quente_a:'Quente A', cozinha_quente_b:'Quente B', cozinha_fria:'Fria', salao:'Sal\u00E3o' };
-        var h = '<div class="panels" style="grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));">';
+        var h = '<div class="panels" style="grid-column:1 / -1;width:100%;grid-template-columns:minmax(0, 1fr);">';
         for(var i=0; i<order.length; i++) {
             var entity = order[i];
             var s = source[entity];
