@@ -21,7 +21,7 @@ import {
   ReplacementRow,
   PerformanceScoreRow,
 } from '../types';
-import { ensureScoresForDate, buildDetractors, getDetractorDates } from '../services/performance.service';
+import { ensureScoresForDate, buildDetractors, getDetractorDates, getWeights } from '../services/performance.service';
 
 function validarDataIso(value: string | undefined): boolean {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -743,17 +743,15 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         for (const row of currentRows) {
           current[row.entity] = {
             entity: row.entity,
-            final_score: row.final_score,
-            base_score: row.base_score,
-            total_demands: row.total_demands,
-            sla_breaches: row.sla_breaches,
-            sla_breach_deduction: row.sla_breach_deduction,
-            cancellations: row.cancellations,
-            cancellation_deduction: row.cancellation_deduction,
-            stockouts: row.stockouts,
-            stockout_deduction: row.stockout_deduction,
-            slow_items: row.slow_items,
-            slow_item_deduction: row.slow_item_deduction,
+            final_score: Number(row.final_score),
+            base_score: Number(row.base_score),
+            total_demands: Number(row.total_demands),
+            sla_breaches: Number(row.sla_breaches),
+            sla_breach_deduction: Number(row.sla_breach_deduction),
+            cancellations: Number(row.cancellations),
+            cancellation_deduction: Number(row.cancellation_deduction),
+            stockouts: Number(row.stockouts),
+            stockout_deduction: Number(row.stockout_deduction),
             detractors: buildDetractors(row),
           };
         }
@@ -797,34 +795,41 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         if (dateFrom !== dateTo) {
           const avgRows = await query<{
             entity: string; avg_score: string; total_demands: string;
-            sla_breaches: string; cancellations: string; stockouts: string; slow_items: string;
+            sla_breaches: string; sla_breach_deduction: string;
+            cancellations: string; cancellation_deduction: string;
+            stockouts: string; stockout_deduction: string;
           }>(
             `SELECT entity,
                ROUND(AVG(final_score)::numeric, 1) AS avg_score,
                SUM(total_demands)::int AS total_demands,
                SUM(sla_breaches)::int AS sla_breaches,
+               SUM(sla_breach_deduction) AS sla_breach_deduction,
                SUM(cancellations)::int AS cancellations,
+               SUM(cancellation_deduction) AS cancellation_deduction,
                SUM(stockouts)::int AS stockouts,
-               SUM(slow_items)::int AS slow_items
+               SUM(stockout_deduction) AS stockout_deduction
              FROM performance_scores
              WHERE date >= $1 AND date <= $2 AND entity = ANY($3)
              GROUP BY entity`,
             [dateFrom, dateTo, entities]
           );
           for (const row of avgRows) {
-            averages[row.entity] = {
+            const average = {
               entity: row.entity,
               final_score: parseFloat(row.avg_score),
               total_demands: parseInt(row.total_demands),
               sla_breaches: parseInt(row.sla_breaches),
+              sla_breach_deduction: parseFloat(row.sla_breach_deduction || '0'),
               cancellations: parseInt(row.cancellations),
+              cancellation_deduction: parseFloat(row.cancellation_deduction || '0'),
               stockouts: parseInt(row.stockouts),
-              slow_items: parseInt(row.slow_items),
+              stockout_deduction: parseFloat(row.stockout_deduction || '0'),
             };
+            averages[row.entity] = Object.assign(average, { detractors: buildDetractors(average) });
           }
         }
 
-        return { current, history, averages, detractor_dates: detractorDates };
+        return { current, history, averages, detractor_dates: detractorDates, weights: await getWeights() };
       } catch (error: any) {
         const msg = error && typeof error === 'object' ? (error.message || String(error)) : String(error);
         request.log.error(error);

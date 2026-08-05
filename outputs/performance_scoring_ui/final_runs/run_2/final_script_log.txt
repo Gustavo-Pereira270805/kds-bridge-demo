@@ -1,0 +1,6 @@
+step 1 action: carregar dashboard e aguardar dados
+step 2 action: abrir exportacao e confirmar Excel consolidado
+download Excel: dashboard_2026-08-05_2026-08-05.xlsx
+step 3 action: abrir exportacao e confirmar PDF consolidado
+download PDF: dashboard_2026-08-05_2026-08-05.pdf
+resultado final: exportacoes baixadas sem coluna ou deducao sintetica

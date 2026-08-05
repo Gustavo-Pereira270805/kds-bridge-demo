@@ -296,27 +296,31 @@
 
     <!-- Painel: Critérios de Avaliação (Pesos de Performance) -->
     <div class="panel" id="panel-weights">
-        <h2>Critérios de Avaliação (Pesos da Nota de Performance)</h2>
-        <p style="color:var(--c-text-secondary); font-size:14px; margin-bottom: 24px;">
-            Ajuste o impacto (penalidade) de cada tipo de evento no cálculo automático da nota diária do restaurante. A nota base é 5.0; cada ocorrência subtrai o valor definido abaixo. As alterações recalcularão as notas já geradas.
-       </p>
-        <div style="max-width: 620px; display: flex; flex-direction: column; gap: 14px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
-                <label style="flex:1; font-weight:600; color:var(--c-text-body);">Estouro de SLA (Cozinha)</label>
-                <input type="number" step="0.01" min="0" max="5" id="weightSlaBreach" class="sla-input" style="width:110px;">
-           </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
-                <label style="flex:1; font-weight:600; color:var(--c-text-body);">Cancelamento de Pedido</label>
-                <input type="number" step="0.01" min="0" max="5" id="weightCancellation" class="sla-input" style="width:110px;">
-           </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
-                <label style="flex:1; font-weight:600; color:var(--c-text-body);">Zerou (Reportado pelo Salão)</label>
-                <input type="number" step="0.01" min="0" max="5" id="weightStockoutSalao" class="sla-input" style="width:110px;">
-           </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
-                <label style="flex:1; font-weight:600; color:var(--c-text-body);">Item Lento</label>
-                <input type="number" step="0.01" min="0" max="5" id="weightSlowItem" class="sla-input" style="width:110px;">
-           </div>
+         <h2>Critérios de Avaliação (Pesos da Nota de Performance)</h2>
+         <p style="color:var(--c-text-secondary); font-size:14px; margin-bottom: 24px;">
+             Ajuste os pesos da nota automática. A nota base é 5.0; cancelamentos e zerados do salão usam os valores abaixo, enquanto o estouro de SLA usa uma curva entre o mínimo e o máximo, com teto fixo em 2,5 vezes o SLA. As alterações recalcularão as notas já geradas.
+        </p>
+         <div style="max-width: 620px; display: flex; flex-direction: column; gap: 14px;">
+             <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                 <label style="flex:1; font-weight:600; color:var(--c-text-body);">Cancelamento (Cozinha)</label>
+                 <input type="number" step="0.01" min="0" max="5" id="weightCancellationCozinha" class="sla-input" style="width:110px;">
+            </div>
+             <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                 <label style="flex:1; font-weight:600; color:var(--c-text-body);">Cancelamento (Salão)</label>
+                 <input type="number" step="0.01" min="0" max="5" id="weightCancellationSalao" class="sla-input" style="width:110px;">
+            </div>
+             <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                 <label style="flex:1; font-weight:600; color:var(--c-text-body);">Zerou (Reportado pelo Salão)</label>
+                 <input type="number" step="0.01" min="0" max="5" id="weightStockoutSalao" class="sla-input" style="width:110px;">
+            </div>
+             <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                 <label style="flex:1; font-weight:600; color:var(--c-text-body);">SLA — penalidade mínima</label>
+                 <input type="number" step="0.01" min="0" max="5" id="weightSlaMin" class="sla-input" style="width:110px;">
+            </div>
+             <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                 <label style="flex:1; font-weight:600; color:var(--c-text-body);">SLA — penalidade máxima</label>
+                 <input type="number" step="0.01" min="0" max="5" id="weightSlaMax" class="sla-input" style="width:110px;">
+            </div>
             <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:8px;">
                 <button class="btn-success" onclick="saveWeights()">Salvar e Recalcular</button>
            </div>
@@ -415,19 +419,21 @@ function switchTab(name) {
 // === PESOS DE PERFORMANCE ===
 function loadWeights() {
     api('/api/v1/admin/settings/weights').then(function(data) {
-        document.getElementById('weightSlaBreach').value = data.sla_breach;
-        document.getElementById('weightCancellation').value = data.cancellation;
+        document.getElementById('weightCancellationCozinha').value = data.cancellation_cozinha;
+        document.getElementById('weightCancellationSalao').value = data.cancellation_salao;
         document.getElementById('weightStockoutSalao').value = data.stockout_salao;
-        document.getElementById('weightSlowItem').value = data.slow_item;
+        document.getElementById('weightSlaMin').value = data.sla_min;
+        document.getElementById('weightSlaMax').value = data.sla_max;
     }).catch(function(err) { toast(err.message, false); });
 }
 
 function saveWeights() {
     var body = {
-        sla_breach: parseFloat(document.getElementById('weightSlaBreach').value),
-        cancellation: parseFloat(document.getElementById('weightCancellation').value),
+        cancellation_cozinha: parseFloat(document.getElementById('weightCancellationCozinha').value),
+        cancellation_salao: parseFloat(document.getElementById('weightCancellationSalao').value),
         stockout_salao: parseFloat(document.getElementById('weightStockoutSalao').value),
-        slow_item: parseFloat(document.getElementById('weightSlowItem').value)
+        sla_min: parseFloat(document.getElementById('weightSlaMin').value),
+        sla_max: parseFloat(document.getElementById('weightSlaMax').value)
     };
     api('/api/v1/admin/settings/weights', {
         method: 'PUT',

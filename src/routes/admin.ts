@@ -3,7 +3,7 @@ import { query, pool } from '../db/client';
 import { DailyMenu, Demand, Menu, Product } from '../types';
 import { runCleanup } from '../services/cleanup.service';
 import { logDemandEvent } from '../services/demand-events.service';
-import { computeDailyScores } from '../services/performance.service';
+import { computeDailyScores, getWeights } from '../services/performance.service';
 import { recomputeStationQueue } from '../services/queue.service';
 
 export default async function adminRoutes(fastify: FastifyInstance) {
@@ -431,18 +431,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
   // GET: Configuração dos Pesos de Desempenho
   fastify.get('/settings/weights', async (request, reply) => {
     try {
-      const rows = await query<{ key: string; value: string }>(
-        `SELECT key, value FROM system_settings WHERE key LIKE 'score_weight_%'`
-      );
-      const map: Record<string, number> = {};
-      rows.forEach(r => { map[r.key] = parseFloat(r.value); });
-
-      return {
-        sla_breach: map.score_weight_sla_breach ?? 0.15,
-        cancellation: map.score_weight_cancellation ?? 0.30,
-        stockout_salao: map.score_weight_stockout_salao ?? 0.10,
-        slow_item: map.score_weight_slow_item ?? 0.10,
-      };
+      return await getWeights();
     } catch (error) {
       request.log.error(error);
       reply.code(500).send({ error: 'Erro ao buscar pesos' });
@@ -451,32 +440,52 @@ export default async function adminRoutes(fastify: FastifyInstance) {
 
   // PUT: Atualiza a configuração de pesos de desempenho
   fastify.put<{
-    Body: {
-      sla_breach: number;
-      cancellation: number;
+    Body: Partial<{
+      cancellation_cozinha: number;
+      cancellation_salao: number;
       stockout_salao: number;
-      slow_item: number;
-    }
+      sla_min: number;
+      sla_max: number;
+    }>
   }>('/settings/weights', async (request, reply) => {
     try {
-      const { sla_breach, cancellation, stockout_salao, slow_item } = request.body;
+      const body = request.body || {};
+      const values = [
+        body.cancellation_cozinha,
+        body.cancellation_salao,
+        body.stockout_salao,
+        body.sla_min,
+        body.sla_max,
+      ];
+      const invalidValue = values.some(value =>
+        typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 5
+      );
+      if (invalidValue || (body.sla_min as number) > (body.sla_max as number)) {
+        return reply.code(400).send({ error: 'Valores inválidos: confira mínimo ≤ máximo e limites 0–5' });
+      }
+
+      const round2 = (value: number): number => Math.round(value * 100) / 100;
 
       const queries = [
-        { key: 'score_weight_sla_breach', val: sla_breach },
-        { key: 'score_weight_cancellation', val: cancellation },
-        { key: 'score_weight_stockout_salao', val: stockout_salao },
-        { key: 'score_weight_slow_item', val: slow_item }
+        { key: 'score_weight_cancellation_cozinha', val: round2(body.cancellation_cozinha as number) },
+        { key: 'score_weight_cancellation_salao', val: round2(body.cancellation_salao as number) },
+        { key: 'score_weight_stockout_salao', val: round2(body.stockout_salao as number) },
+        { key: 'score_weight_sla_min', val: round2(body.sla_min as number) },
+        { key: 'score_weight_sla_max', val: round2(body.sla_max as number) },
       ];
 
       for (const q of queries) {
-        if (typeof q.val === 'number' && !isNaN(q.val)) {
-          await query(
-            `INSERT INTO system_settings (key, value) VALUES ($1, $2)
-             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-            [q.key, q.val.toString()]
-          );
-        }
+        await query(
+          `INSERT INTO system_settings (key, value) VALUES ($1, $2)
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+          [q.key, q.val.toString()]
+        );
       }
+
+      await query(
+        `DELETE FROM system_settings
+         WHERE key IN ('score_weight_sla_breach', 'score_weight_cancellation', 'score_weight_slow_item')`
+      );
 
       // Recálculo retroativo: dispara o recálculo em background
       // sem travar a request HTTP do usuário

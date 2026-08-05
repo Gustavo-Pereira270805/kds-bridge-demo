@@ -1,0 +1,9 @@
+step 1 action: consultar API de pesos e performance
+API weights: {"sla_min": 0.05, "sla_max": 0.3, "cancellation_cozinha": 0.3, "cancellation_salao": 0.3, "stockout_salao": 0.1}
+API ocorrencias verificadas: 84
+step 2 action: abrir dashboard e verificar cards de performance
+step 3 action: abrir detalhamento e validar deducao, estacao e fechamento
+step 4 action: abrir modal e conferir pesos reais e escala
+modal text: Como são calculadas as notas? | PESOS E PENALIDADES | EVENTO	IMPACTO NA NOTA | Nota base	5.0 | Estouro de SLA (cozinha)	Curva de −0,05 a −0,30; teto em 2,5× SLA | Estouro de SLA (salão)	Curva de −0,05 a −0,30; teto em 2,5× SLA | Cancelamento (cozinha)	−0,30 por ocorrência | Cancelamento (salão)	−0,30 por ocorrência | Zerado (salão)	−0,10 por ocorrência | Zerado (cozinha)	Informativo; não desconta | EXEMPLO DE CÁLCULO | SLA de 20 min, preparo de 44 min: fator 2,2 → −0,25. | A nota começa em 5.0 e subtrai as penalidades reais de cada ocorrência. | ESCALA DE CORES | ≥4,5 | Ótimo | ≥3,5 | Bom | ≥2,5 | Regular | <2,5 | Ruim | Entidades avaliadas: Cozinha Quente A, Cozinha Quente B, Cozinha Fria, Salão e Cozinha Geral (média das cozinhas). A nota parte de 5.0 e sofre as penalidades da tabela; é recalculada a cada mudança de status das demandas do dia. | Fechar
+step 5 action: abrir admin e validar cinco inputs e PUT invalido
+resultado final: verificacao webwright concluida sem alterar pesos

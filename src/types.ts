@@ -306,6 +306,14 @@ export interface ReplacementRow {
 }
 
 // Performance / scoring types
+export interface PerformanceWeights {
+  sla_min: number;
+  sla_max: number;
+  cancellation_cozinha: number;
+  cancellation_salao: number;
+  stockout_salao: number;
+}
+
 export interface PerformanceScoreRow {
   id: string;
   entity: string;
@@ -340,12 +348,21 @@ export interface EntityScore {
   cancellation_deduction: number;
   stockouts: number;
   stockout_deduction: number;
-  slow_items: number;
-  slow_item_deduction: number;
   detractors: PerformanceDetractor[];
 }
 
 export interface PerformanceResponse {
   current: Record<string, EntityScore>;
+  averages: Record<string, Omit<EntityScore, 'base_score'>>;
   history: { date: string; [entity: string]: number | string }[];
+  detractor_dates: Record<string, Array<{
+    type: string;
+    date: string;
+    demand_id: string;
+    product_name: string;
+    detail: string;
+    deduction: number;
+    station?: string;
+  }> >;
+  weights: PerformanceWeights;
 }
