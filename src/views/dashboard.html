@@ -1375,8 +1375,8 @@ if (document.readyState === 'loading') {
 
     function loadPerformance(filter) {
         try {
-            var pr = filter === 'today' ? 'week' : (filter === 'month' ? 'month' : 'week');
-            var perfUrl = '/api/v1/analytics/performance?range=' + pr;
+            var perfDates = getExportDates();
+            var perfUrl = '/api/v1/analytics/performance?from=' + encodeURIComponent(perfDates.from) + '&to=' + encodeURIComponent(perfDates.to);
             api(perfUrl).then(function(perf) {
                 var perfGrid = document.querySelector('#performance .bento-grid');
                 if(!perfGrid) return;
@@ -1389,7 +1389,7 @@ if (document.readyState === 'loading') {
                 populateCriteriaModal(window._perfWeights);
                 html += renderPerfDetractors(perf, perf.detractor_dates);
                 if(perf.history && perf.history.length > 1) {
-                    var label = pr === 'week' ? 'Últimos 7 dias' : 'Últimos 30 dias';
+                    var label = getDaySpan() > 7 ? 'Últimos 30 dias' : 'Últimos 7 dias';
                     html += '<article class="panel panel-chart" data-cols="12" id="perfTrendPanel"><header class="panel-header"><h3 class="panel-title">Evolução das Notas — ' + label + '</h3></header><div class="panel-body"><canvas id="perfTrendCanvas"></canvas></div></article>';
                 }
                 perfGrid.innerHTML = html;

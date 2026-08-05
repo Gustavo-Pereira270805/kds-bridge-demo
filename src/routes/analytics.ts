@@ -790,43 +790,42 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           );
         }
 
-        // Period averages (for week/month)
+        // Média e deduções acumuladas do período selecionado, inclusive um único dia
         let averages: Record<string, any> = {};
-        if (dateFrom !== dateTo) {
-          const avgRows = await query<{
-            entity: string; avg_score: string; total_demands: string;
-            sla_breaches: string; sla_breach_deduction: string;
-            cancellations: string; cancellation_deduction: string;
-            stockouts: string; stockout_deduction: string;
-          }>(
-            `SELECT entity,
-               ROUND(AVG(final_score)::numeric, 1) AS avg_score,
-               SUM(total_demands)::int AS total_demands,
-               SUM(sla_breaches)::int AS sla_breaches,
-               SUM(sla_breach_deduction) AS sla_breach_deduction,
-               SUM(cancellations)::int AS cancellations,
-               SUM(cancellation_deduction) AS cancellation_deduction,
-               SUM(stockouts)::int AS stockouts,
-               SUM(stockout_deduction) AS stockout_deduction
-             FROM performance_scores
-             WHERE date >= $1 AND date <= $2 AND entity = ANY($3)
-             GROUP BY entity`,
-            [dateFrom, dateTo, entities]
-          );
-          for (const row of avgRows) {
-            const average = {
-              entity: row.entity,
-              final_score: parseFloat(row.avg_score),
-              total_demands: parseInt(row.total_demands),
-              sla_breaches: parseInt(row.sla_breaches),
-              sla_breach_deduction: parseFloat(row.sla_breach_deduction || '0'),
-              cancellations: parseInt(row.cancellations),
-              cancellation_deduction: parseFloat(row.cancellation_deduction || '0'),
-              stockouts: parseInt(row.stockouts),
-              stockout_deduction: parseFloat(row.stockout_deduction || '0'),
-            };
-            averages[row.entity] = Object.assign(average, { detractors: buildDetractors(average) });
-          }
+        const avgRows = await query<{
+          entity: string; avg_score: string; total_demands: string;
+          sla_breaches: string; sla_breach_deduction: string;
+          cancellations: string; cancellation_deduction: string;
+          stockouts: string; stockout_deduction: string;
+        }>(
+          `SELECT entity,
+             ROUND(AVG(final_score)::numeric, 1) AS avg_score,
+             SUM(total_demands)::int AS total_demands,
+             SUM(sla_breaches)::int AS sla_breaches,
+             SUM(sla_breach_deduction) AS sla_breach_deduction,
+             SUM(cancellations)::int AS cancellations,
+             SUM(cancellation_deduction) AS cancellation_deduction,
+             SUM(stockouts)::int AS stockouts,
+             SUM(stockout_deduction) AS stockout_deduction
+           FROM performance_scores
+           WHERE date >= $1 AND date <= $2 AND entity = ANY($3)
+           GROUP BY entity`,
+          [dateFrom, dateTo, entities]
+        );
+        const periodDays = intervaloInclusivo(dateFrom, dateTo);
+        for (const row of avgRows) {
+          const average = {
+            entity: row.entity,
+            final_score: parseFloat(row.avg_score),
+            total_demands: parseInt(row.total_demands),
+            sla_breaches: parseInt(row.sla_breaches),
+            sla_breach_deduction: Math.round(parseFloat(row.sla_breach_deduction || '0') / periodDays * 100) / 100,
+            cancellations: parseInt(row.cancellations),
+            cancellation_deduction: Math.round(parseFloat(row.cancellation_deduction || '0') / periodDays * 100) / 100,
+            stockouts: parseInt(row.stockouts),
+            stockout_deduction: Math.round(parseFloat(row.stockout_deduction || '0') / periodDays * 100) / 100,
+          };
+          averages[row.entity] = Object.assign(average, { detractors: buildDetractors(average) });
         }
 
         return { current, history, averages, detractor_dates: detractorDates, weights: await getWeights() };
