@@ -1,0 +1,10 @@
+step 1 action: cozinhas abertas e instrumentadas
+step 2 action: demanda quente criada | 993d3dc9-41c9-44e0-99b5-377045983f37
+step 3 action: demanda travada (cooking_started=true)
+step 4 action: cancel-salao executado
+step 5 action: cross-cancel sons | quente=["cross"] fria=[]
+step 6 action: demanda fria criada | e7537e64-35e0-4047-8776-522fbf09ac98
+step 7 action: demanda fria travada
+step 8 action: cancel-salao fria executado
+step 9 action: cross-cancel fria sons | quente=["cross"] fria=["cross"]
+step 10 action: fim | roteamento de cross-cancel verificado

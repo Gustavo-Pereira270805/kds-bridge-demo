@@ -1,0 +1,7 @@
+step 1 action: CP3 motor exposto | {"funcs": {"playNormalAlert": true, "playUrgentAlert": true, "playStockoutAlert": true, "playCrossCancelAlert": true}, "sounds": ["playNormalAlert:ok", "playUrgentAlert:ok", "playStockoutAlert:ok", "playCrossCancelAlert:ok"], "hasAudio": true}
+step 2 action: CP1 console quente | erros=2 ["Failed to load resource: the server responded with a status of 404 (Not Found)", "Failed to load resource: the server responded with a status of 404 (Not Found)"]
+step 3 action: CP3 motor na fria | {"funcs": {"playNormalAlert": true, "playUrgentAlert": true, "playStockoutAlert": true, "playCrossCancelAlert": true}, "sounds": ["playNormalAlert:ok", "playUrgentAlert:ok", "playStockoutAlert:ok", "playCrossCancelAlert:ok"]}
+step 4 action: CP2 console fria | erros=0 []
+step 5 action: CP4 kiosk | console=[]
+step 6 action: CP5 sem CDN Tone.js | telas_com_tone=nenhuma
+step 7 action: fim | KDS sons: verificação concluída — erros_quente=2 erros_fria=0 tone_cdn=nenhuma

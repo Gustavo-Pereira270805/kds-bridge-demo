@@ -159,8 +159,11 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
       const room = station.length > 0 ? getStationRoom(station[0].code) : 'cozinha_quente';
 
       const eventName = priority === 'urgent' ? 'demand:urgent' : 'demand:new';
-      fastify.io.emit(eventName, newDemand);
-      console.log('[Demand] Emitido ' + eventName + ' (broadcast) para ' + room);
+      fastify.io.to(room).emit(eventName, newDemand);
+      fastify.io.to('salao').emit(eventName, newDemand);
+      fastify.io.to('gerente').emit(eventName, newDemand);
+      fastify.io.to('cozinha').emit(eventName, newDemand);
+      console.log('[Demand] Emitido ' + eventName + ' para salas: ' + room + ', salao, gerente, cozinha');
 
       recomputeStationQueue(product.kitchen_station_id).then(() => {
         fastify.io.emit('demand:queue-updated');
@@ -345,7 +348,13 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
         computeDailyScores(new Date(updated.created_at).toISOString().slice(0, 10)).catch(err => request.log.error(err));
         fastify.io.emit('demand:cancelled', updated);
         if (demand.cooking_started) {
-          fastify.io.emit('demand:cross-cancel', {
+          // Alerta de cancelamento cruzado é para a cozinha da estação da demanda (toca o som).
+          const stRows = await query<{ code: string }>(
+            'SELECT code FROM kitchen_stations WHERE id = $1',
+            [demand.kitchen_station_id]
+          );
+          const room = stRows.length > 0 ? getStationRoom(stRows[0].code) : 'cozinha_quente';
+          fastify.io.to(room).emit('demand:cross-cancel', {
             ...updated,
             cancelled_by: 'salao',
             message: 'Item cancelado pelo salão já estava em preparo!',
@@ -417,7 +426,8 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
         computeDailyScores(new Date(updated.created_at).toISOString().slice(0, 10)).catch(err => request.log.error(err));
         fastify.io.emit('demand:cancelled', updated);
         if (demand.cooking_started) {
-          fastify.io.emit('demand:cross-cancel', {
+          // Cozinha cancelou: só o salão consome este evento (toast "cozinha cancelou").
+          fastify.io.to('salao').emit('demand:cross-cancel', {
             ...updated,
             cancelled_by: 'cozinha',
             message: 'Item cancelado pela cozinha já estava em preparo!',

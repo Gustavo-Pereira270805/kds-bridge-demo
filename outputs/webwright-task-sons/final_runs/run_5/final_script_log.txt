@@ -1,0 +1,6 @@
+step 1 action: demanda criada (cozinha em background) | 97873882-d5c9-4ad2-bce1-6523cd7f2bf1
+step 2 action: sons com guia em background | sons=["normal"] console=[]
+step 3 action: sons ao trazer guia para frente | sons=["normal"] console=[]
+step 4 action: nova demanda com guia ativa | cc352e28-3562-4db0-92a8-a91cf4c88994
+step 5 action: sons com guia ativa | ["normal", "normal"]
+step 6 action: fim | cenario background -> foreground concluido
