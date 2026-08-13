@@ -289,6 +289,7 @@
         .export-donut-layout li i { width:9px; height:9px; border-radius:2px; }
         .export-donut-layout li b { color:#f4efe8; font:700 10px var(--font-mono); }
         @media print { .export-report { background:#090a0c !important; } }
+        .period-btn:disabled { opacity: 0.45; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -296,6 +297,10 @@
     <div class="header-inner">
         <h1 class="header-title">Dashboard</h1>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <div class="period-pill-group" id="turnSelector" role="group" aria-label="Turno">
+                <button class="period-btn active" data-turn="lunch" aria-pressed="true">Almoço (Geral)</button>
+                <button class="period-btn" data-turn="dinner" aria-pressed="false" disabled title="Estação Jantar não encontrada">Jantar</button>
+            </div>
             <div class="period-pill-group" id="periodSelector" role="group" aria-label="Período rápido">
                 <button class="period-btn active" data-range="today" aria-pressed="true">Hoje</button>
                 <button class="period-btn" data-range="yesterday" aria-pressed="false">Ontem</button>
@@ -457,7 +462,7 @@
              <div class="criteria-chip" style="background:#e63946;"><div class="cs-range">&lt;2,5</div><div class="cs-label">Ruim</div></div>
          </div>
         <div class="criteria-entities">
-            <strong>Entidades avaliadas:</strong> Cozinha Quente A, Cozinha Quente B, Cozinha Fria, Sal&atilde;o e Cozinha Geral (m&eacute;dia das cozinhas). A nota parte de 5.0 e sofre as penalidades da tabela; &eacute; recalculada a cada mudan&ccedil;a de status das demandas do dia.
+            <strong>Entidades avaliadas:</strong> Cozinha Quente A, Cozinha Quente B, Cozinha Fria, Sal&atilde;o e Cozinha Geral (m&eacute;dia das cozinhas); na aba Jantar, apenas a Cozinha Jantar. A nota parte de 5.0 e sofre as penalidades da tabela; &eacute; recalculada a cada mudan&ccedil;a de status das demandas do dia.
         </div>
         <div class="modal-actions">
             <button id="btnCriteriaClose" class="btn-modal-confirm" type="button">Fechar</button>
@@ -579,7 +584,7 @@ if (document.readyState === 'loading') {
 }
 
 (function() {
-    var state = { filter: { range: 'today' }, stationId: '', lastData: null, exporting: false };
+    var state = { filter: { range: 'today' }, stationId: '', lastData: null, exporting: false, turn: 'lunch', jantarStationId: null };
     var socket = io();
     socket.emit('identify', 'gerente');
 
@@ -1208,11 +1213,19 @@ if (document.readyState === 'loading') {
         });
     }
 
+    var PERF_LABELS = { cozinha_geral: 'Cozinha Geral', cozinha_quente_a: 'Quente A', cozinha_quente_b: 'Quente B', cozinha_fria: 'Fria', salao: 'Salão', cozinha_jantar: 'Cozinha Jantar' };
+
+    function perfEntities() {
+        return state.turn === 'dinner'
+            ? ['cozinha_jantar']
+            : ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'salao'];
+    }
+
     function createPerfTrendChart(canvas, data) {
         var history = data.history || [];
         var labels = history.map(function(d) { return d.date; });
-        var entities = ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'salao'];
-        var entityLabels = { cozinha_geral: 'Cozinha Geral', cozinha_quente_a: 'Quente A', cozinha_quente_b: 'Quente B', cozinha_fria: 'Fria', salao: 'Sal\u00e3o' };
+        var entities = perfEntities();
+        var entityLabels = PERF_LABELS;
         var datasets = entities.map(function(entity, i) {
             return {
                 label: entityLabels[entity] || entity,
@@ -1295,8 +1308,8 @@ if (document.readyState === 'loading') {
         if(!perf || (!perf.current && !perf.averages)) return '';
         var source = perf.averages || perf.current;
         var isAvg = !!perf.averages;
-        var order = ['cozinha_geral','cozinha_quente_a','cozinha_quente_b','cozinha_fria','salao'];
-        var labels = { cozinha_geral:'Cozinha Geral', cozinha_quente_a:'Quente A', cozinha_quente_b:'Quente B', cozinha_fria:'Fria', salao:'Sal\u00E3o' };
+        var order = perfEntities();
+        var labels = PERF_LABELS;
         var h = '<div class="score-grid">';
         for(var i=0; i<order.length; i++) {
             var s = source[order[i]];
@@ -1316,8 +1329,8 @@ if (document.readyState === 'loading') {
     function renderPerfDetractors(perf, detractorDates) {
         var source = perf && perf.averages && Object.keys(perf.averages).length ? perf.averages : (perf && perf.current);
         if(!source) return '';
-        var order = ['cozinha_geral','salao','cozinha_quente_a','cozinha_quente_b','cozinha_fria'];
-        var labels = { cozinha_geral:'Cozinha Geral', cozinha_quente_a:'Quente A', cozinha_quente_b:'Quente B', cozinha_fria:'Fria', salao:'Sal\u00E3o' };
+        var order = state.turn === 'dinner' ? ['cozinha_jantar'] : ['cozinha_geral','salao','cozinha_quente_a','cozinha_quente_b','cozinha_fria'];
+        var labels = PERF_LABELS;
         var h = '<div class="panels" style="grid-column:1 / -1;width:100%;grid-template-columns:minmax(0, 1fr);">';
         for(var i=0; i<order.length; i++) {
             var entity = order[i];
@@ -1448,6 +1461,10 @@ if (document.readyState === 'loading') {
         }
     }
 
+    function effectiveStationId() {
+        return state.turn === 'dinner' ? state.jantarStationId : state.stationId;
+    }
+
     function filterToParams() {
         if (state.filter.range) return 'range=' + encodeURIComponent(state.filter.range);
         var p = 'from=' + encodeURIComponent(state.filter.from);
@@ -1488,7 +1505,8 @@ if (document.readyState === 'loading') {
         state.filter = filter || state.filter;
 
         var params = filterToParams();
-        if (state.stationId) params += '&station_id=' + encodeURIComponent(state.stationId);
+        var sid = effectiveStationId();
+        if (sid) params += '&station_id=' + encodeURIComponent(sid);
 
         // Show skeleton while loading
         var kpiEl2 = document.getElementById('kpiStrip');
@@ -1665,6 +1683,15 @@ if (document.readyState === 'loading') {
     // Station filter
     function loadStations() {
         api('/api/v1/kitchen-stations').then(function(stations) {
+            state.jantarStationId = null;
+            for (var i = 0; i < stations.length; i++) {
+                if (stations[i].code === 'jantar') { state.jantarStationId = stations[i].id; break; }
+            }
+            var dinnerBtn = document.querySelector('#turnSelector .period-btn[data-turn="dinner"]');
+            if (dinnerBtn) {
+                dinnerBtn.disabled = !state.jantarStationId;
+                dinnerBtn.title = state.jantarStationId ? '' : 'Estação Jantar não encontrada';
+            }
             var sel = document.getElementById('stationSelect');
             if (!sel) return;
             sel.innerHTML = '<option value="">Todas as cozinhas</option>';
@@ -1680,6 +1707,25 @@ if (document.readyState === 'loading') {
     if (stationSelect) {
         stationSelect.addEventListener('change', function() {
             state.stationId = stationSelect.value;
+            loadDashboard(state.filter);
+        });
+    }
+
+    // Turno (Almoço / Jantar)
+    var turnSelector = document.getElementById('turnSelector');
+    if (turnSelector) {
+        turnSelector.addEventListener('click', function(e) {
+            var btn = e.target.closest('.period-btn');
+            if (!btn || btn.disabled) return;
+            var turn = btn.dataset.turn;
+            if ((turn !== 'lunch' && turn !== 'dinner') || state.turn === turn) return;
+            state.turn = turn;
+            turnSelector.querySelectorAll('.period-btn').forEach(function(b) {
+                var on = b.dataset.turn === turn;
+                b.classList.toggle('active', on);
+                b.setAttribute('aria-pressed', String(on));
+            });
+            if (stationSelect) stationSelect.hidden = (state.turn === 'dinner');
             loadDashboard(state.filter);
         });
     }
@@ -1791,8 +1837,8 @@ if (document.readyState === 'loading') {
 
     function exportPerformanceHtml(perf) {
         if (!perf) return '<div class="export-empty">Notas indisponíveis para o período.</div>';
-        var source = perf.averages && Object.keys(perf.averages).length ? perf.averages : (perf.current || {}), order = ['cozinha_geral','cozinha_quente_a','cozinha_quente_b','cozinha_fria','salao'];
-        var labels = { cozinha_geral:'Cozinha Geral', cozinha_quente_a:'Quente A', cozinha_quente_b:'Quente B', cozinha_fria:'Fria', salao:'Salão' };
+        var source = perf.averages && Object.keys(perf.averages).length ? perf.averages : (perf.current || {}), order = perfEntities();
+        var labels = PERF_LABELS;
         var cards = '', details = '';
          order.forEach(function(entity) {
              var item = source[entity]; if (!item) return;
@@ -1842,16 +1888,18 @@ if (document.readyState === 'loading') {
     }
 
     function appendPerformanceExcel(wb, perf, prefix) {
-        var labels = { cozinha_geral:'Cozinha Geral', cozinha_quente_a:'Quente A', cozinha_quente_b:'Quente B', cozinha_fria:'Fria', salao:'Salão' };
+        var labels = PERF_LABELS;
         var source = perf && (perf.averages && Object.keys(perf.averages).length ? perf.averages : perf.current) || {};
+        var entities = perfEntities();
         var rows = [];
-         Object.keys(source).forEach(function(entity) {
+         entities.forEach(function(entity) {
              var item = source[entity] || {};
+             if (!item || typeof item.final_score === 'undefined') return;
              rows.push({ Entidade: labels[entity] || entity, Nota: Number(item.final_score || 0), Demandas: Number(item.total_demands || 0), 'Estouro SLA': Number(item.sla_breaches || 0), Cancelamentos: Number(item.cancellations || 0), Roturas: Number(item.stockouts || 0) });
          });
         if (rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), (prefix + 'Notas Performance').substring(0, 31));
         var detractors = [];
-        Object.keys(source).forEach(function(entity) { (source[entity].detractors || []).forEach(function(d) { detractors.push({ Entidade: labels[entity] || entity, Detrator: d.label, Ocorrências: Number(d.count || 0), Desconto: Number(d.deduction || 0) }); }); });
+        entities.forEach(function(entity) { ((source[entity] || {}).detractors || []).forEach(function(d) { detractors.push({ Entidade: labels[entity] || entity, Detrator: d.label, Ocorrências: Number(d.count || 0), Desconto: Number(d.deduction || 0) }); }); });
         if (detractors.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detractors), (prefix + 'Detratores').substring(0, 31));
     }
 
@@ -1905,7 +1953,8 @@ if (document.readyState === 'loading') {
                     var ds = days[i].toISOString().split('T')[0];
                     var parts = ds.split('-');
                     var dayLabel = parts[2] + '/' + parts[1] + '/' + parts[0];
-                    var params = 'from=' + ds + '&to=' + ds + (state.stationId ? '&station_id=' + encodeURIComponent(state.stationId) : '');
+                    var sid = effectiveStationId();
+                    var params = 'from=' + ds + '&to=' + ds + (sid ? '&station_id=' + encodeURIComponent(sid) : '');
                     var resp = await fetch('/api/v1/analytics/dashboard?' + params);
                     if (!resp.ok) throw new Error('Erro ao carregar dados do dia ' + ds);
                     var dayData = await resp.json();
@@ -1975,7 +2024,8 @@ if (document.readyState === 'loading') {
                 for (var i = 0; i < days.length; i++) {
                     var ds = days[i].toISOString().split('T')[0];
                     var parts = ds.split('-');
-                    var params = 'from=' + ds + '&to=' + ds + (state.stationId ? '&station_id=' + encodeURIComponent(state.stationId) : '');
+                    var sid = effectiveStationId();
+                    var params = 'from=' + ds + '&to=' + ds + (sid ? '&station_id=' + encodeURIComponent(sid) : '');
                     if (exportProgress) exportProgress.textContent = 'Gerando dia ' + (i + 1) + ' de ' + days.length + '...';
                     try {
                         var resp = await fetch('/api/v1/analytics/dashboard?' + params);
