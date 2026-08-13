@@ -9,6 +9,7 @@ import { computeDailyScores } from '../services/performance.service';
 
 function getStationRoom(code: string): string {
   if (code === 'fria') return 'cozinha_fria';
+  if (code === 'jantar') return 'cozinha_jantar';
   return 'cozinha_quente';
 }
 

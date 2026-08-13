@@ -5,6 +5,7 @@ import { runCleanup } from '../services/cleanup.service';
 import { logDemandEvent } from '../services/demand-events.service';
 import { computeDailyScores, getWeights } from '../services/performance.service';
 import { recomputeStationQueue } from '../services/queue.service';
+import { ensureTodayMenu } from '../services/menu.service';
 
 export default async function adminRoutes(fastify: FastifyInstance) {
   // Produtos: criar
@@ -425,6 +426,173 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     } catch (error) {
       request.log.error(error);
       reply.code(500).send({ error: 'Erro ao definir cardápio da data' });
+    }
+  });
+
+  // Turno jantar: ativação com transferência de pendências do almoço
+  fastify.post('/shift/dinner', async (request, reply) => {
+    const client = await pool.connect();
+    try {
+      const dailyMenuId = await ensureTodayMenu();
+
+      const { rows: stationRows } = await client.query<{ id: string }>(
+        `SELECT id FROM kitchen_stations WHERE code = 'jantar'`
+      );
+      if (stationRows.length === 0) {
+        client.release();
+        return reply.code(500).send({ error: 'Estação jantar não encontrada' });
+      }
+      const jantarId = stationRows[0].id;
+
+      const today = (await client.query<{ today: string }>(`SELECT CURRENT_DATE::text AS today`)).rows[0].today;
+
+      await client.query('BEGIN');
+
+      const { rows: addedRows } = await client.query(
+        `INSERT INTO daily_menu_overrides (daily_menu_id, product_id, action, reason)
+         SELECT $1, p.id, 'add', 'Turno jantar ativado'
+         FROM products p
+         WHERE p.active = true AND p.kitchen_station_id = $2
+         ON CONFLICT (daily_menu_id, product_id) DO NOTHING
+         RETURNING id`,
+        [dailyMenuId, jantarId]
+      );
+
+      const { rows: sourceRows } = await client.query<{ kitchen_station_id: string | null }>(
+        `SELECT DISTINCT kitchen_station_id FROM demands
+         WHERE status = 'pending' AND created_at::date = $1 AND kitchen_station_id <> $2`,
+        [today, jantarId]
+      );
+
+      const { rows: countRows } = await client.query<{ cnt: string }>(
+        `SELECT COUNT(*)::int AS cnt FROM demands
+         WHERE status = 'pending' AND created_at::date = $1 AND kitchen_station_id <> $2`,
+        [today, jantarId]
+      );
+      const pendingLunchDemands = parseInt(countRows[0].cnt, 10);
+
+      const { rows: transferred } = await client.query<{ id: string }>(
+        `UPDATE demands SET kitchen_station_id = $1
+         WHERE status = 'pending' AND created_at::date = $2 AND kitchen_station_id <> $1
+         RETURNING id`,
+        [jantarId, today]
+      );
+
+      for (const t of transferred) {
+        await client.query(
+          `INSERT INTO demand_events (demand_id, event_type, actor, notes)
+           VALUES ($1, 'shift_transfer', 'sistema',
+             'Transferida para a Cozinha Jantar na ativação do turno jantar')`,
+          [t.id]
+        );
+      }
+
+      await client.query(
+        `INSERT INTO system_settings (key, value) VALUES ('shift_dinner_active_date', $1)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [today]
+      );
+
+      await client.query('COMMIT');
+      client.release();
+
+      await recomputeStationQueue(jantarId);
+      for (const s of sourceRows) {
+        if (s.kitchen_station_id && s.kitchen_station_id !== jantarId) {
+          await recomputeStationQueue(s.kitchen_station_id);
+        }
+      }
+      computeDailyScores(today).catch((e) => request.log.error(e));
+
+      fastify.io.emit('menu:updated', { date: today, shift: 'dinner' });
+      fastify.io.emit('shift:updated', { shift: 'dinner' });
+      fastify.io.emit('demand:queue-updated');
+
+      return {
+        shift: 'dinner' as const,
+        added_products: addedRows.length,
+        transferred_demands: transferred.length,
+        pending_lunch_demands: pendingLunchDemands,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK').catch((e) => request.log.error(e));
+      client.release();
+      request.log.error(error);
+      reply.code(500).send({ error: 'Erro ao ativar turno jantar' });
+    }
+  });
+
+  // Turno jantar: encerramento manual (revert para o almoço)
+  fastify.post('/shift/lunch', async (request, reply) => {
+    const client = await pool.connect();
+    try {
+      const dailyMenuId = await ensureTodayMenu();
+
+      const { rows: jantarRows } = await client.query<{ id: string }>(
+        `SELECT id FROM kitchen_stations WHERE code = 'jantar'`
+      );
+      const { rows: quenteARows } = await client.query<{ id: string }>(
+        `SELECT id FROM kitchen_stations WHERE code = 'quente_a'`
+      );
+      if (jantarRows.length === 0 || quenteARows.length === 0) {
+        client.release();
+        return reply.code(500).send({ error: 'Estação não encontrada' });
+      }
+      const jantarId = jantarRows[0].id;
+      const quenteAId = quenteARows[0].id;
+
+      const today = (await client.query<{ today: string }>(`SELECT CURRENT_DATE::text AS today`)).rows[0].today;
+
+      await client.query('BEGIN');
+
+      const { rows: removedRows } = await client.query(
+        `DELETE FROM daily_menu_overrides
+         WHERE daily_menu_id = $1 AND action = 'add'
+           AND product_id IN (SELECT id FROM products WHERE kitchen_station_id = $2)
+         RETURNING id`,
+        [dailyMenuId, jantarId]
+      );
+
+      const { rows: transferred } = await client.query<{ id: string }>(
+        `UPDATE demands SET kitchen_station_id = $1
+         WHERE status = 'pending' AND created_at::date = $2 AND kitchen_station_id = $3
+         RETURNING id`,
+        [quenteAId, today, jantarId]
+      );
+      for (const t of transferred) {
+        await client.query(
+          `INSERT INTO demand_events (demand_id, event_type, actor, notes)
+           VALUES ($1, 'shift_transfer', 'sistema',
+             'Revertida para a Cozinha Quente A no encerramento do turno jantar')`,
+          [t.id]
+        );
+      }
+
+      await client.query(
+        `UPDATE system_settings SET value = '' WHERE key = 'shift_dinner_active_date'`
+      );
+
+      await client.query('COMMIT');
+      client.release();
+
+      await recomputeStationQueue(jantarId);
+      await recomputeStationQueue(quenteAId);
+      computeDailyScores(today).catch((e) => request.log.error(e));
+
+      fastify.io.emit('menu:updated', { date: today, shift: 'lunch' });
+      fastify.io.emit('shift:updated', { shift: 'lunch' });
+      fastify.io.emit('demand:queue-updated');
+
+      return {
+        shift: 'lunch' as const,
+        removed_products: removedRows.length,
+        transferred_demands: transferred.length,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK').catch((e) => request.log.error(e));
+      client.release();
+      request.log.error(error);
+      reply.code(500).send({ error: 'Erro ao encerrar turno jantar' });
     }
   });
 

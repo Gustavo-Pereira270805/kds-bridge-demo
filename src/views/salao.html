@@ -218,6 +218,8 @@
         <span id="headerDate">—</span>
         <span class="header-sep">·</span>
         <span id="headerMenu">—</span>
+        <span class="header-sep" id="shiftSep" style="display:none;">·</span>
+        <span id="shiftBadge" class="badge-pill badge-dinner" style="display:none;">Turno Jantar ativo</span>
     </div>
 
     <div id="toast" role="alert"></div>
@@ -294,6 +296,16 @@
     var searchTimeout = null;
     var toastTimeout = null;
     var currentDropdownItems = [];
+    var currentShift = 'lunch';
+
+    function updateShiftBadge() {
+        var badge = document.getElementById('shiftBadge');
+        var sep = document.getElementById('shiftSep');
+        if (!badge) return;
+        var active = currentShift === 'dinner';
+        badge.style.display = active ? '' : 'none';
+        if (sep) sep.style.display = active ? '' : 'none';
+    }
 
     function toDate(v) {
         if (!v) return new Date();
@@ -532,7 +544,9 @@
         api('/api/v1/daily-menu/today').then(function(data) {
             products = data.products || [];
             todayMenuProducts = products;
+            currentShift = data.shift || 'lunch';
             updateHeader(data);
+            updateShiftBadge();
             populateReplacedProducts();
             if (select) {
                 select.innerHTML = '<option value=""></option>' +
@@ -600,25 +614,38 @@
 
     function normalizeTodayProducts() {
         return todayMenuProducts.map(function(p) {
-            return { id: p.product_id, name: p.name, category: p.category || '', in_today_menu: true };
+            return { id: p.product_id, name: p.name, category: p.category || '', in_today_menu: true, station_code: p.station_code || '' };
         });
     }
 
     function renderProductDropdown(items) {
         var dropdown = document.getElementById('productDropdown');
         if (!dropdown) return;
-        currentDropdownItems = items || [];
+        var sorted = (items || []).slice().sort(function(a, b) {
+            var aj = (a.station_code === 'jantar') ? 1 : 0;
+            var bj = (b.station_code === 'jantar') ? 1 : 0;
+            if (aj !== bj) return bj - aj;
+            var at = a.in_today_menu ? 1 : 0;
+            var bt = b.in_today_menu ? 1 : 0;
+            if (at !== bt) return bt - at;
+            return a.name.localeCompare(b.name);
+        });
+        currentDropdownItems = sorted;
         if (currentDropdownItems.length === 0) {
             dropdown.innerHTML = '<div class="product-empty">Nenhum produto encontrado</div>';
             dropdown.classList.add('open');
             return;
         }
         dropdown.innerHTML = currentDropdownItems.map(function(p, i) {
+            var badge = p.station_code === 'jantar'
+                ? '<span class="today-badge badge-jantar">JANTAR</span>'
+                : (p.in_today_menu
+                    ? (currentShift === 'dinner' ? '<span class="today-badge">ALMOÇO</span>' : '<span class="today-badge">HOJE</span>')
+                    : '');
             return '<div class="product-option" data-idx="' + i + '">' +
                 '<span><span class="opt-name">' + p.name + '</span>' +
                 (p.category ? '<span class="opt-cat">' + p.category + '</span>' : '') +
-                '</span>' +
-                (p.in_today_menu ? '<span class="today-badge">HOJE</span>' : '') +
+                '</span>' + badge +
             '</div>';
         }).join('');
         dropdown.classList.add('open');
@@ -799,6 +826,10 @@
         }
     });
     socket.on('menu:updated', function() { loadProducts(); });
+    socket.on('shift:updated', function(data) {
+        currentShift = (data && data.shift === 'dinner') ? 'dinner' : 'lunch';
+        loadProducts();
+    });
     socket.on('connect', function() { socket.emit('identify', 'salao'); loadActiveDemands(); });
 
     loadProducts();

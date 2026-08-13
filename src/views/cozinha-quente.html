@@ -65,6 +65,20 @@
         }
         .column-a h2 { background: #1c0f0f; color: var(--c-danger); border-bottom: 3px solid var(--c-danger); }
         .column-b h2 { background: #1c150a; color: var(--c-warn); border-bottom: 3px solid var(--c-warn); }
+        .column-jantar { flex: 1; }
+        .column[hidden] { display: none; }
+        .column-jantar h2 { background: #101827; color: var(--dinner-accent); border-bottom: 3px solid var(--dinner-accent); }
+
+        body[data-station="jantar"] { background: var(--dinner-bg); }
+        body[data-station="jantar"] .card { background: var(--dinner-surface); }
+        body[data-station="jantar"] .card.cooking { background: #1d2436; border-left-color: var(--dinner-accent); }
+        body[data-station="jantar"] .card .eta { color: var(--dinner-accent); }
+        body[data-station="jantar"] .card .actions .ready-btn { background: var(--dinner-accent); color: #141218; }
+        body[data-station="jantar"] .card .actions .ready-btn:hover { background: #e5bc90; }
+        body[data-station="jantar"] .ready-strip-header { color: var(--dinner-accent); }
+        body[data-station="jantar"] .ready-strip .ready-pill { background: #1d2436; border-color: var(--dinner-accent); }
+        body[data-station="jantar"] .ready-strip .ready-pill .pill-name { color: #e5bc90; }
+        body[data-station="jantar"] .column-jantar .grid { max-width: 860px; margin: 0 auto; width: 100%; }
 
         .grid { display: flex; flex-direction: column; gap: 12px; flex: 1; }
 
@@ -278,6 +292,11 @@
         <div id="gridB" class="grid"></div>
         <div id="readyB" class="ready-strip"></div>
     </div>
+    <div class="column column-jantar" hidden>
+        <h2>COZINHA JANTAR <span class="col-timer" id="timerJ">--:--</span></h2>
+        <div id="gridJ" class="grid"></div>
+        <div id="readyJ" class="ready-strip"></div>
+    </div>
     <div id="crossCancelToast"></div>
 
     <div id="cancelModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center;backdrop-filter:blur(4px);">
@@ -297,22 +316,67 @@
 
     <script>
         const stationParam = new URLSearchParams(window.location.search).get('station');
-        const selectedStation = stationParam === 'quente_b' ? 'quente_b' : 'quente_a';
-        document.documentElement.dataset.station = selectedStation;
-        document.body.dataset.station = selectedStation;
-        document.querySelector('.column-a').hidden = selectedStation !== 'quente_a';
-        document.querySelector('.column-b').hidden = selectedStation !== 'quente_b';
-        KDSStationTheme.load(selectedStation);
+        const baseStation = stationParam === 'quente_b' ? 'quente_b' : 'quente_a';
+        const forceJantar = stationParam === 'jantar';
+        let currentShift = 'lunch';
+
+        function dinnerMode() {
+            return currentShift === 'dinner' || forceJantar;
+        }
+
+        function applyStationMode() {
+            var dinner = dinnerMode();
+            // Almoço: duas colunas (A + B); Jantar: coluna única
+            document.querySelector('.column-a').hidden = dinner;
+            document.querySelector('.column-b').hidden = dinner;
+            document.querySelector('.column-jantar').hidden = !dinner;
+            var themeStation = dinner ? 'jantar' : baseStation;
+            document.documentElement.dataset.station = themeStation;
+            document.body.dataset.station = themeStation;
+            KDSStationTheme.load(themeStation);
+            watchStationTheme(themeStation);
+        }
+
+        const watchedStations = {};
+        function watchStationTheme(stationCode) {
+            if (watchedStations[stationCode]) return;
+            watchedStations[stationCode] = true;
+            KDSStationTheme.watch(socket, stationCode);
+        }
+
+        function demandBelongsHere(kitchen_station_id) {
+            if (!kitchen_station_id) return true;
+            if (dinnerMode()) {
+                return stationIds.jantar === null ? true : kitchen_station_id === stationIds.jantar;
+            }
+            if (stationIds.quente_a === null && stationIds.quente_b === null) return true;
+            return kitchen_station_id === stationIds.quente_a || kitchen_station_id === stationIds.quente_b;
+        }
+
+        function setShift(shift) {
+            if (currentShift === shift) return;
+            currentShift = shift;
+            applyStationMode();
+            joinRooms();
+            carregarDemandas();
+        }
+
+        function fetchShiftStatus() {
+            fetch('/api/v1/shift/status')
+                .then(function(res) { return res.json(); })
+                .then(function(data) { setShift(data && data.shift === 'dinner' ? 'dinner' : 'lunch'); })
+                .catch(function(err) { console.error('Falha ao buscar turno:', err); });
+        }
+
         const socket = io({
             reconnection: true,
             reconnectionAttempts: Infinity,
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000
         });
-        KDSStationTheme.watch(socket, selectedStation);
         let demands = [];
         let timeInterval;
-        let stationIds = { quente_a: null, quente_b: null };
+        let stationIds = { quente_a: null, quente_b: null, jantar: null };
         const pendingConfirm = {};
         const flashIds = new Set();
         let crossCancelToastTimer = null;
@@ -330,12 +394,18 @@
             }, duration);
         }
 
-        socket.emit('join', 'cozinha_quente');
+        function joinRooms() {
+            socket.emit('join', 'cozinha_quente');
+            if (dinnerMode()) socket.emit('join', 'cozinha_jantar');
+        }
+        applyStationMode();
+        joinRooms();
 
         socket.on('connect', () => {
             document.getElementById('reconnectBanner').style.display = 'none';
-            socket.emit('join', 'cozinha_quente');
+            joinRooms();
             carregarDemandas();
+            fetchShiftStatus();
         });
 
         socket.on('disconnect', () => {
@@ -427,6 +497,7 @@
         }
 
         carregarDemandas();
+        fetchShiftStatus();
 
         function render() {
             for (const key in pendingConfirm) {
@@ -441,9 +512,15 @@
                 d.kitchen_station_id === stationIds.quente_b &&
                 (d.status === 'pending' || d.status === 'ready')
             );
+            const filterJ = demands.filter(d =>
+                d.kitchen_station_id === stationIds.jantar &&
+                (d.status === 'pending' || d.status === 'ready')
+            );
 
-            renderGrid('gridA', 'readyA', selectedStation === 'quente_a' ? filterA : []);
-            renderGrid('gridB', 'readyB', selectedStation === 'quente_b' ? filterB : []);
+            const dinner = dinnerMode();
+            renderGrid('gridA', 'readyA', dinner ? [] : filterA);
+            renderGrid('gridB', 'readyB', dinner ? [] : filterB);
+            renderGrid('gridJ', 'readyJ', dinner ? filterJ : []);
             flashIds.clear();
         }
 
@@ -638,6 +715,7 @@
         });
 
         socket.on('demand:new', (demand) => {
+            if (demand && !demandBelongsHere(demand.kitchen_station_id)) return;
             demands.push(demand);
             if (demand && demand.id) flashIds.add(demand.id);
             render();
@@ -646,6 +724,7 @@
         });
 
         socket.on('demand:urgent', (demand) => {
+            if (demand && !demandBelongsHere(demand.kitchen_station_id)) return;
             demands.push(demand);
             if (demand && demand.id) flashIds.add(demand.id);
             render();
@@ -672,22 +751,24 @@
 
         socket.on('demand:cross-cancel', (data) => {
             if (!data || data.cancelled_by !== 'salao') return;
+            const btn = data.id
+                ? document.querySelector('.ready-btn[data-id="' + data.id + '"]')
+                : null;
+            if (!btn) return;
             if (typeof Tone !== 'undefined') Tone.start();
             playCrossCancelAlert();
-            if (data.id) {
-                const btn = document.querySelector('.ready-btn[data-id="' + data.id + '"]');
-                const card = btn ? btn.closest('.card') : null;
-                if (card) {
-                    card.classList.add('cross-cancelled');
-                    setTimeout(() => {
-                        if (card.isConnected) card.classList.remove('cross-cancelled');
-                    }, 6000);
-                }
+            const card = btn.closest('.card');
+            if (card) {
+                card.classList.add('cross-cancelled');
+                setTimeout(() => {
+                    if (card.isConnected) card.classList.remove('cross-cancelled');
+                }, 6000);
             }
             showCrossCancelToast(data.message || 'ATENÇÃO: Item cancelado pelo Salão já estava em preparo!');
         });
 
         socket.on('demand:stockout', (updated) => {
+            if (updated && !demandBelongsHere(updated.kitchen_station_id)) return;
             const idx = demands.findIndex(d => d.id === updated.id);
             if (idx !== -1) demands[idx] = updated;
             render();
@@ -701,6 +782,10 @@
 
         socket.on('kitchen:capacity-updated', () => {
             carregarDemandas();
+        });
+
+        socket.on('shift:updated', (data) => {
+            setShift(data && data.shift === 'dinner' ? 'dinner' : 'lunch');
         });
 
         function showCrossCancelToast(message) {
@@ -772,6 +857,7 @@
         function updateAllTimers() {
             if (stationIds.quente_a) updateColumnTimer('timerA', stationIds.quente_a);
             if (stationIds.quente_b) updateColumnTimer('timerB', stationIds.quente_b);
+            if (stationIds.jantar) updateColumnTimer('timerJ', stationIds.jantar);
 
             const now = Date.now();
             document.querySelectorAll('.card-timer[data-eta]').forEach(el => {
@@ -797,6 +883,7 @@
 
         setInterval(function() {
             carregarDemandas();
+            fetchShiftStatus();
         }, 5000);
     </script>
 </body>

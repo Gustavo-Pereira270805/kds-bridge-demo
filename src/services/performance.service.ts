@@ -73,6 +73,7 @@ export async function getWeights(): Promise<PerformanceWeights> {
 function entityFromStationCode(code: string): string {
   if (code === 'quente_a') return 'cozinha_quente_a';
   if (code === 'quente_b') return 'cozinha_quente_b';
+  if (code === 'jantar') return 'cozinha_jantar';
   return 'cozinha_fria';
 }
 
@@ -241,7 +242,7 @@ export async function ensureScoresForDate(dateStr: string): Promise<void> {
     `SELECT COUNT(*)::int AS cnt FROM performance_scores WHERE date = $1`,
     [dateStr]
   );
-  if (parseInt(row?.cnt || '0', 10) < 5) {
+  if (parseInt(row?.cnt || '0', 10) < 6) {
     await computeDailyScores(dateStr);
   }
 }
@@ -282,9 +283,10 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
   const weights = await getWeights();
   const results: DetractorDate[] = [];
 
-  if (entity === 'cozinha_quente_a' || entity === 'cozinha_quente_b' || entity === 'cozinha_fria') {
+  if (entity === 'cozinha_quente_a' || entity === 'cozinha_quente_b' || entity === 'cozinha_fria' || entity === 'cozinha_jantar') {
     const stationCode = entity === 'cozinha_quente_a' ? 'quente_a'
-      : entity === 'cozinha_quente_b' ? 'quente_b' : 'fria';
+      : entity === 'cozinha_quente_b' ? 'quente_b'
+      : entity === 'cozinha_jantar' ? 'jantar' : 'fria';
 
     const slaRows = await query<{
       id: string; product_name: string; created_at: string | Date; ready_at: string | Date | null;

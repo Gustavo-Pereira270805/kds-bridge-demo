@@ -117,6 +117,11 @@
   --header-bg: rgba(30, 27, 36, 0.94);
   --shadow-btn-3d-dark:  0 4px 0 rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.08) inset;
   --shadow-btn-3d-light: 0 4px 0 rgba(0, 0, 0, 0.20), 0 1px 0 rgba(255, 255, 255, 0.40) inset;
+
+  /* === Turno Jantar (paleta noturna) === */
+  --dinner-bg: #0b1020;
+  --dinner-surface: #141a2e;
+  --dinner-accent: #d4a574;
 }
 
 /* === Light theme overrides === */
@@ -402,3 +407,33 @@ body {
 .btn-theme-toggle .theme-icon-sun { display: none; }
 :root[data-theme="light"] .btn-theme-toggle .theme-icon-sun { display: block; }
 :root[data-theme="light"] .btn-theme-toggle .theme-icon-moon { display: none; }
+
+/* === Botão turno jantar (gerente) === */
+.btn-shift-dinner {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 42px; padding: 8px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--c-accent-gold);
+  background: transparent;
+  color: var(--c-accent-gold);
+  font-size: 0.85rem; font-weight: var(--fw-semi);
+  cursor: pointer; font-family: inherit;
+  transition: all var(--t-fast) var(--ease-out);
+}
+.btn-shift-dinner:hover { background: rgba(212, 165, 116, 0.15); }
+.btn-shift-dinner:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-shift-dinner.btn-shift-active {
+  background: #d4a574;
+  color: #141218;
+  font-weight: var(--fw-bold);
+}
+
+.badge-dinner {
+  background: #d4a574;
+  color: #141218;
+}
+
+.badge-jantar {
+  background: #d4a574;
+  color: #141218;
+}

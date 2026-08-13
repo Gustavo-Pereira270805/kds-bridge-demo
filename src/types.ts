@@ -71,6 +71,17 @@ export interface DailyMenuOverride {
   reason: string | null;
 }
 
+export interface ShiftStatus {
+  shift: 'lunch' | 'dinner';
+}
+
+export interface StartDinnerResponse {
+  shift: 'dinner';
+  added_products: number;
+  transferred_demands: number;
+  pending_lunch_demands: number;
+}
+
 export interface DailyMenuEffective {
   date: string;
   daily_menu_id: string;
@@ -79,6 +90,7 @@ export interface DailyMenuEffective {
   category: string;
   default_unit: string;
   origin: 'base' | 'manual_add';
+  station_code?: string;
 }
 
 export type DemandStatus =
@@ -144,7 +156,8 @@ export type DemandEventType =
   | 'stockout_reported'
   | 'sla_breach_cozinha'
   | 'sla_breach_salao'
-  | 'annulled';
+  | 'annulled'
+  | 'shift_transfer';
 
 export interface CreateDemandBody {
   product_id: string;
@@ -269,6 +282,7 @@ export interface ProductSearchRow {
   category: string | null;
   kitchen_station_id: string | null;
   in_today_menu: boolean;
+  station_code?: string;
 }
 
 // v2.5 — calendário de cardápios (gerente)

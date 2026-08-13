@@ -14,6 +14,7 @@ import analyticsRoutes from './routes/analytics';
 import authRoutes from './routes/auth';
 import kitchenStationsRoutes from './routes/kitchen-stations';
 import stationThemeRoutes from './routes/station-themes';
+import shiftRoutes from './routes/shift';
 import unitsRoutes from './routes/units';
 import adminRoutes from './routes/admin';
 import { registerSocketHandlers } from './socket/handlers';
@@ -93,6 +94,7 @@ fastify.register(analyticsRoutes, { prefix: '/api/v1/analytics' });
 fastify.register(authRoutes, { prefix: '/api/v1/auth' });
 fastify.register(kitchenStationsRoutes, { prefix: '/api/v1/kitchen-stations' });
 fastify.register(stationThemeRoutes, { prefix: '/api/v1/station-themes' });
+fastify.register(shiftRoutes, { prefix: '/api/v1/shift' });
 fastify.register(unitsRoutes, { prefix: '/api/v1/units' });
 fastify.register(adminRoutes, { prefix: '/api/v1/admin' });
 
@@ -146,6 +148,38 @@ async function seedDatabase() {
         `INSERT INTO system_settings (key, value)
          VALUES ('station_theme_salao', 'dark')
          ON CONFLICT (key) DO NOTHING`
+      );
+
+      // Espelho da migration dinner-shift: estação jantar + estado do turno + evento shift_transfer
+      await client.query(
+        `INSERT INTO kitchen_stations (code, name, capacity, theme)
+         VALUES ('jantar', 'Cozinha Jantar', 1, 'dark')
+         ON CONFLICT (code) DO NOTHING`
+      );
+      await client.query(
+        `INSERT INTO system_settings (key, value)
+         VALUES ('shift_dinner_active_date', '')
+         ON CONFLICT (key) DO NOTHING`
+      );
+      await client.query(
+        `DO $$
+         BEGIN
+           IF NOT EXISTS (
+             SELECT 1 FROM pg_constraint
+             WHERE conname = 'demand_events_event_type_check'
+               AND contype = 'c' AND conrelid = 'demand_events'::regclass
+               AND pg_get_constraintdef(oid) LIKE '%shift_transfer%'
+           ) THEN
+             ALTER TABLE demand_events DROP CONSTRAINT IF EXISTS demand_events_event_type_check;
+             ALTER TABLE demand_events ADD CONSTRAINT demand_events_event_type_check
+               CHECK (event_type IN (
+                 'created', 'marked_ready', 'retrieved',
+                 'cancelled_salao', 'cancelled_cozinha',
+                 'stockout_reported', 'sla_breach_cozinha', 'sla_breach_salao',
+                 'annulled', 'shift_transfer'
+               ));
+           END IF;
+         END $$`
       );
 
       const { rows: ksRows } = await client.query('SELECT id, code FROM kitchen_stations');

@@ -18,7 +18,7 @@ export default async function stationThemeRoutes(fastify: FastifyInstance) {
         return { stationCode, theme: normalizeTheme(setting?.value) };
       }
 
-      if (!['quente_a', 'quente_b', 'fria'].includes(stationCode)) {
+      if (!['quente_a', 'quente_b', 'fria', 'jantar'].includes(stationCode)) {
         return reply.code(404).send({ error: 'Estação não encontrada' });
       }
 
