@@ -19,6 +19,7 @@ import unitsRoutes from './routes/units';
 import adminRoutes from './routes/admin';
 import { registerSocketHandlers } from './socket/handlers';
 import { runCleanup } from './services/cleanup.service';
+import { syncFlexibleProducts } from './services/shift.service';
 import { requireAuth } from './middleware/auth';
 
 const fastify = Fastify({ logger: true });
@@ -134,6 +135,7 @@ const start = async () => {
   try {
     await connectDatabase();
     await seedDatabase();
+    await syncFlexibleProducts().catch(err => fastify.log.error('[Shift] Erro ao sincronizar produtos flexíveis (não crítico): ' + String(err)));
     await fastify.listen({ port: PORT, host: '0.0.0.0' });
     scheduleDailyCleanup();
     console.log('┌─────────────────────────────────────────┐');
@@ -370,6 +372,7 @@ async function runCleanupJob() {
   try {
     const result = await runCleanup();
     console.log(`[Cleanup] Limpeza automática (>${result.retention_days}d):`, result);
+    await syncFlexibleProducts().catch(err => console.error('[Shift] Erro ao sincronizar produtos flexíveis (não crítico):', err));
   } catch (err) {
     console.error('[Cleanup] Erro na limpeza automática (não crítico):', err);
   }

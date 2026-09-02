@@ -487,6 +487,13 @@ export default async function adminRoutes(fastify: FastifyInstance) {
 
       await client.query('BEGIN');
 
+      // Produtos flexíveis: ficam no quente no almoço e migram para jantar no turno noturno
+      await client.query(
+        `UPDATE products SET kitchen_station_id = $1
+         WHERE name = ANY($2::text[]) AND kitchen_station_id <> $1`,
+        [jantarId, ['INHAME COZIDO', 'DEL\u00CDCIA DE PEIXE', 'DEL\u00CDCIA DE FRANGO']]
+      );
+
       const { rows: addedRows } = await client.query(
         `INSERT INTO daily_menu_overrides (daily_menu_id, product_id, action, reason)
          SELECT $1, p.id, 'add', 'Turno jantar ativado'
@@ -590,6 +597,17 @@ export default async function adminRoutes(fastify: FastifyInstance) {
            AND product_id IN (SELECT id FROM products WHERE kitchen_station_id = $2)
          RETURNING id`,
         [dailyMenuId, jantarId]
+      );
+
+      // Reverte produtos flexíveis para a estação do almoço
+      await client.query(
+        `UPDATE products SET kitchen_station_id = CASE
+           WHEN name = 'INHAME COZIDO' THEN (SELECT id FROM kitchen_stations WHERE code = 'quente_b')
+           WHEN name = 'DEL\u00CDCIA DE PEIXE' THEN (SELECT id FROM kitchen_stations WHERE code = 'quente_a')
+           WHEN name = 'DEL\u00CDCIA DE FRANGO' THEN (SELECT id FROM kitchen_stations WHERE code = 'quente_b')
+         END
+         WHERE name = ANY($1::text[]) AND kitchen_station_id = $2`,
+        [['INHAME COZIDO', 'DEL\u00CDCIA DE PEIXE', 'DEL\u00CDCIA DE FRANGO'], jantarId]
       );
 
       const { rows: transferred } = await client.query<{ id: string }>(
