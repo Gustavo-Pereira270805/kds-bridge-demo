@@ -1,0 +1,13 @@
+[Unit]
+Description=KDS Pi Agent
+After=network-online.target tailscaled.service
+
+[Service]
+User=framboa
+Environment=KDS_SERVER=https://kds-framboa.duckdns.org
+Environment=KDS_TOKEN=
+ExecStart=/usr/bin/node /opt/kds-agent/agent.js
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
