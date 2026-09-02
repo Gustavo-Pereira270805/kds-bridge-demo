@@ -2,20 +2,23 @@ import { Server, Socket } from 'socket.io';
 import { AuthUser } from '../types';
 import { getUserByToken } from '../middleware/auth';
 
-const VALID_ROOMS = new Set([
+export const VALID_ROOMS = new Set([
   'salao',
   'cozinha_quente',
   'cozinha_fria',
   'cozinha_jantar',
   'cozinha',
   'gerente',
+  'kds-pis',
 ]);
 
 // Salas da cozinha são acessíveis sem autenticação (kiosks fixos);
 // salão e gerente exigem token válido com o papel correspondente.
-function canJoinRoom(room: string, user: AuthUser | undefined): boolean {
+// Sala kds-pis é restrita a gerente/admin (controle remoto de Pis).
+export function canJoinRoom(room: string, user: AuthUser | undefined): boolean {
   const kitchenRooms = ['cozinha', 'cozinha_quente', 'cozinha_fria', 'cozinha_jantar'];
   if (kitchenRooms.includes(room)) return true;
+  if (room === 'kds-pis') return !!user && (user.role === 'gerente' || user.role === 'admin');
   if (!user) return false;
   if (room === 'salao') return user.role === 'salao' || user.role === 'gerente' || user.role === 'admin';
   if (room === 'gerente') return user.role === 'gerente' || user.role === 'admin';
