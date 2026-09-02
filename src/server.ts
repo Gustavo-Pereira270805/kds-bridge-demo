@@ -212,12 +212,23 @@ async function seedDatabase() {
            END IF;
          END $$`
       );
+      // Tabela pi_events para auditoria de controle remoto dos Pis (sem migration prévia no Supabase)
+      await client.query(
+        `CREATE TABLE IF NOT EXISTS pi_events (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          target text NOT NULL CHECK (target IN ('quente','fria','ambos')),
+          action text NOT NULL CHECK (action IN ('shutdown','reboot')),
+          by text NOT NULL,
+          at timestamptz NOT NULL DEFAULT now(),
+          online boolean NOT NULL DEFAULT false
+        )`
+      );
       await client.query(
         `DO $$
          BEGIN
            IF NOT EXISTS (
              SELECT 1 FROM pg_constraint
-             WHERE conname = 'demand_events_event_type_check'
+               WHERE conname = 'demand_events_event_type_check'
                AND contype = 'c' AND conrelid = 'demand_events'::regclass
                AND pg_get_constraintdef(oid) LIKE '%shift_transfer%'
            ) THEN

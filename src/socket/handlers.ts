@@ -14,11 +14,10 @@ export const VALID_ROOMS = new Set([
 
 // Salas da cozinha são acessíveis sem autenticação (kiosks fixos);
 // salão e gerente exigem token válido com o papel correspondente.
-// Sala kds-pis é restrita a gerente/admin (controle remoto de Pis).
+// Sala kds-pis é pública para heartbeat/power (Pi sem token) — emissão de pi:power só via HTTP com RBAC.
 export function canJoinRoom(room: string, user: AuthUser | undefined): boolean {
-  const kitchenRooms = ['cozinha', 'cozinha_quente', 'cozinha_fria', 'cozinha_jantar'];
+  const kitchenRooms = ['cozinha', 'cozinha_quente', 'cozinha_fria', 'cozinha_jantar', 'kds-pis'];
   if (kitchenRooms.includes(room)) return true;
-  if (room === 'kds-pis') return !!user && (user.role === 'gerente' || user.role === 'admin');
   if (!user) return false;
   if (room === 'salao') return user.role === 'salao' || user.role === 'gerente' || user.role === 'admin';
   if (room === 'gerente') return user.role === 'gerente' || user.role === 'admin';
