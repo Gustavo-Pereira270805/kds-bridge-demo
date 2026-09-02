@@ -1,10 +1,31 @@
 #!/bin/bash
-# ~/.config/openbox/autostart — Orange Pi modo quiosque para KDS Bridge v2.1
-# Configuração para 2 Orange Pis:
-#   - Pi 1 (hostname: cozinha-quente-kds): Cozinha Quente A/B (tela dividida)
-#   - Pi 2 (hostname: cozinha-fria-kds):   Cozinha Fria (tela única)
+# kds-kiosk.sh — Orange Pi Zero 3 (Armbian XFCE) em modo quiosque para KDS Bridge
+#
+# Este arquivo é o LAUNCHER do quiosque. O autostart do XFCE deve apontar para ele
+# (veja "AUTOSTART NO XFCE" no fim do arquivo).
+#
+# Cenário: o servidor KDS roda no PC (ou nuvem) e os 2 Pis são telas quiosque
+# que apenas abrem o Chromium numa URL. Banco de dados = Supabase (nuvem).
+#
+#   - Pi 1 (cozinha quente A/B): KDS_SCREEN="quente" -> /cozinha-quente
+#   - Pi 2 (cozinha fria)       : KDS_SCREEN="fria"   -> /cozinha-fria
 
-# Desabilitar protetor de tela e desligamento automático da tela
+# =====================================================
+# CONFIGURAÇÃO — altere aqui:
+# =====================================================
+
+# IP do PC (ou servidor cloud) onde roda o KDS, na porta 3000.
+# No Windows, descubra com: ipconfig -> IPv4 do adaptador de rede.
+SERVER_URL="http://SEU_PC_IP:3000"
+
+# Tela deste Orange Pi: "quente" ou "fria"
+KDS_SCREEN="quente"
+
+# =====================================================
+# A partir daqui não precisa editar (só ajustes avançados)
+# =====================================================
+
+# Desligar protetor de tela / suspensão de tela
 xset s off
 xset s noblank
 xset -dpms
@@ -12,28 +33,43 @@ xset -dpms
 # Esconder o cursor do mouse
 unclutter -idle 0 &
 
-# Aguardar a rede estabilizar
+# Aguardar a rede estabilizar antes de abrir o navegador
 sleep 5
 
-# =====================================================
-# ALTERE A LINHA ABAIXO conforme o Orange Pi:
-# =====================================================
-#
-# Orange Pi da Cozinha Quente (A/B):
-# chromium --noerrdialogs --disable-infobars --kiosk \
-#          --disable-session-crashed-bubble \
-#          --disable-restore-session-state \
-#          https://SEU-RETOOL.retool.com/app/cozinha-quente
-#
-# Orange Pi da Cozinha Fria:
-# chromium --noerrdialogs --disable-infobars --kiosk \
-#          --disable-session-crashed-bubble \
-#          --disable-restore-session-state \
-#          https://SEU-RETOOL.retool.com/app/cozinha-fria
+case "$KDS_SCREEN" in
+  quente) URL="$SERVER_URL/cozinha-quente" ;;
+  fria)   URL="$SERVER_URL/cozinha-fria" ;;
+  *)      URL="$SERVER_URL" ;;
+esac
 
 chromium --noerrdialogs \
          --disable-infobars \
          --kiosk \
          --disable-session-crashed-bubble \
          --disable-restore-session-state \
-         https://SEU-RETOOL.retool.com/app/cozinha
+         --user-data-dir="$HOME/.config/chromium-kiosk" \
+         "$URL"
+
+# =====================================================
+# AUTOSTART NO XFCE (Armbian)
+# =====================================================
+# 1) Copie este script para o home do usuário e torne-o executável:
+#      cp orange-pi-autostart.sh ~/kds-kiosk.sh
+#      chmod +x ~/kds-kiosk.sh
+#
+# 2) Crie o atalho de autostart do XFCE em ~/.config/autostart/kds-kiosk.desktop:
+#      [Desktop Entry]
+#      Type=Application
+#      Name=KDS Kiosk
+#      Exec=/home/SEU_USUARIO/kds-kiosk.sh
+#      X-GNOME-Autostart-enabled=true
+#    (troque SEU_USUARIO pelo usuário criado no primeiro boot do Armbian)
+#
+# 3) PRIMEIRA VEZ — antes de confiar no quiosque: abra o Chromium manualmente,
+#    vá em http://SEU_PC_IP:3000/cozinha-quente (ou /cozinha-fria), faça login
+#    com a conta de papel "cozinha". O token é salvo no localStorage e persiste
+#    após reiniciar, então o quiosque não pede login de novo.
+#
+# 4) Pacotes necessários (instale uma vez):
+#      sudo apt update && sudo apt install -y chromium unclutter
+# =====================================================

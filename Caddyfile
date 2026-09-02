@@ -1,0 +1,17 @@
+# Caddyfile — proxy reverso com TLS automático (Let's Encrypt)
+# O domínio aponta para o IP público da instância (DuckDNS ou domínio próprio).
+# O HTTPS (HTTP-01) exige as portas 80 e 443 liberadas no security list da Oracle.
+
+{$DOMAIN} {
+    # Mostra o conteúdo de /health vindo do app
+    handle /health {
+        reverse_proxy app:3000
+    }
+
+    # Telas e API do KDS Bridge
+    handle {
+        reverse_proxy app:3000
+    }
+
+    encode gzip
+}

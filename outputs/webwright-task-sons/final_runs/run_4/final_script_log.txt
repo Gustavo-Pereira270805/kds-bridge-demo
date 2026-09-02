@@ -1,3 +1,0 @@
-step 1 action: 3 guias abertas (salao, quente, fria)
-step 2 action: demanda comum quente criada | 6956cd67-38c9-482c-aa70-0e4bc01d1342
-step 3 action: demanda urgente fria criada | 616fbeb2-0f21-4c24-a584-eb0922d2991d

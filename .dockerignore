@@ -1,0 +1,17 @@
+node_modules
+dist
+.git
+.gitignore
+.env
+*.db
+*.log
+dashboard
+outputs
+test_webwright
+final_runs
+docs
+orange-pi-autostart.sh
+Procfile
+Dockerfile
+docker-compose.yml
+Caddyfile

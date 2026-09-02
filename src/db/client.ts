@@ -20,6 +20,19 @@ const dbConfig = parseConnectionString(DATABASE_URL);
 let _pool: Pool | null = null;
 let _initPromise: Promise<Pool> | null = null;
 
+function isPrivateV4(ip: string): boolean {
+  const parts = ip.split('.').map(Number);
+  if (parts.length !== 4 || parts.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return false;
+  if (parts[0] === 10) return true;
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+  if (parts[0] === 192 && parts[1] === 168) return true;
+  return false;
+}
+
+function isLocalIp(ip: string): boolean {
+  return ip === '::1' || ip === '127.0.0.1' || isPrivateV4(ip);
+}
+
 async function getPool(): Promise<Pool> {
   if (_pool) return _pool;
   if (!_initPromise) {
@@ -31,12 +44,13 @@ async function getPool(): Promise<Pool> {
         console.log(`[db] Using direct IP: ${ip}`);
       } else {
         ip = await dns
-          .resolve6(dbConfig.host)
+          .resolve4(dbConfig.host)
           .then((addrs) => addrs[0])
-          .catch(() => dns.resolve4(dbConfig.host).then((addrs) => addrs[0]));
+          .catch(() => dns.resolve6(dbConfig.host).then((addrs) => addrs[0]));
         console.log(`[db] Resolved ${dbConfig.host} -> ${ip}`);
       }
-      const isLocal = ip === '::1' || ip === '127.0.0.1' || ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.');
+      const isLocal = isLocalIp(ip);
+      const rejectUnauthorized = process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false';
       _pool = new Pool({
         host: ip,
         port: dbConfig.port,
@@ -46,7 +60,7 @@ async function getPool(): Promise<Pool> {
         max: 10,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 10000,
-        ssl: isLocal ? false : { rejectUnauthorized: false, servername: dbConfig.host },
+        ssl: isLocal ? false : { rejectUnauthorized, servername: dbConfig.host },
       });
       return _pool;
     })();

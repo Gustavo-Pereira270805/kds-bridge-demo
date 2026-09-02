@@ -1,9 +1,0 @@
-step 1 action: criada demanda estacao FRIA | be76285c-d7c5-4c35-b646-aaaedcf331d5
-step 2 action: CP-A sons apos demanda fria | quente=[] fria=["playNormalAlert"]
-step 3 action: criada demanda estacao QUENTE | 7791af5b-d130-418a-bc90-a7ea44ffedfc
-step 4 action: CP-B sons apos demanda quente | quente=["playNormalAlert"] fria=["playNormalAlert"]
-step 5 action: criada demanda URGENTE quente | 63c7e186-a4b2-45ce-8246-f5c8fc139237
-step 6 action: CP-C sons apos demanda urgente quente | quente=["playNormalAlert", "playUrgentAlert"] fria=["playNormalAlert"]
-step 7 action: stockout na demanda fria | priority_apos=urgent
-step 8 action: CP-D sons apos stockout fria | quente=["playNormalAlert", "playUrgentAlert"] fria=["playNormalAlert", "playStockoutAlert"]
-step 9 action: fim | Roteamento OK: fria recebeu 1 sons da demanda fria, quente recebeu 1 sons da demanda quente; cross-check: quente=playNormalAlert fria=playNormalAlert
