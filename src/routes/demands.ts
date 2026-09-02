@@ -9,6 +9,7 @@ import { computeDailyScores } from '../services/performance.service';
 
 function getStationRoom(code: string): string {
   if (code === 'fria') return 'cozinha_fria';
+  if (code === 'jantar') return 'cozinha_jantar';
   return 'cozinha_quente';
 }
 
@@ -159,8 +160,11 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
       const room = station.length > 0 ? getStationRoom(station[0].code) : 'cozinha_quente';
 
       const eventName = priority === 'urgent' ? 'demand:urgent' : 'demand:new';
-      fastify.io.emit(eventName, newDemand);
-      console.log('[Demand] Emitido ' + eventName + ' (broadcast) para ' + room);
+      fastify.io.to(room).emit(eventName, newDemand);
+      fastify.io.to('salao').emit(eventName, newDemand);
+      fastify.io.to('gerente').emit(eventName, newDemand);
+      fastify.io.to('cozinha').emit(eventName, newDemand);
+      console.log('[Demand] Emitido ' + eventName + ' para salas: ' + room + ', salao, gerente, cozinha');
 
       recomputeStationQueue(product.kitchen_station_id).then(() => {
         fastify.io.emit('demand:queue-updated');
@@ -345,7 +349,13 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
         computeDailyScores(new Date(updated.created_at).toISOString().slice(0, 10)).catch(err => request.log.error(err));
         fastify.io.emit('demand:cancelled', updated);
         if (demand.cooking_started) {
-          fastify.io.emit('demand:cross-cancel', {
+          // Alerta de cancelamento cruzado é para a cozinha da estação da demanda (toca o som).
+          const stRows = await query<{ code: string }>(
+            'SELECT code FROM kitchen_stations WHERE id = $1',
+            [demand.kitchen_station_id]
+          );
+          const room = stRows.length > 0 ? getStationRoom(stRows[0].code) : 'cozinha_quente';
+          fastify.io.to(room).emit('demand:cross-cancel', {
             ...updated,
             cancelled_by: 'salao',
             message: 'Item cancelado pelo salão já estava em preparo!',
@@ -417,7 +427,8 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
         computeDailyScores(new Date(updated.created_at).toISOString().slice(0, 10)).catch(err => request.log.error(err));
         fastify.io.emit('demand:cancelled', updated);
         if (demand.cooking_started) {
-          fastify.io.emit('demand:cross-cancel', {
+          // Cozinha cancelou: só o salão consome este evento (toast "cozinha cancelou").
+          fastify.io.to('salao').emit('demand:cross-cancel', {
             ...updated,
             cancelled_by: 'cozinha',
             message: 'Item cancelado pela cozinha já estava em preparo!',
@@ -467,10 +478,29 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           const novoSla = (urgente != null && Number(urgente) > 0)
             ? Math.min(demand.sla_minutes ?? Infinity, Number(urgente))
             : demand.sla_minutes;
-          await query(
-            `UPDATE demands SET priority = 'urgent', sla_minutes = $1 WHERE id = $2`,
-            [novoSla, id]
-          );
+          // Se a demanda já está em preparo (locked) e o SLA foi reduzido, recalcular expected_ready_at
+          // com o novo SLA. O recomputeStationQueue preserva slots locked, então ajustamos aqui.
+          if (novoSla != null && demand.sla_minutes != null && novoSla < demand.sla_minutes) {
+            // Parâmetros separados ($3 explícito) para o driver pg deduzir corretamente o tipo
+            await query(
+              `UPDATE demands
+                  SET priority = 'urgent', sla_minutes = $1,
+                      expected_ready_at = cooking_started_at + ($3::int * INTERVAL '1 minute')
+                WHERE id = $2 AND cooking_started = true AND cooking_started_at IS NOT NULL`,
+              [novoSla, id, Number(novoSla)]
+            );
+            // Se não estava locked, update normal (sem mexer no expected_ready_at — recompute cuida)
+            await query(
+              `UPDATE demands SET priority = 'urgent', sla_minutes = $1
+                WHERE id = $2 AND (cooking_started = false OR cooking_started_at IS NULL)`,
+              [novoSla, id]
+            );
+          } else {
+            await query(
+              `UPDATE demands SET priority = 'urgent', sla_minutes = $1 WHERE id = $2`,
+              [novoSla, id]
+            );
+          }
         } else if (demand.status === 'pending') {
           await query(
             `UPDATE demands SET priority = 'urgent' WHERE id = $1`,

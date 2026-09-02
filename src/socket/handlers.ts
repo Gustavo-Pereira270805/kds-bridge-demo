@@ -4,6 +4,8 @@ const VALID_ROOMS = new Set([
   'salao',
   'cozinha_quente',
   'cozinha_fria',
+  'cozinha_jantar',
+  'cozinha',
   'gerente',
 ]);
 

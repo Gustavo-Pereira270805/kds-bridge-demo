@@ -12,3 +12,7 @@ test_webwright/
 .playwright-mcp/
 .worktrees/
 .superpowers/
+outputs/
+final_runs/
+dev*.log
+start.log

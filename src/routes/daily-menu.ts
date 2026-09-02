@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { query } from '../db/client';
 import { DailyMenuEffective, DailyMenu, DailyMenuCalendarRow } from '../types';
 import { computeMenuForDate, ensureTodayMenu, getMenuForDate } from '../services/menu.service';
+import { getCurrentShift } from '../services/shift.service';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_CALENDAR_RANGE_DAYS = 62;
@@ -32,15 +33,23 @@ export default async function dailyMenuRoutes(fastify: FastifyInstance) {
       const menu = await getMenuForDate(today);
 
       const products = await query<DailyMenuEffective>(
-        `SELECT * FROM daily_menu_effective WHERE daily_menu_id = $1 ORDER BY category, name`,
+        `SELECT dme.*, ks.code AS station_code
+         FROM daily_menu_effective dme
+         JOIN products p ON p.id = dme.product_id
+         LEFT JOIN kitchen_stations ks ON ks.id = p.kitchen_station_id
+         WHERE dme.daily_menu_id = $1
+         ORDER BY (ks.code = 'jantar') DESC, dme.category, dme.name`,
         [menu.daily_menu_id]
       );
+
+      const shift = await getCurrentShift();
 
       // v2.5 (§2.4) — metadata do cardápio envelopando os produtos
       return {
         menu: { number: menu.menu_number, name: menu.menu_name },
         date: today,
         products,
+        shift,
       };
     } catch (error) {
       request.log.error(error);

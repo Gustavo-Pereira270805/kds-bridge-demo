@@ -38,8 +38,41 @@ export async function recomputeStationQueue(stationId: string): Promise<void> {
   );
   while (slots.length < station.capacity) slots.push(now);
 
+  const urgentWaiting = waiting.filter(d => d.priority === 'urgent');
+  const nonUrgentLocked = locked.filter(d => d.priority !== 'urgent');
+  const preemptedIds = new Set<string>();
+
+  const freeSlotsCount = Math.max(0, station.capacity - locked.length);
+  const neededPreemptions = Math.max(0, urgentWaiting.length - freeSlotsCount);
+
+  if (neededPreemptions > 0 && nonUrgentLocked.length > 0) {
+    nonUrgentLocked.sort((a, b) =>
+      new Date(b.expected_ready_at!).getTime() - new Date(a.expected_ready_at!).getTime()
+    );
+
+    const preemptCount = Math.min(neededPreemptions, nonUrgentLocked.length);
+
+    for (let i = 0; i < preemptCount; i++) {
+      const victim = nonUrgentLocked[i];
+      const lockIdx = locked.findIndex(l => l.id === victim.id);
+      if (lockIdx === -1) continue;
+
+      slots[lockIdx] = now;
+      locked.splice(lockIdx, 1);
+      victim.cooking_started = false;
+      waiting.push(victim);
+      preemptedIds.add(victim.id);
+    }
+
+    waiting.sort((a, b) => {
+      if (a.priority !== b.priority) return a.priority === 'urgent' ? -1 : 1;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
+  }
+
   const toLock: { id: string; expectedReadyAt: string }[] = [];
   const toUpdate: { id: string; expectedReadyAt: string }[] = [];
+  const toUnlock: string[] = [...preemptedIds];
 
   for (const demand of waiting) {
     let earliestIdx = 0;
@@ -59,9 +92,18 @@ export async function recomputeStationQueue(stationId: string): Promise<void> {
     }
   }
 
+  const relockedIds = new Set(toLock.map(l => l.id));
+  const unlockOnly = toUnlock.filter(id => !relockedIds.has(id));
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    for (const id of unlockOnly) {
+      await client.query(
+        `UPDATE demands SET cooking_started = false, cooking_started_at = NULL WHERE id = $1`,
+        [id]
+      );
+    }
     for (const u of toLock) {
       await client.query(
         `UPDATE demands SET expected_ready_at = $1, cooking_started = true, cooking_started_at = now()

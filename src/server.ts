@@ -13,6 +13,8 @@ import dailyMenuRoutes from './routes/daily-menu';
 import analyticsRoutes from './routes/analytics';
 import authRoutes from './routes/auth';
 import kitchenStationsRoutes from './routes/kitchen-stations';
+import stationThemeRoutes from './routes/station-themes';
+import shiftRoutes from './routes/shift';
 import unitsRoutes from './routes/units';
 import adminRoutes from './routes/admin';
 import { registerSocketHandlers } from './socket/handlers';
@@ -36,15 +38,9 @@ fastify.io = io;
 
 registerSocketHandlers(io);
 
-const views = {
-  salao: fs.readFileSync(path.join(__dirname, 'views', 'salao.html'), 'utf8'),
-  cozinha: fs.readFileSync(path.join(__dirname, 'views', 'cozinha.html'), 'utf8'),
-  cozinha_quente: fs.readFileSync(path.join(__dirname, 'views', 'cozinha-quente.html'), 'utf8'),
-  cozinha_fria: fs.readFileSync(path.join(__dirname, 'views', 'cozinha-fria.html'), 'utf8'),
-  gerente: fs.readFileSync(path.join(__dirname, 'views', 'gerente.html'), 'utf8'),
-  admin: fs.readFileSync(path.join(__dirname, 'views', 'admin.html'), 'utf8'),
-  dashboard: fs.readFileSync(path.join(__dirname, 'views', 'dashboard.html'), 'utf8'),
-};
+function getView(filename: string): string {
+  return fs.readFileSync(path.join(__dirname, 'views', filename), 'utf8');
+}
 
 fastify.register(fastifyStatic, {
   root: path.join(__dirname, 'views', 'styles'),
@@ -52,32 +48,39 @@ fastify.register(fastifyStatic, {
   prefixAvoidTrailingSlash: true,
 });
 
+fastify.register(fastifyStatic, {
+  root: path.join(__dirname, 'views', 'scripts'),
+  prefix: '/scripts/',
+  prefixAvoidTrailingSlash: true,
+  decorateReply: false,
+});
+
 fastify.get('/salao', async (_request, reply) => {
-  return reply.type('text/html').send(views.salao);
+  return reply.type('text/html').send(getView('salao.html'));
 });
 
 fastify.get('/cozinha', async (_request, reply) => {
-  return reply.type('text/html').send(views.cozinha);
+  return reply.type('text/html').send(getView('cozinha.html'));
 });
 
 fastify.get('/cozinha-quente', async (_request, reply) => {
-  return reply.type('text/html').send(views.cozinha_quente);
+  return reply.type('text/html').send(getView('cozinha-quente.html'));
 });
 
 fastify.get('/cozinha-fria', async (_request, reply) => {
-  return reply.type('text/html').send(views.cozinha_fria);
+  return reply.type('text/html').send(getView('cozinha-fria.html'));
 });
 
 fastify.get('/gerente', async (_request, reply) => {
-  return reply.type('text/html').send(views.gerente);
+  return reply.type('text/html').send(getView('gerente.html'));
 });
 
 fastify.get('/admin', async (_request, reply) => {
-  return reply.type('text/html').send(views.admin);
+  return reply.type('text/html').send(getView('admin.html'));
 });
 
 fastify.get('/dashboard', async (_request, reply) => {
-  return reply.type('text/html').send(views.dashboard);
+  return reply.type('text/html').send(getView('dashboard.html'));
 });
 
 fastify.get('/health', async (_request, reply) => {
@@ -90,6 +93,8 @@ fastify.register(dailyMenuRoutes, { prefix: '/api/v1/daily-menu' });
 fastify.register(analyticsRoutes, { prefix: '/api/v1/analytics' });
 fastify.register(authRoutes, { prefix: '/api/v1/auth' });
 fastify.register(kitchenStationsRoutes, { prefix: '/api/v1/kitchen-stations' });
+fastify.register(stationThemeRoutes, { prefix: '/api/v1/station-themes' });
+fastify.register(shiftRoutes, { prefix: '/api/v1/shift' });
 fastify.register(unitsRoutes, { prefix: '/api/v1/units' });
 fastify.register(adminRoutes, { prefix: '/api/v1/admin' });
 
@@ -116,6 +121,66 @@ async function seedDatabase() {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+
+      // Keep local/dev databases aligned with the versioned station-theme migration.
+      await client.query(
+        `ALTER TABLE kitchen_stations
+         ADD COLUMN IF NOT EXISTS theme text NOT NULL DEFAULT 'dark'`
+      );
+      await client.query(
+        `DO $$
+         BEGIN
+           IF NOT EXISTS (
+             SELECT 1 FROM pg_constraint
+             WHERE conname = 'kitchen_stations_theme_check'
+           ) THEN
+             ALTER TABLE kitchen_stations
+               ADD CONSTRAINT kitchen_stations_theme_check
+               CHECK (theme IN ('dark', 'light'));
+           END IF;
+         END $$`
+      );
+      await client.query(
+        `UPDATE kitchen_stations SET theme = 'dark'
+         WHERE theme IS NULL OR theme NOT IN ('dark', 'light')`
+      );
+      await client.query(
+        `INSERT INTO system_settings (key, value)
+         VALUES ('station_theme_salao', 'dark')
+         ON CONFLICT (key) DO NOTHING`
+      );
+
+      // Espelho da migration dinner-shift: estação jantar + estado do turno + evento shift_transfer
+      await client.query(
+        `INSERT INTO kitchen_stations (code, name, capacity, theme)
+         VALUES ('jantar', 'Cozinha Jantar', 1, 'dark')
+         ON CONFLICT (code) DO NOTHING`
+      );
+      await client.query(
+        `INSERT INTO system_settings (key, value)
+         VALUES ('shift_dinner_active_date', '')
+         ON CONFLICT (key) DO NOTHING`
+      );
+      await client.query(
+        `DO $$
+         BEGIN
+           IF NOT EXISTS (
+             SELECT 1 FROM pg_constraint
+             WHERE conname = 'demand_events_event_type_check'
+               AND contype = 'c' AND conrelid = 'demand_events'::regclass
+               AND pg_get_constraintdef(oid) LIKE '%shift_transfer%'
+           ) THEN
+             ALTER TABLE demand_events DROP CONSTRAINT IF EXISTS demand_events_event_type_check;
+             ALTER TABLE demand_events ADD CONSTRAINT demand_events_event_type_check
+               CHECK (event_type IN (
+                 'created', 'marked_ready', 'retrieved',
+                 'cancelled_salao', 'cancelled_cozinha',
+                 'stockout_reported', 'sla_breach_cozinha', 'sla_breach_salao',
+                 'annulled', 'shift_transfer'
+               ));
+           END IF;
+         END $$`
+      );
 
       const { rows: ksRows } = await client.query('SELECT id, code FROM kitchen_stations');
       const stationMap: Record<string, string> = {};

@@ -1,0 +1,38 @@
+# KDS Bridge — stack de produção (Docker Compose)
+# Uso: docker compose up -d --build
+# Variáveis do app vêm do arquivo .env (mesmo formato do desenvolvimento)
+services:
+  app:
+    build: .
+    container_name: kds-bridge
+    restart: unless-stopped
+    env_file: .env
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2
+    container_name: kds-caddy
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=kds.duckdns.org
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+networks:
+  default:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 2001:db8:2::/64
+
+volumes:
+  caddy_data:
+  caddy_config:

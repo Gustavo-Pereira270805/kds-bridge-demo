@@ -20,14 +20,15 @@ export default async function productsRoutes(fastify: FastifyInstance) {
     try {
       const q = request.query.q ?? '';
       const rows = await query<ProductSearchRow>(
-        `SELECT p.id, p.name, p.category, p.kitchen_station_id,
+        `SELECT p.id, p.name, p.category, p.kitchen_station_id, ks.code AS station_code,
           EXISTS(
             SELECT 1 FROM daily_menu_effective dme
             WHERE dme.product_id = p.id AND dme.date = CURRENT_DATE
           ) AS in_today_menu
         FROM products p
+        LEFT JOIN kitchen_stations ks ON ks.id = p.kitchen_station_id
         WHERE p.active = true AND p.name ILIKE $1
-        ORDER BY in_today_menu DESC, p.name
+        ORDER BY (ks.code = 'jantar') DESC, in_today_menu DESC, p.name
         LIMIT 15`,
         [`%${q}%`]
       );

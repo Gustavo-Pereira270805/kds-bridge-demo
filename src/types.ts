@@ -19,6 +19,7 @@ export interface KitchenStation {
   code: string;
   name: string;
   capacity: number;
+  theme: 'dark' | 'light';
   created_at: string;
   updated_at: string;
 }
@@ -70,6 +71,17 @@ export interface DailyMenuOverride {
   reason: string | null;
 }
 
+export interface ShiftStatus {
+  shift: 'lunch' | 'dinner';
+}
+
+export interface StartDinnerResponse {
+  shift: 'dinner';
+  added_products: number;
+  transferred_demands: number;
+  pending_lunch_demands: number;
+}
+
 export interface DailyMenuEffective {
   date: string;
   daily_menu_id: string;
@@ -78,6 +90,7 @@ export interface DailyMenuEffective {
   category: string;
   default_unit: string;
   origin: 'base' | 'manual_add';
+  station_code?: string;
 }
 
 export type DemandStatus =
@@ -143,7 +156,8 @@ export type DemandEventType =
   | 'stockout_reported'
   | 'sla_breach_cozinha'
   | 'sla_breach_salao'
-  | 'annulled';
+  | 'annulled'
+  | 'shift_transfer';
 
 export interface CreateDemandBody {
   product_id: string;
@@ -268,6 +282,7 @@ export interface ProductSearchRow {
   category: string | null;
   kitchen_station_id: string | null;
   in_today_menu: boolean;
+  station_code?: string;
 }
 
 // v2.5 — calendário de cardápios (gerente)
@@ -305,6 +320,14 @@ export interface ReplacementRow {
 }
 
 // Performance / scoring types
+export interface PerformanceWeights {
+  sla_min: number;
+  sla_max: number;
+  cancellation_cozinha: number;
+  cancellation_salao: number;
+  stockout_salao: number;
+}
+
 export interface PerformanceScoreRow {
   id: string;
   entity: string;
@@ -339,12 +362,21 @@ export interface EntityScore {
   cancellation_deduction: number;
   stockouts: number;
   stockout_deduction: number;
-  slow_items: number;
-  slow_item_deduction: number;
   detractors: PerformanceDetractor[];
 }
 
 export interface PerformanceResponse {
   current: Record<string, EntityScore>;
+  averages: Record<string, Omit<EntityScore, 'base_score'>>;
   history: { date: string; [entity: string]: number | string }[];
+  detractor_dates: Record<string, Array<{
+    type: string;
+    date: string;
+    demand_id: string;
+    product_name: string;
+    detail: string;
+    deduction: number;
+    station?: string;
+  }> >;
+  weights: PerformanceWeights;
 }

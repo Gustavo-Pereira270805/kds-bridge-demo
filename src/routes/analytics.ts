@@ -21,7 +21,17 @@ import {
   ReplacementRow,
   PerformanceScoreRow,
 } from '../types';
-import { ensureScoresForDate, buildDetractors, getDetractorDates } from '../services/performance.service';
+import { ensureScoresForDate, buildDetractors, getDetractorDates, getWeights } from '../services/performance.service';
+
+function validarDataIso(value: string | undefined): boolean {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
+}
+
+function intervaloInclusivo(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000) + 1;
+}
 
 // v2.5 (§5.6) — indicadores diários embutidos em cada dia do week_comparison;
 // a data fica no objeto externo, então `day` é omitida do sub-objeto
@@ -675,16 +685,28 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
   );
 
   // ── Performance / Notas de Desempenho ──
-  fastify.get<{ Querystring: { range?: string } }>(
+  fastify.get<{ Querystring: { range?: string; from?: string; to?: string; station_id?: string } }>(
     '/performance',
     async (request, reply) => {
       try {
-        const { range } = request.query;
+        const { range, from, to, station_id } = request.query;
         const now = new Date();
 
         let dateFrom: string;
         let dateTo: string;
-        if (range === 'week') {
+        if (from || to) {
+          dateFrom = from || to as string;
+          dateTo = to || from as string;
+          if (!validarDataIso(dateFrom) || !validarDataIso(dateTo)) {
+            return reply.code(400).send({ error: 'A data deve estar no formato ISO YYYY-MM-DD e ser válida' });
+          }
+          if (dateFrom > dateTo) {
+            return reply.code(400).send({ error: 'A data inicial deve ser anterior ou igual à data final' });
+          }
+          if (intervaloInclusivo(dateFrom, dateTo) > 31) {
+            return reply.code(400).send({ error: 'O período máximo é de 31 dias' });
+          }
+        } else if (range === 'week') {
           const d = new Date(now);
           d.setDate(d.getDate() - 7);
           dateFrom = d.toISOString().split('T')[0];
@@ -700,18 +722,15 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         }
 
         // Ensure today's scores are computed
-        await ensureScoresForDate(now.toISOString().split('T')[0]);
-        if (dateFrom !== dateTo) {
-          // Compute missing historical dates
-          const cur = new Date(dateFrom);
-          const end = new Date(dateTo);
-          while (cur <= end) {
-            await ensureScoresForDate(cur.toISOString().split('T')[0]);
-            cur.setDate(cur.getDate() + 1);
-          }
+        // Compute the requested dates. This also makes exact daily exports deterministic.
+        const cur = new Date(dateFrom + 'T00:00:00');
+        const end = new Date(dateTo + 'T00:00:00');
+        while (cur <= end) {
+          await ensureScoresForDate(cur.toISOString().split('T')[0]);
+          cur.setDate(cur.getDate() + 1);
         }
 
-        const entities = ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'salao'];
+        const entities = ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'cozinha_jantar', 'salao'];
 
         // Current scores
         const currentRows = await query<PerformanceScoreRow>(
@@ -724,17 +743,15 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         for (const row of currentRows) {
           current[row.entity] = {
             entity: row.entity,
-            final_score: row.final_score,
-            base_score: row.base_score,
-            total_demands: row.total_demands,
-            sla_breaches: row.sla_breaches,
-            sla_breach_deduction: row.sla_breach_deduction,
-            cancellations: row.cancellations,
-            cancellation_deduction: row.cancellation_deduction,
-            stockouts: row.stockouts,
-            stockout_deduction: row.stockout_deduction,
-            slow_items: row.slow_items,
-            slow_item_deduction: row.slow_item_deduction,
+            final_score: Number(row.final_score),
+            base_score: Number(row.base_score),
+            total_demands: Number(row.total_demands),
+            sla_breaches: Number(row.sla_breaches),
+            sla_breach_deduction: Number(row.sla_breach_deduction),
+            cancellations: Number(row.cancellations),
+            cancellation_deduction: Number(row.cancellation_deduction),
+            stockouts: Number(row.stockouts),
+            stockout_deduction: Number(row.stockout_deduction),
             detractors: buildDetractors(row),
           };
         }
@@ -743,7 +760,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         const detractorDates: Record<string, any[]> = {};
         for (const entity of entities) {
           try {
-            detractorDates[entity] = await getDetractorDates(entity, dateTo);
+            detractorDates[entity] = await getDetractorDates(entity, dateFrom, dateTo);
           } catch (e) {
             detractorDates[entity] = [];
           }
@@ -773,39 +790,45 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           );
         }
 
-        // Period averages (for week/month)
+        // Média e deduções acumuladas do período selecionado, inclusive um único dia
         let averages: Record<string, any> = {};
-        if (dateFrom !== dateTo) {
-          const avgRows = await query<{
-            entity: string; avg_score: string; total_demands: string;
-            sla_breaches: string; cancellations: string; stockouts: string; slow_items: string;
-          }>(
-            `SELECT entity,
-               ROUND(AVG(final_score)::numeric, 1) AS avg_score,
-               SUM(total_demands)::int AS total_demands,
-               SUM(sla_breaches)::int AS sla_breaches,
-               SUM(cancellations)::int AS cancellations,
-               SUM(stockouts)::int AS stockouts,
-               SUM(slow_items)::int AS slow_items
-             FROM performance_scores
-             WHERE date >= $1 AND date <= $2 AND entity = ANY($3)
-             GROUP BY entity`,
-            [dateFrom, dateTo, entities]
-          );
-          for (const row of avgRows) {
-            averages[row.entity] = {
-              entity: row.entity,
-              final_score: parseFloat(row.avg_score),
-              total_demands: parseInt(row.total_demands),
-              sla_breaches: parseInt(row.sla_breaches),
-              cancellations: parseInt(row.cancellations),
-              stockouts: parseInt(row.stockouts),
-              slow_items: parseInt(row.slow_items),
-            };
-          }
+        const avgRows = await query<{
+          entity: string; avg_score: string; total_demands: string;
+          sla_breaches: string; sla_breach_deduction: string;
+          cancellations: string; cancellation_deduction: string;
+          stockouts: string; stockout_deduction: string;
+        }>(
+          `SELECT entity,
+             ROUND(AVG(final_score)::numeric, 1) AS avg_score,
+             SUM(total_demands)::int AS total_demands,
+             SUM(sla_breaches)::int AS sla_breaches,
+             SUM(sla_breach_deduction) AS sla_breach_deduction,
+             SUM(cancellations)::int AS cancellations,
+             SUM(cancellation_deduction) AS cancellation_deduction,
+             SUM(stockouts)::int AS stockouts,
+             SUM(stockout_deduction) AS stockout_deduction
+           FROM performance_scores
+           WHERE date >= $1 AND date <= $2 AND entity = ANY($3)
+           GROUP BY entity`,
+          [dateFrom, dateTo, entities]
+        );
+        const periodDays = intervaloInclusivo(dateFrom, dateTo);
+        for (const row of avgRows) {
+          const average = {
+            entity: row.entity,
+            final_score: parseFloat(row.avg_score),
+            total_demands: parseInt(row.total_demands),
+            sla_breaches: parseInt(row.sla_breaches),
+            sla_breach_deduction: Math.round(parseFloat(row.sla_breach_deduction || '0') / periodDays * 100) / 100,
+            cancellations: parseInt(row.cancellations),
+            cancellation_deduction: Math.round(parseFloat(row.cancellation_deduction || '0') / periodDays * 100) / 100,
+            stockouts: parseInt(row.stockouts),
+            stockout_deduction: Math.round(parseFloat(row.stockout_deduction || '0') / periodDays * 100) / 100,
+          };
+          averages[row.entity] = Object.assign(average, { detractors: buildDetractors(average) });
         }
 
-        return { current, history, averages, detractor_dates: detractorDates };
+        return { current, history, averages, detractor_dates: detractorDates, weights: await getWeights() };
       } catch (error: any) {
         const msg = error && typeof error === 'object' ? (error.message || String(error)) : String(error);
         request.log.error(error);
