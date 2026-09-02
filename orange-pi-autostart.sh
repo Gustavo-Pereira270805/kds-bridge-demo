@@ -16,6 +16,9 @@
 
 # IP do PC (ou servidor cloud) onde roda o KDS, na porta 3000.
 # No Windows, descubra com: ipconfig -> IPv4 do adaptador de rede.
+# Em produção use o domínio DuckDNS (independe da rede local) ou o IP tailnet 100.x:
+#   SERVER_URL="https://kds-framboa.duckdns.org"  # produção (recomendado)
+#   SERVER_URL="http://100.x.x.x:3000"            # tailnet Tailscale se o servidor estiver na mesma tailnet
 SERVER_URL="https://kds-framboa.duckdns.org"
 
 # Tela deste Orange Pi: "quente" ou "fria"
@@ -47,7 +50,7 @@ chromium --noerrdialogs \
          --kiosk \
          --disable-session-crashed-bubble \
          --disable-restore-session-state \
-         --user-data-dir="$HOME/.config/chromium-kiosk" \
+         --user-data-dir="/tmp/chromium-kiosk" \
          "$URL"
 
 # =====================================================
