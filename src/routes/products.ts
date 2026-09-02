@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { query } from '../db/client';
 import { Product, ProductSearchRow } from '../types';
+import { requireRole } from '../middleware/auth';
 
 export default async function productsRoutes(fastify: FastifyInstance) {
   fastify.get('/', async (request, reply) => {
@@ -51,7 +52,7 @@ export default async function productsRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.patch<{ Params: { id: string } }>('/:id', async (request, reply) => {
+  fastify.patch<{ Params: { id: string } }>('/:id', { preHandler: requireRole('gerente', 'admin') }, async (request, reply) => {
     try {
       const { id } = request.params;
       const products = await query<Product>(

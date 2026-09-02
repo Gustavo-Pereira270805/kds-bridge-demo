@@ -4,6 +4,17 @@ declare module 'fastify' {
   interface FastifyInstance {
     io: SocketIOServer;
   }
+  interface FastifyRequest {
+    user?: AuthUser;
+  }
+}
+
+export type UserRole = 'salao' | 'cozinha' | 'gerente' | 'admin';
+
+export interface AuthUser {
+  id: string;
+  email: string | undefined;
+  role: UserRole;
 }
 
 export interface Unit {
@@ -131,6 +142,7 @@ export interface Demand {
   is_replacement: boolean;
   replaced_product_id: string | null;
   replaced_name?: string | null;
+  origin_station_id?: string | null;
   ready_out_of_order: boolean;
   annulled_at: string | null;
   annulled_by: string | null;

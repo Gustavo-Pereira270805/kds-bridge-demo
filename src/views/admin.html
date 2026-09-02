@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="/styles/theme.css">
     <script src="/scripts/theme.js"></script>
     <script src="/socket.io/socket.io.js"></script>
+    <script src="/scripts/security.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -328,6 +329,7 @@
    </div>
 
 <script>
+if (!kdsGuard()) throw new Error('redirecionando para login');
 (function () {
     var button = document.getElementById('themeToggle');
     var label = button && button.querySelector('.theme-toggle-label');
@@ -386,14 +388,6 @@ function confirmDialog(message) {
     backdrop.addEventListener('click', onBackdrop);
     document.addEventListener('keydown', onKey);
   });
-}
-
-var tokens = localStorage.getItem('admin_token') || '';
-if (tokens) {
-    api('/api/v1/auth/me', { headers: { Authorization: 'Bearer ' + tokens } }).catch(function() {
-        tokens = '';
-        localStorage.removeItem('admin_token');
-    });
 }
 
 function switchTab(name) {
@@ -456,18 +450,18 @@ function loadProducts() {
                 stName = st ? st.name : p.kitchen_station_id;
             }
             return '<tr>' +
-                '<td><strong>' + p.name + '</strong></td>' +
-                '<td>' + p.category + '</td>' +
+                '<td><strong>' + esc(p.name) + '</strong></td>' +
+                '<td>' + esc(p.category) + '</td>' +
                 '<td><select onchange="updateProduct(\'' + p.id + '\',\'kitchen_station_id\',this.value)" style="width:200px;">' +
                     '<option value="">--</option>' +
-                    allStations.map(function(s) { return '<option value="' + s.id + '"' + (p.kitchen_station_id === s.id ? ' selected' : '') + '>' + s.name + '</option>'; }).join('') +
+                    allStations.map(function(s) { return '<option value="' + s.id + '"' + (p.kitchen_station_id === s.id ? ' selected' : '') + '>' + esc(s.name) + '</option>'; }).join('') +
                 '</select></td>' +
                 '<td><input type="number" class="sla-input" value="' + p.sla_minutes_normal + '" min="1" onchange="updateProduct(\'' + p.id + '\',\'sla_minutes_normal\',this.value)" style="width:70px;"></td>' +
                 '<td><input type="number" class="sla-input" value="' + p.sla_minutes_urgente + '" min="1" onchange="updateProduct(\'' + p.id + '\',\'sla_minutes_urgente\',this.value)" style="width:70px;"></td>' +
                 '<td>' + (p.active ? '<span style="color:var(--c-accent-warm);">Sim</span>' : '<span style="color:var(--c-danger);">Não</span>') + '</td>' +
                 '<td>' +
                     '<button class="btn-sm ' + (p.active ? 'btn-warning' : 'btn-success') + '" onclick="toggleProduct(\'' + p.id + '\')">' + (p.active ? 'Desativar' : 'Ativar') + '</button> ' +
-                    '<button class="btn-sm btn-danger" onclick="deleteProduct(\'' + p.id + '\',\'' + p.name + '\')">X</button>' +
+                    '<button class="btn-sm btn-danger" data-action="delete-product" data-id="' + p.id + '" data-name="' + esc(p.name) + '">X</button>' +
                 '</td>' +
             '</tr>';
         }).join('');
@@ -524,14 +518,14 @@ function loadStations() {
                 '<td><button class="btn-primary btn-sm" id="save-theme-salao" onclick="saveSalonTheme()">Salvar</button></td></tr>';
         tbody.innerHTML = salonRow + stations.map(function(s) {
             var theme = s.theme === 'light' ? 'light' : 'dark';
-            return '<tr><td><strong>' + s.name + '</strong></td><td>' + s.code + '</td>' +
-                '<td><input type="number" id="cap-' + s.id + '" value="' + s.capacity + '" min="1" style="width:70px;"></td>' +
-                '<td><select id="theme-' + s.id + '" aria-label="Tema de ' + s.name + '"><option value="dark"' + (theme === 'dark' ? ' selected' : '') + '>Escuro</option><option value="light"' + (theme === 'light' ? ' selected' : '') + '>Claro</option></select></td>' +
+            return '<tr><td><strong>' + esc(s.name) + '</strong></td><td>' + esc(s.code) + '</td>' +
+                '<td><input type="number" id="cap-' + s.id + '" value="' + s.capacity + '" min="1" max="32" style="width:70px;"></td>' +
+                '<td><select id="theme-' + s.id + '" aria-label="Tema de ' + escAttr(s.name) + '"><option value="dark"' + (theme === 'dark' ? ' selected' : '') + '>Escuro</option><option value="light"' + (theme === 'light' ? ' selected' : '') + '>Claro</option></select></td>' +
                 '<td><button class="btn-primary btn-sm" id="save-' + s.id + '" onclick="saveStationSettings(\'' + s.id + '\')">Salvar</button></td></tr>';
         }).join('');
         if (document.getElementById('panel-products').classList.contains('active')) loadProducts();
         var sel = document.getElementById('newStation');
-        sel.innerHTML = '<option value="">Sem cozinha</option>' + stations.map(function(s) { return '<option value="' + s.id + '">' + s.name + '</option>'; }).join('');
+        sel.innerHTML = '<option value="">Sem cozinha</option>' + stations.map(function(s) { return '<option value="' + s.id + '">' + esc(s.name) + '</option>'; }).join('');
     });
 }
 
@@ -558,26 +552,18 @@ function saveSalonTheme() {
 function updateCapacity(id) {
     var cap = parseInt(document.getElementById('cap-' + id).value);
     if (!cap || cap < 1) { toast('Capacidade deve ser >= 1', false); return; }
-    if (tokens) {
-        api('/api/v1/kitchen-stations/' + id, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tokens },
-            body: JSON.stringify({ capacity: cap })
-        }).then(function() { toast('Capacidade atualizada', true); loadStations(); }).catch(function(e) { toast(e.message, false); });
-    } else {
-        api('/api/v1/kitchen-stations/' + id, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ capacity: cap })
-        }).then(function() { toast('Capacidade atualizada', true); loadStations(); }).catch(function(e) { toast(e.message, false); });
-    }
+    api('/api/v1/kitchen-stations/' + id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ capacity: cap })
+    }).then(function() { toast('Capacidade atualizada', true); loadStations(); }).catch(function(e) { toast(e.message, false); });
 }
 
 // === MENUS ===
 function loadMenus() {
     api('/api/v1/admin/menus').then(function(menus) {
         var sel = document.getElementById('menuSelect');
-        sel.innerHTML = menus.map(function(m) { return '<option value="' + m.id + '">Cardápio ' + m.number + ' — ' + m.name + '</option>'; }).join('');
+        sel.innerHTML = menus.map(function(m) { return '<option value="' + m.id + '">Cardápio ' + m.number + ' — ' + esc(m.name) + '</option>'; }).join('');
         loadMenuProducts();
     });
 }
@@ -592,14 +578,14 @@ function loadMenuProducts() {
             ? '<p style="color:var(--c-text-secondary);">Nenhum produto neste cardápio</p>'
             : menuProds.map(function(p) {
                 return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid var(--c-border-default);">' +
-                    '<span>' + p.name + ' <small style="color:var(--c-text-secondary);">(' + p.category + ')</small></span>' +
+                    '<span>' + esc(p.name) + ' <small style="color:var(--c-text-secondary);">(' + esc(p.category) + ')</small></span>' +
                     '<button class="btn-sm btn-danger" onclick="removeFromMenu(\'' + menuId + '\',\'' + p.product_id + '\')">Remover</button></div>';
             }).join('');
 
         var menuProdIds = new Set(menuProds.map(function(p) { return p.product_id; }));
         document.getElementById('availableProductList').innerHTML = allProds.filter(function(p) { return !menuProdIds.has(p.id); }).map(function(p) {
             return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid var(--c-border-default);">' +
-                '<span>' + p.name + ' <small style="color:var(--c-text-secondary);">(' + p.category + ')</small></span>' +
+                '<span>' + esc(p.name) + ' <small style="color:var(--c-text-secondary);">(' + esc(p.category) + ')</small></span>' +
                 '<button class="btn-sm btn-success" onclick="addToMenu(\'' + menuId + '\',\'' + p.id + '\')">Adicionar</button></div>';
         }).join('');
     });
@@ -644,20 +630,20 @@ function loadUnitsPanel() {
                     : '<span style="color:var(--c-danger);cursor:pointer;" onclick="toggleUnitActive(\'' + u.id + '\')" title="Reativar">Nao</span>') + '</td>' +
                 '<td>' +
                     '<button class="btn-sm btn-primary" onclick="saveUnit(\'' + u.id + '\')">Salvar</button> ' +
-                    '<button class="btn-sm btn-danger" onclick="deleteUnit(\'' + u.id + '\',\'' + esc(u.label) + '\')">X</button>' +
+                    '<button class="btn-sm btn-danger" data-action="delete-unit" data-id="' + u.id + '" data-name="' + esc(u.label) + '">X</button>' +
                 '</td>' +
             '</tr>';
         }).join('');
 
         // Checkboxes para vínculo com produto (só ativas)
         document.getElementById('unitCheckboxes').innerHTML = allUnits.filter(function(u) { return u.active; }).map(function(u) {
-            return '<label style="white-space:nowrap;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:4px;"><input type="checkbox" class="unit-cb" value="' + u.id + '" style="accent-color:var(--c-accent-warm);"> ' + u.label + '</label>';
+            return '<label style="white-space:nowrap;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:4px;"><input type="checkbox" class="unit-cb" value="' + u.id + '" style="accent-color:var(--c-accent-warm);"> ' + esc(u.label) + '</label>';
         }).join('');
     });
     api('/api/v1/products/all').then(function(prods) {
         var sel = document.getElementById('unitProductSelect');
         sel.innerHTML = '<option value="">Selecione um produto...</option>' +
-            prods.map(function(p) { return '<option value="' + p.id + '">' + p.name + '</option>'; }).join('');
+            prods.map(function(p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('');
         sel.onchange = function() {
             if (!this.value) { document.querySelectorAll('.unit-cb').forEach(function(cb) { cb.checked = false; }); return; }
             api('/api/v1/units/by-product/' + encodeURIComponent(this.value)).then(function(prodUnits) {
@@ -667,8 +653,6 @@ function loadUnitsPanel() {
         };
     });
 }
-
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 function addUnit() {
     var code = document.getElementById('newUnitCode').value.trim();
@@ -738,7 +722,7 @@ function loadReasons() {
                 ? '<span style="background:var(--c-accent-cold);color:var(--c-text-invert);padding:3px 10px;border-radius:20px;font-size:12px;">Salão</span>'
                 : '<span style="background:var(--c-warn);color:var(--c-primary);padding:3px 10px;border-radius:20px;font-size:12px;">Cozinha</span>';
             return '<tr>' +
-                '<td><strong>' + r.label + '</strong></td>' +
+                '<td><strong>' + esc(r.label) + '</strong></td>' +
                 '<td>' + categoryBadge + '</td>' +
                 '<td>' +
                     '<button class="btn-sm ' + (r.active ? 'btn-warning' : 'btn-danger') + '" data-action="toggle" data-id="' + r.id + '">' + (r.active ? 'Ativo' : 'Inativo') + '</button>' +
@@ -776,6 +760,22 @@ async function deleteReason(id) {
 }
 
 document.getElementById('addReasonBtn').addEventListener('click', addReason);
+
+document.getElementById('productsTable').addEventListener('click', function(e) {
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    if (btn.getAttribute('data-action') === 'delete-product') {
+        deleteProduct(btn.getAttribute('data-id'), btn.getAttribute('data-name'));
+    }
+});
+
+document.getElementById('unitsTableBody').addEventListener('click', function(e) {
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    if (btn.getAttribute('data-action') === 'delete-unit') {
+        deleteUnit(btn.getAttribute('data-id'), btn.getAttribute('data-name'));
+    }
+});
 
 document.getElementById('reasonsTableBody').addEventListener('click', function(e) {
     var btn = e.target.closest('button');

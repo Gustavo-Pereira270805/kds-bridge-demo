@@ -135,6 +135,13 @@ body {
 }
 
 /* === Sticky header === */
+.header-controls {
+  display: flex; align-items: center; gap: 6px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.header-controls > * { flex-shrink: 0; }
 .sticky-top {
   position: sticky; top: 0; z-index: var(--z-sticky);
   height: var(--header-height);
@@ -153,7 +160,7 @@ body {
 .header-title {
   font-size: 15px; font-weight: var(--fw-bold);
   color: var(--c-text-invert);
-  margin: 0; margin-right: var(--sp-4);
+  margin: 0;
   white-space: nowrap;
   letter-spacing: -0.01em;
 }
@@ -170,7 +177,7 @@ body {
 .period-btn {
   background: transparent;
   border: 0;
-  padding: 5px 12px;
+  padding: 5px 7px;
   font-size: 12px;
   font-weight: var(--fw-medium);
   color: var(--c-text-secondary);
@@ -204,6 +211,9 @@ body {
   border-radius: var(--radius-md);
   transition: border-color var(--t-fast) var(--ease-out);
 }
+.date-range input[type="date"] { width: 110px; }
+.station-select { max-width: 112px; }
+.date-controls input[type="date"] { width: 98px; }
 .date-range input[type="date"]:focus,
 .station-select:focus {
   border-color: var(--c-accent-gold);
@@ -212,7 +222,7 @@ body {
 .date-range > span { color: var(--c-text-secondary); font-size: 12px; }
 .btn-apply {
   height: 32px;
-  padding: 0 var(--sp-4);
+  padding: 0 10px;
   font-size: 12px;
   font-weight: var(--fw-semi);
   background: var(--c-primary);

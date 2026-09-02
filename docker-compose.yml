@@ -9,6 +9,8 @@ services:
     env_file: .env
     expose:
       - "3000"
+    ports:
+      - "3000:3000"
 
   caddy:
     image: caddy:2
@@ -20,7 +22,7 @@ services:
       - "80:80"
       - "443:443"
     environment:
-      - DOMAIN=kds.duckdns.org
+      - DOMAIN=kds-framboa.duckdns.org
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -36,3 +38,4 @@ networks:
 volumes:
   caddy_data:
   caddy_config:
+

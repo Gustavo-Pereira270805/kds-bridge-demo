@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { query } from '../db/client';
+import { requireRole } from '../middleware/auth';
 
 type Theme = 'dark' | 'light';
 
@@ -34,7 +35,7 @@ export default async function stationThemeRoutes(fastify: FastifyInstance) {
     }
   });
 
-  fastify.patch<{ Body: { theme?: Theme } }>('/salao', async (request, reply) => {
+  fastify.patch<{ Body: { theme?: Theme } }>('/salao', { preHandler: requireRole('gerente', 'admin') }, async (request, reply) => {
     const { theme } = request.body;
     if (theme !== 'dark' && theme !== 'light') {
       return reply.code(400).send({ error: 'Tema inválido' });

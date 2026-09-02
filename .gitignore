@@ -16,3 +16,9 @@ outputs/
 final_runs/
 dev*.log
 start.log
+
+# Configuração local de agentes — não versionar
+opencode.json
+opencode.jsonc
+.opencode/
+AGENTS.md

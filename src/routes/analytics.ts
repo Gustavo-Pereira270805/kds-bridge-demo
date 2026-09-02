@@ -22,6 +22,7 @@ import {
   PerformanceScoreRow,
 } from '../types';
 import { ensureScoresForDate, buildDetractors, getDetractorDates, getWeights } from '../services/performance.service';
+import { requireRole } from '../middleware/auth';
 
 function validarDataIso(value: string | undefined): boolean {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -39,6 +40,8 @@ type DayIndicatorValues = Omit<DayIndicators, 'day'>;
 type WeekComparisonDayWithIndicators = WeekComparisonDay & { indicators: DayIndicatorValues };
 
 export default async function analyticsRoutes(fastify: FastifyInstance) {
+  fastify.addHook('preHandler', requireRole('gerente', 'admin'));
+
   fastify.get<{ Querystring: { from?: string; to?: string } }>(
     '/summary',
     async (request, reply) => {
@@ -679,7 +682,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         console.error('Message:', msg);
         console.error('Stack:', stack);
         request.log.error(error, 'Dashboard query failed');
-        reply.code(500).send({ error: 'Erro ao buscar dados do dashboard: ' + msg });
+        reply.code(500).send({ error: 'Erro ao buscar dados do dashboard' });
       }
     }
   );
@@ -832,7 +835,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
       } catch (error: any) {
         const msg = error && typeof error === 'object' ? (error.message || String(error)) : String(error);
         request.log.error(error);
-        reply.code(500).send({ error: 'Erro ao buscar performance: ' + msg });
+        reply.code(500).send({ error: 'Erro ao buscar performance' });
       }
     }
   );

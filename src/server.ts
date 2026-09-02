@@ -19,13 +19,20 @@ import unitsRoutes from './routes/units';
 import adminRoutes from './routes/admin';
 import { registerSocketHandlers } from './socket/handlers';
 import { runCleanup } from './services/cleanup.service';
+import { requireAuth } from './middleware/auth';
 
 const fastify = Fastify({ logger: true });
 
+const corsOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  ...(process.env.RETOOL_URL ? [process.env.RETOOL_URL] : []),
+];
+
 fastify.register(cors, {
-  origin: process.env.NODE_ENV === 'production'
-    ? [process.env.RETOOL_URL || '*']
-    : '*',
+  origin: corsOrigins,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 });
 
 const io = new Server(fastify.server, {
@@ -37,6 +44,25 @@ const io = new Server(fastify.server, {
 fastify.io = io;
 
 registerSocketHandlers(io);
+
+const PUBLIC_PATHS = [
+  '/health',
+  '/login',
+  '/salao',
+  '/cozinha',
+  '/cozinha-quente',
+  '/cozinha-fria',
+  '/gerente',
+  '/admin',
+  '/dashboard',
+  '/styles/',
+  '/scripts/',
+  '/socket.io/',
+];
+
+// O hook onRequest global foi removido.
+// A autenticação é imposta por rota através do `preHandler: requireRole(...)`
+// Isso permite que as rotas e views da cozinha sejam públicas, enquanto salão e gerente são protegidos.
 
 function getView(filename: string): string {
   return fs.readFileSync(path.join(__dirname, 'views', filename), 'utf8');
@@ -81,6 +107,10 @@ fastify.get('/admin', async (_request, reply) => {
 
 fastify.get('/dashboard', async (_request, reply) => {
   return reply.type('text/html').send(getView('dashboard.html'));
+});
+
+fastify.get('/login', async (_request, reply) => {
+  return reply.type('text/html').send(getView('login.html'));
 });
 
 fastify.get('/health', async (_request, reply) => {
@@ -160,6 +190,25 @@ async function seedDatabase() {
         `INSERT INTO system_settings (key, value)
          VALUES ('shift_dinner_active_date', '')
          ON CONFLICT (key) DO NOTHING`
+      );
+      // Rastreia a estação de origem nas transferências do turno jantar (reversão correta)
+      // origin_station_id deve ser uuid (mesmo tipo de kitchen_station_id) — text causava
+      // "COALESCE types text and uuid cannot be matched" ao ativar o turno jantar.
+      await client.query(
+        `ALTER TABLE demands
+         ADD COLUMN IF NOT EXISTS origin_station_id uuid`
+      );
+      await client.query(
+        `DO $$ BEGIN
+           IF EXISTS (
+             SELECT 1 FROM information_schema.columns
+             WHERE table_name = 'demands'
+               AND column_name = 'origin_station_id'
+               AND data_type = 'text'
+           ) THEN
+             ALTER TABLE demands ALTER COLUMN origin_station_id TYPE uuid USING origin_station_id::uuid;
+           END IF;
+         END $$`
       );
       await client.query(
         `DO $$

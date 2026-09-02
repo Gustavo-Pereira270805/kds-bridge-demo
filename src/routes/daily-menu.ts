@@ -3,6 +3,9 @@ import { query } from '../db/client';
 import { DailyMenuEffective, DailyMenu, DailyMenuCalendarRow } from '../types';
 import { computeMenuForDate, ensureTodayMenu, getMenuForDate } from '../services/menu.service';
 import { getCurrentShift } from '../services/shift.service';
+import { requireRole } from '../middleware/auth';
+
+const gerenteOrAdmin = requireRole('gerente', 'admin');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_CALENDAR_RANGE_DAYS = 62;
@@ -60,6 +63,7 @@ export default async function dailyMenuRoutes(fastify: FastifyInstance) {
   fastify.patch<{
     Body: { product_id: string; action: 'add' | 'remove'; reason?: string };
   }>('/today', {
+    preHandler: gerenteOrAdmin,
     schema: {
       body: {
         type: 'object',

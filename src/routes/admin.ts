@@ -1,13 +1,29 @@
 import { FastifyInstance } from 'fastify';
 import { query, pool } from '../db/client';
 import { DailyMenu, Demand, Menu, Product } from '../types';
-import { runCleanup } from '../services/cleanup.service';
+import { runCleanup, getRetentionDays } from '../services/cleanup.service';
 import { logDemandEvent } from '../services/demand-events.service';
 import { computeDailyScores, getWeights } from '../services/performance.service';
 import { recomputeStationQueue } from '../services/queue.service';
 import { ensureTodayMenu } from '../services/menu.service';
+import { requireAuth } from '../middleware/auth';
 
 export default async function adminRoutes(fastify: FastifyInstance) {
+  fastify.addHook('preHandler', async (request, reply) => {
+    const path = request.url.split('?')[0].replace(/^\/api\/v1\/admin/, '').replace(/^\//, '');
+    // Leitura de motivos de cancelamento é pública: cozinha (kiosks sem token) e salão a usam.
+    if (request.method === 'GET' && path === 'cancel-reasons') return;
+
+    // O hook anterior verificava request.user sem nunca populá-lo (o requireAuth não era chamado),
+    // então TODA rota admin retornava 401 "Token não fornecido" mesmo com token válido.
+    await requireAuth(request, reply);
+    if (reply.sent) return;
+
+    const role = request.user?.role;
+    if (role === 'admin' || role === 'gerente') return;
+    return reply.code(403).send({ error: 'Permissão insuficiente para esta operação' });
+  });
+
   // Produtos: criar
   fastify.post<{ Body: { name: string; category?: string; kitchen_station_id?: string | null; sla_minutes_normal?: number; sla_minutes_urgente?: number } }>(
     '/products', {
@@ -43,7 +59,23 @@ export default async function adminRoutes(fastify: FastifyInstance) {
 
   // Produtos: atualizar campos
   fastify.put<{ Params: { id: string }; Body: Record<string, unknown> }>(
-    '/products/:id', async (request, reply) => {
+    '/products/:id', {
+    schema: {
+      body: {
+        type: 'object',
+        minProperties: 1,
+        additionalProperties: false,
+        properties: {
+          name: { type: 'string', minLength: 1 },
+          category: { type: 'string' },
+          kitchen_station_id: { type: ['string', 'null'] },
+          sla_minutes_normal: { type: 'number', minimum: 1 },
+          sla_minutes_urgente: { type: 'number', minimum: 1 },
+          active: { type: 'boolean' },
+        },
+      },
+    },
+  }, async (request, reply) => {
     try {
       const { id } = request.params;
       const allowed = ['name', 'category', 'kitchen_station_id', 'sla_minutes_normal', 'sla_minutes_urgente', 'active'];
@@ -333,7 +365,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
       if (!demand) { client.release(); return reply.code(404).send({ error: 'Demanda não encontrada' }); }
       if (demand.status === 'annulled') { client.release(); return reply.code(400).send({ error: 'Demanda já anulada' }); }
 
-      const annulledBy = (request as { user?: { email?: string } }).user?.email ?? 'gerente';
+      const annulledBy = request.user?.email ?? 'gerente';
       const wasPending = demand.status === 'pending';
       const stationId = demand.kitchen_station_id;
       const demandDate = new Date(demand.created_at).toISOString().split('T')[0];
@@ -342,9 +374,14 @@ export default async function adminRoutes(fastify: FastifyInstance) {
 
       const { rows: [updated] } = await client.query<Demand>(
         `UPDATE demands SET status = 'annulled', annulled_at = NOW(), annulled_by = $1, annul_reason = $2
-         WHERE id = $3 RETURNING *`,
+         WHERE id = $3 AND status != 'annulled' RETURNING *`,
         [annulledBy, reason, id]
       );
+      if (!updated) {
+        await client.query('ROLLBACK');
+        client.release();
+        return reply.code(409).send({ error: 'Demanda não está mais pendente' });
+      }
 
       await client.query(
         `INSERT INTO demand_events (demand_id, event_type, actor, notes) VALUES ($1, $2, $3, $4)`,
@@ -377,7 +414,9 @@ export default async function adminRoutes(fastify: FastifyInstance) {
       if (olderThanDays !== undefined && (!Number.isInteger(olderThanDays) || olderThanDays <= 0)) {
         return reply.code(400).send({ error: 'older_than_days deve ser um inteiro maior que zero' });
       }
-      const result = await runCleanup(olderThanDays);
+      const floor = await getRetentionDays();
+      const effective = Math.max(olderThanDays ?? floor, floor);
+      const result = await runCleanup(effective);
       return result;
     } catch (error) {
       request.log.error(error);
@@ -472,7 +511,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
       const pendingLunchDemands = parseInt(countRows[0].cnt, 10);
 
       const { rows: transferred } = await client.query<{ id: string }>(
-        `UPDATE demands SET kitchen_station_id = $1
+        `UPDATE demands SET origin_station_id = COALESCE(origin_station_id, kitchen_station_id), kitchen_station_id = $1
          WHERE status = 'pending' AND created_at::date = $2 AND kitchen_station_id <> $1
          RETURNING id`,
         [jantarId, today]
@@ -554,7 +593,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
       );
 
       const { rows: transferred } = await client.query<{ id: string }>(
-        `UPDATE demands SET kitchen_station_id = $1
+        `UPDATE demands SET kitchen_station_id = COALESCE(origin_station_id, $1), origin_station_id = NULL
          WHERE status = 'pending' AND created_at::date = $2 AND kitchen_station_id = $3
          RETURNING id`,
         [quenteAId, today, jantarId]
