@@ -185,6 +185,7 @@
         <button class="tab" onclick="switchTab('unidades')">Unidades</button>
         <button class="tab" onclick="switchTab('reasons')">Motivos Cancelamento</button>
         <button class="tab" onclick="switchTab('weights')">Critérios de Avaliação</button>
+        <button class="tab" onclick="switchTab('pis')">Controle de Pis</button>
     </div>
 
     <!-- Painel: Produtos -->
@@ -328,6 +329,16 @@
        </div>
    </div>
 
+    <div id="panel-pis" class="panel">
+      <h2>Controle de Pis</h2>
+      <p style="color:var(--c-text-secondary)">Desligar requer ligar manualmente no Pi.</p>
+      <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:16px">
+        <div><h3>Quente <span id="badge-quente">offline</span></h3><button class="btn-danger" onclick="piPower('quente','shutdown')">Desligar</button> <button class="btn-warning" onclick="piPower('quente','reboot')">Reiniciar</button></div>
+        <div><h3>Fria <span id="badge-fria">offline</span></h3><button class="btn-danger" onclick="piPower('fria','shutdown')">Desligar</button> <button class="btn-warning" onclick="piPower('fria','reboot')">Reiniciar</button></div>
+        <div><h3>Ambos</h3><button class="btn-danger" onclick="piPower('ambos','shutdown')">Desligar Ambos</button> <button class="btn-warning" onclick="piPower('ambos','reboot')">Reiniciar Ambos</button></div>
+      </div>
+    </div>
+
 <script>
 if (!kdsGuard()) throw new Error('redirecionando para login');
 (function () {
@@ -408,6 +419,7 @@ function switchTab(name) {
     if (name === 'unidades') loadUnitsPanel();
     if (name === 'reasons') loadReasons();
     if (name === 'weights') loadWeights();
+    if(name==='pis'){ /* nada a carregar, heartbeat cuida */ }
 }
 
 // === PESOS DE PERFORMANCE ===
@@ -784,6 +796,18 @@ document.getElementById('reasonsTableBody').addEventListener('click', function(e
     var id = btn.getAttribute('data-id');
     if (action === 'toggle') toggleReason(id);
     if (action === 'delete') deleteReason(id);
+});
+
+function piPower(target, action){
+  confirmDialog(`Confirmar ${action} em ${target}? ${action==='shutdown'?'Desligar requer ligar manualmente.':''}`).then(ok=>{
+    if(!ok) return;
+    api(`/api/v1/admin/pis/${target}/${action}`, {method:'POST'}).then(d=> toast(`Comando ${action} enviado para ${target}`, true)).catch(e=> toast(e.message,false));
+  });
+}
+var socket = kdsSocket(io);
+socket.on('pi:heartbeat', ({hostname})=>{
+  const badge = hostname.includes('quente') ? document.getElementById('badge-quente') : document.getElementById('badge-fria');
+  if(badge){ badge.textContent='online'; badge.style.color='var(--c-accent-warm)'; }
 });
 
 // Init
