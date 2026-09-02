@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { query, pool } from '../db/client';
-import { DailyMenu, Demand, Menu, Product } from '../types';
+import { DailyMenu, Demand, Menu, PiAction, PiTarget, Product } from '../types';
 import { runCleanup, getRetentionDays } from '../services/cleanup.service';
 import { logDemandEvent } from '../services/demand-events.service';
 import { computeDailyScores, getWeights } from '../services/performance.service';
@@ -730,6 +730,29 @@ export default async function adminRoutes(fastify: FastifyInstance) {
       request.log.error(error);
       reply.code(500).send({ error: 'Erro ao salvar pesos' });
     }
+  });
+
+  // Pis: controle remoto (gerente/admin) — emite pi:power na sala kds-pis e audita em pi_events
+  fastify.post<{ Params: { target: string; action: string } }>('/pis/:target/:action', {
+    schema: {
+      params: {
+        type: 'object',
+        required: ['target', 'action'],
+        properties: {
+          target: { type: 'string', enum: ['quente', 'fria', 'ambos'] },
+          action: { type: 'string', enum: ['shutdown', 'reboot'] },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { target, action } = request.params as { target: PiTarget; action: PiAction };
+    const by = request.user!.email ?? request.user!.id;
+    const at = new Date().toISOString();
+    const room = 'kds-pis';
+    const payload = { target, action, by, at };
+    fastify.io.to(room).emit('pi:power', payload);
+    await query(`INSERT INTO pi_events (target, action, by, online) VALUES ($1,$2,$3,$4)`, [target, action, by, false]);
+    return { status: 'sent', target, action, by, at };
   });
 
 }
