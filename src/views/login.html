@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrar - KDS Bridge</title>
+    <script>
+      document.documentElement.setAttribute('data-theme', localStorage.getItem('kds-theme') || 'dark');
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/styles/theme.css">
+    <script src="/scripts/theme.js"></script>
+    <script src="/scripts/security.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--c-bg-page); color: var(--c-text-body);
+            min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px;
+        }
+        .login-card {
+            width: 100%; max-width: 380px; background: var(--c-bg-panel); padding: 32px;
+            border-radius: var(--radius-xl); box-shadow: var(--shadow-card-dark); border: 1px solid var(--c-border-default);
+        }
+        .login-card h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; color: var(--c-text-body); }
+        .login-card p { font-size: 13px; color: var(--c-text-secondary); margin-bottom: 24px; }
+        .field { margin-bottom: 16px; }
+        .field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--c-text-secondary); }
+        .field input {
+            width: 100%; padding: 10px 12px; font-size: 14px; font-family: inherit;
+            background: var(--c-bg-input, #1f2937); color: var(--c-text-body);
+            border: 1px solid var(--c-border-default); border-radius: var(--radius-md);
+            outline: none;
+        }
+        .field input:focus { border-color: var(--c-accent-gold); }
+        .btn-login {
+            width: 100%; padding: 12px; font-size: 15px; font-weight: 700; font-family: inherit;
+            background: var(--c-accent-gold); color: var(--c-on-accent);
+            border: none; border-radius: var(--radius-md); cursor: pointer; margin-top: 8px;
+        }
+        .btn-login:disabled { opacity: 0.6; cursor: wait; }
+        .error { color: var(--c-danger, #ef4444); font-size: 13px; margin-top: 12px; min-height: 18px; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h1>KDS Bridge</h1>
+        <p>Acesse com sua conta do restaurante</p>
+        <form id="loginForm" novalidate>
+            <div class="field">
+                <label for="email">E-mail</label>
+                <input type="email" id="email" name="email" autocomplete="username" required>
+            </div>
+            <div class="field">
+                <label for="password">Senha</label>
+                <input type="password" id="password" name="password" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="btn-login" id="btnLogin">Entrar</button>
+            <div class="error" id="error"></div>
+        </form>
+    </div>
+    <script>
+        (function () {
+            var form = document.getElementById('loginForm');
+            var btn = document.getElementById('btnLogin');
+            var errorEl = document.getElementById('error');
+            var next = new URLSearchParams(window.location.search).get('next') || '/salao';
+            if (!/^\/(salao|cozinha|cozinha-quente|cozinha-fria|gerente|admin|dashboard)$/.test(next)) {
+                next = '/salao';
+            }
+
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                errorEl.textContent = '';
+                var email = document.getElementById('email').value.trim();
+                var password = document.getElementById('password').value;
+                if (!email || !password) {
+                    errorEl.textContent = 'Informe e-mail e senha';
+                    return;
+                }
+                btn.disabled = true;
+                fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: email, password: password })
+                }).then(function (res) {
+                    return res.json().then(function (body) {
+                        if (!res.ok) throw new Error(body.error || 'Falha ao entrar');
+                        window.kdsSetToken(body.token, body.user && body.user.role);
+                        window.location.href = next;
+                    });
+                }).catch(function (err) {
+                    errorEl.textContent = err.message || 'Falha ao entrar';
+                    btn.disabled = false;
+                });
+            });
+        })();
+    </script>
+</body>
+</html>

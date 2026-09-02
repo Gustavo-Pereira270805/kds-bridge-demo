@@ -16,7 +16,7 @@
 
 # IP do PC (ou servidor cloud) onde roda o KDS, na porta 3000.
 # No Windows, descubra com: ipconfig -> IPv4 do adaptador de rede.
-SERVER_URL="http://SEU_PC_IP:3000"
+SERVER_URL="https://kds-framboa.duckdns.org"
 
 # Tela deste Orange Pi: "quente" ou "fria"
 KDS_SCREEN="quente"
@@ -73,3 +73,4 @@ chromium --noerrdialogs \
 # 4) Pacotes necessários (instale uma vez):
 #      sudo apt update && sudo apt install -y chromium unclutter
 # =====================================================
+

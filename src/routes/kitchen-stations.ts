@@ -2,6 +2,9 @@ import { FastifyInstance } from 'fastify';
 import { query } from '../db/client';
 import { KitchenStation } from '../types';
 import { recomputeStationQueue } from '../services/queue.service';
+import { requireRole } from '../middleware/auth';
+
+const MAX_CAPACITY = 32;
 
 export default async function kitchenStationsRoutes(fastify: FastifyInstance) {
   fastify.get('/', async (request, reply) => {
@@ -19,12 +22,13 @@ export default async function kitchenStationsRoutes(fastify: FastifyInstance) {
   fastify.patch<{ Params: { id: string }; Body: { capacity?: number; theme?: 'dark' | 'light' } }>(
     '/:id',
     {
+      preHandler: requireRole('gerente', 'admin'),
       schema: {
         body: {
           type: 'object',
           minProperties: 1,
           properties: {
-            capacity: { type: 'number', minimum: 1 },
+            capacity: { type: 'number', minimum: 1, maximum: MAX_CAPACITY },
             theme: { type: 'string', enum: ['dark', 'light'] },
           },
         },
@@ -35,7 +39,7 @@ export default async function kitchenStationsRoutes(fastify: FastifyInstance) {
         const { id } = request.params;
         const { capacity, theme } = request.body;
 
-        if (capacity !== undefined && (!Number.isInteger(capacity) || capacity < 1)) {
+        if (capacity !== undefined && (!Number.isInteger(capacity) || capacity < 1 || capacity > MAX_CAPACITY)) {
           return reply.code(400).send({ error: 'Capacidade inválida' });
         }
         if (theme !== undefined && theme !== 'dark' && theme !== 'light') {

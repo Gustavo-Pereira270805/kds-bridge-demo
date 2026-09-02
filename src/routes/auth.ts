@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { createClient } from '@supabase/supabase-js';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, roleFromUser } from '../middleware/auth';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -33,7 +33,8 @@ export default async function authRoutes(fastify: FastifyInstance) {
         });
 
         if (error) {
-          return reply.code(401).send({ error: error.message });
+          request.log.info({ email }, 'Falha de login');
+          return reply.code(401).send({ error: 'E-mail ou senha inválidos' });
         }
 
         return {
@@ -41,6 +42,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
           user: {
             id: data.user.id,
             email: data.user.email,
+            role: roleFromUser(data.user),
           },
         };
       } catch (error) {
@@ -50,15 +52,12 @@ export default async function authRoutes(fastify: FastifyInstance) {
     }
   );
 
-  fastify.get('/me', { preHandler: requireAuth }, async (request, reply) => {
+  fastify.get('/me', { preHandler: requireAuth }, async (request) => {
     try {
-      const token = request.headers.authorization?.replace('Bearer ', '');
-      const { data } = await supabase.auth.getUser(token!);
-
-      return { user: data.user };
+      return { user: request.user };
     } catch (error) {
       request.log.error(error);
-      reply.code(500).send({ error: 'Erro ao verificar autenticação' });
+      return { user: undefined };
     }
   });
 }

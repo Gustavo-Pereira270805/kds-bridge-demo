@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="/styles/theme.css">
     <script src="/scripts/theme.js"></script>
     <script src="/socket.io/socket.io.js"></script>
+    <script src="/scripts/security.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -390,7 +391,8 @@
         return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
-    var socket = io();
+    if (!kdsGuard()) throw new Error('redirecionando para login');
+    var socket = kdsSocket(io);
     socket.emit('identify', 'gerente');
 
     var allProducts = [];
@@ -442,7 +444,7 @@
                 var actionCell = isAnnulled
                     ? '<td class="cell-actions"><span style="color:#9ca3af;">—</span></td>'
                     : '<td><button type="button" class="btn-annul" data-id="' + d.id + '">Anular</button></td>';
-                return '<tr' + rowAttrs + '><td><strong>' + d.product_name + '</strong></td><td>' + d.quantity + '</td><td>' + (d.unit_label || '') + '</td>' +
+                return '<tr' + rowAttrs + '><td><strong>' + esc(d.product_name) + '</strong></td><td>' + d.quantity + '</td><td>' + esc(d.unit_label || '') + '</td>' +
                     '<td>' + (d.priority === 'urgent' ? 'Urgente' : 'Normal') + '</td>' + statusCell +
                     '<td class="mono">' + formatTime(d.created_at) + '</td>' + actionCell + '</tr>';
             }).join('');
@@ -469,7 +471,7 @@
                     ? ' <span class="badge-pill badge-dinner">Jantar</span>'
                     : '';
                 return '<div class="product-row">' +
-                    '<span><strong>' + p.name + '</strong> <small style="color:#999;">(' + p.category + ')</small>' + badge + '</span>' +
+                    '<span><strong>' + esc(p.name) + '</strong> <small style="color:#999;">(' + esc(p.category) + ')</small>' + badge + '</span>' +
                     '<button class="btn-toggle out-menu" data-id="' + p.product_id + '">Remover</button>' +
                 '</div>';
             }).join('');

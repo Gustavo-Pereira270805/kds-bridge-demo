@@ -5,6 +5,7 @@
     <title>Cozinha - KDS Bridge</title>
     <link rel="stylesheet" href="/styles/theme.css">
     <script src="/socket.io/socket.io.js"></script>
+    <script src="/scripts/security.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -163,7 +164,7 @@
     <div id="readyStrip" class="ready-strip"></div>
 
     <script>
-        const socket = io({
+                const socket = kdsSocket(io, {
             reconnection: true,
             reconnectionAttempts: Infinity,
             reconnectionDelay: 1000,
@@ -356,7 +357,7 @@
 
                 const etaText = etaDisplay(d.expected_ready_at);
                 const etaClass = overdue ? 'eta overdue' : 'eta';
-                const unitText = d.unit_label ? `<span class="unit-label">(${d.unit_label})</span>` : '';
+                const unitText = d.unit_label ? `<span class="unit-label">(${esc(d.unit_label)})</span>` : '';
                 const cookingBadge = d.cooking_started ? `<span class="cooking-badge">EM PREPARO</span>` : '';
                 const urgentLabel = d.priority === 'urgent' ? `<div class="urgent-label">URGENTE</div>` : '';
 
@@ -373,7 +374,7 @@
                     <div class="card-top">
                         <div class="qty">${d.quantity}x</div>
                         <div class="product-info">
-                            <div class="name">${d.product_name}${unitText}</div>
+                            <div class="name">${esc(d.product_name)}${unitText}</div>
                             ${cookingBadge}
                         </div>
                     </div>
@@ -394,8 +395,8 @@
                 readyStrip.innerHTML =
                     '<div class="ready-strip-header">PRONTO PARA RETIRAR · ' + ready.length + '</div>' +
                     sortedReady.map(d => {
-                        const unitText = d.unit_label ? `<span class="pill-unit">${d.unit_label}</span>` : '';
-                        return `<div class="ready-pill"><span class="pill-qty">${d.quantity}x</span><span class="pill-name">${d.product_name}</span>${unitText}</div>`;
+                        const unitText = d.unit_label ? `<span class="pill-unit">${esc(d.unit_label)}</span>` : '';
+                        return `<div class="ready-pill"><span class="pill-qty">${d.quantity}x</span><span class="pill-name">${esc(d.product_name)}</span>${unitText}</div>`;
                     }).join('');
             } else {
                 readyStrip.innerHTML = '';

@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="/styles/theme.css">
     <script src="/scripts/station-theme.js"></script>
     <script src="/socket.io/socket.io.js"></script>
+    <script src="/scripts/security.js"></script>
     <style>
         * { box-sizing: border-box; }
 
@@ -278,12 +279,13 @@
     </div>
 
     <script>
-        const stationSocket = io();
+        if (!kdsGuard()) throw new Error('redirecionando para login');
+        const stationSocket = kdsSocket(io);
         stationSocket.emit('join', 'salao');
         KDSStationTheme.watch(stationSocket, 'salao');
         KDSStationTheme.load('salao');
 (function() {
-    var socket = io();
+    var socket = kdsSocket(io);
     socket.emit('identify', 'salao');
     var demands = [];
     var products = [];
@@ -366,7 +368,7 @@
             var isReady = d.status === 'ready';
             var cls = isReady ? 'ready' : (d.priority === 'urgent' ? 'urgent' : 'pending');
             if (d.stockout_reported) cls += ' stockout';
-            var unitText = d.unit_label ? ' (' + d.unit_label + ')' : '';
+            var unitText = d.unit_label ? ' (' + esc(d.unit_label) + ')' : '';
             var qtyText = (typeof d.quantity === 'number' ? d.quantity : parseFloat(d.quantity) || d.quantity) + 'x';
             var badges = d.priority === 'urgent'
                 ? '<span class="badge urgent">URGENTE</span>'
@@ -384,7 +386,7 @@
 
             return '<div class="demand-card ' + cls + '">' +
                 '<div class="info">' +
-                    '<div class="name">' + qtyText + ' ' + d.product_name + unitText + ' ' + badges + '</div>' +
+                    '<div class="name">' + qtyText + ' ' + esc(d.product_name) + unitText + ' ' + badges + '</div>' +
                     '<div class="meta">' + timeAgo(d.created_at) + '</div>' +
                     (d.expected_ready_at ? '<div class="eta">ETA ' + etaDisplay(d.expected_ready_at) + '</div>' : '') +
                 '</div>' +
@@ -550,7 +552,7 @@
             populateReplacedProducts();
             if (select) {
                 select.innerHTML = '<option value=""></option>' +
-                    products.map(function(p) { return '<option value="' + p.product_id + '">' + p.name + '</option>'; }).join('');
+                    products.map(function(p) { return '<option value="' + p.product_id + '">' + esc(p.name) + '</option>'; }).join('');
                 if (prevVal) {
                     var opt = select.querySelector('option[value="' + prevVal + '"]');
                     if (!opt && prevText) {
@@ -569,7 +571,7 @@
         var select = document.getElementById('replacedProduct');
         if (!select) return;
         select.innerHTML = '<option value="">Item substituído...</option>' +
-            todayMenuProducts.map(function(p) { return '<option value="' + p.product_id + '">' + p.name + '</option>'; }).join('');
+            todayMenuProducts.map(function(p) { return '<option value="' + p.product_id + '">' + esc(p.name) + '</option>'; }).join('');
     }
 
     function loadUnitsForProduct(productId) {
@@ -587,7 +589,7 @@
             if (units.length === 0) {
                 select.innerHTML = '<option value="">Sem unidade</option>';
             } else {
-                select.innerHTML = units.map(function(u) { return '<option value="' + u.id + '">' + u.label + '</option>'; }).join('');
+                select.innerHTML = units.map(function(u) { return '<option value="' + u.id + '">' + esc(u.label) + '</option>'; }).join('');
             }
         }).catch(function(err) {
             console.error('Erro ao carregar unidades:', err);
@@ -601,7 +603,7 @@
             var select = document.getElementById('cancelReasonSelect');
             if (!select) return;
             select.innerHTML = '<option value="">Motivo...</option>' +
-                cancelReasons.map(function(r) { return '<option value="' + r.id + '">' + r.label + '</option>'; }).join('');
+                cancelReasons.map(function(r) { return '<option value="' + r.id + '">' + esc(r.label) + '</option>'; }).join('');
         }).catch(console.error);
     }
 
@@ -643,8 +645,8 @@
                     ? (currentShift === 'dinner' ? '<span class="today-badge">ALMOÇO</span>' : '<span class="today-badge">HOJE</span>')
                     : '');
             return '<div class="product-option" data-idx="' + i + '">' +
-                '<span><span class="opt-name">' + p.name + '</span>' +
-                (p.category ? '<span class="opt-cat">' + p.category + '</span>' : '') +
+                '<span><span class="opt-name">' + esc(p.name) + '</span>' +
+                (p.category ? '<span class="opt-cat">' + esc(p.category) + '</span>' : '') +
                 '</span>' + badge +
             '</div>';
         }).join('');

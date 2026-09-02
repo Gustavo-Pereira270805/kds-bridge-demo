@@ -81,7 +81,10 @@ export async function recomputeStationQueue(stationId: string): Promise<void> {
     }
 
     const start = Math.max(now, slots[earliestIdx]);
-    const expectedReadyAtMs = start + demand.sla_minutes * 60_000;
+    const sla = Number.isFinite(demand.sla_minutes) && (demand.sla_minutes as number) > 0
+      ? (demand.sla_minutes as number)
+      : 10;
+    const expectedReadyAtMs = start + sla * 60_000;
     slots[earliestIdx] = expectedReadyAtMs;
     const expectedReadyAt = new Date(expectedReadyAtMs).toISOString();
 
