@@ -171,6 +171,17 @@ export type DemandEventType =
   | 'annulled'
   | 'shift_transfer';
 
+export type PiTarget = 'quente' | 'fria' | 'ambos';
+export type PiAction = 'shutdown' | 'reboot';
+export interface PiEvent {
+  id: string;
+  target: PiTarget;
+  action: PiAction;
+  by: string;
+  at: string;
+  online: boolean;
+}
+
 export interface CreateDemandBody {
   product_id: string;
   quantity: number;
