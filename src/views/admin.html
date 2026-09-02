@@ -805,6 +805,7 @@ function piPower(target, action){
   });
 }
 var socket = kdsSocket(io);
+socket.on('connect', function(){ socket.emit('join','kds-pis'); socket.emit('join','gerente'); });
 socket.on('pi:heartbeat', ({hostname})=>{
   const badge = hostname.includes('quente') ? document.getElementById('badge-quente') : document.getElementById('badge-fria');
   if(badge){ badge.textContent='online'; badge.style.color='var(--c-accent-warm)'; }

@@ -62,6 +62,12 @@ export function registerSocketHandlers(io: Server) {
       }
     });
 
+    socket.on('pi:heartbeat', (data: { hostname: string; at: string }) => {
+      if (canJoinRoom('kds-pis', socket.data.user as AuthUser | undefined)) {
+        io.to('gerente').to('kds-pis').emit('pi:heartbeat', data);
+      }
+    });
+
     socket.on('disconnect', () => {
       console.log(`[Socket.io] Conexão Encerrada: ${socket.id}`);
     });
