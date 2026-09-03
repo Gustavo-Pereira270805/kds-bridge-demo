@@ -3,11 +3,13 @@
 # Quando o gateway local deixa de responder por ~30s, reinicia o Wi-Fi e,
 # se persistir, reinicia a placa. Não depende de internet, Tailscale ou
 # servidor externo (ping no gateway da rede local).
+# Há uma carência inicial (BOOT_GRACE) para não reiniciar durante o boot.
 set -u
 
 GATEWAY="${KDS_WATCHDOG_GATEWAY:-192.168.0.1}"
 PING_INTERVAL="${KDS_WATCHDOG_PING_INTERVAL:-10}"
 MAX_FAILS="${KDS_WATCHDOG_MAX_FAILS:-3}"
+BOOT_GRACE="${KDS_WATCHDOG_BOOT_GRACE:-120}"
 LOG_TAG="kds-watchdog"
 
 fail=0
@@ -19,6 +21,14 @@ while true; do
   fi
 
   if [ "$fail" -ge "$MAX_FAILS" ]; then
+    uptime_s=$(awk '{print int($1)}' /proc/uptime)
+    if [ "$uptime_s" -lt "$BOOT_GRACE" ]; then
+      logger -t "$LOG_TAG" "Boot em curso (uptime=${uptime_s}s); ignorando falhas de rede"
+      fail=0
+      sleep "$PING_INTERVAL"
+      continue
+    fi
+
     logger -t "$LOG_TAG" "Sem resposta do gateway por $((MAX_FAILS * PING_INTERVAL))s — reiniciando Wi-Fi"
     if nmcli device reapply wlan0 2>/dev/null; then
       :

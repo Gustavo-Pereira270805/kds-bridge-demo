@@ -1,10 +1,11 @@
 [Unit]
 Description=KDS - espelho da tela do kiosk via VNC (somente localhost)
-After=graphical.target
+After=lightdm.service
 Wants=display-manager.service
 
 [Service]
 Type=simple
+ExecStartPre=/bin/sleep 3
 ExecStart=/usr/bin/x11vnc -display :0 -auth guess -forever -shared -noxdamage -localhost -once
 Restart=always
 RestartSec=5
