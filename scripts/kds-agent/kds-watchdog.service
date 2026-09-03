@@ -1,0 +1,15 @@
+[Unit]
+Description=KDS - watchdog de rede local (reinicia Wi-Fi ou placa)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/kds-watchdog.sh
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

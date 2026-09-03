@@ -107,14 +107,20 @@ if [ -f "$REPO_ROOT/scripts/kds-agent/agent.js" ]; then
   AGENT_SRC="$REPO_ROOT/scripts/kds-agent/agent.js"
   SERVICE_SRC="$REPO_ROOT/scripts/kds-agent/kds-agent.service"
   VNC_SERVICE_SRC="$REPO_ROOT/scripts/kds-agent/kds-screen-vnc.service"
+  WATCHDOG_SRC="$REPO_ROOT/scripts/kds-agent/kds-watchdog.sh"
+  WATCHDOG_SERVICE_SRC="$REPO_ROOT/scripts/kds-agent/kds-watchdog.service"
 elif [ -f "$SCRIPT_DIR/kds-agent/agent.js" ]; then
   AGENT_SRC="$SCRIPT_DIR/kds-agent/agent.js"
   SERVICE_SRC="$SCRIPT_DIR/kds-agent/kds-agent.service"
   VNC_SERVICE_SRC="$SCRIPT_DIR/kds-agent/kds-screen-vnc.service"
+  WATCHDOG_SRC="$SCRIPT_DIR/kds-agent/kds-watchdog.sh"
+  WATCHDOG_SERVICE_SRC="$SCRIPT_DIR/kds-agent/kds-watchdog.service"
 else
   AGENT_SRC="scripts/kds-agent/agent.js"
   SERVICE_SRC="scripts/kds-agent/kds-agent.service"
   VNC_SERVICE_SRC="scripts/kds-agent/kds-screen-vnc.service"
+  WATCHDOG_SRC="scripts/kds-agent/kds-watchdog.sh"
+  WATCHDOG_SERVICE_SRC="scripts/kds-agent/kds-watchdog.service"
 fi
 
 if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
@@ -124,7 +130,7 @@ if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
 fi
 
 DOWNLOAD_DIR=""
-if [ ! -f "$AGENT_SRC" ] || [ ! -f "$SERVICE_SRC" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/package.json" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/kds-no-sleep.service" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/kds-no-suspend.rules" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/kds-screen-vnc.service" ]; then
+if [ ! -f "$AGENT_SRC" ] || [ ! -f "$SERVICE_SRC" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/package.json" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/kds-no-sleep.service" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/kds-no-suspend.rules" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/kds-screen-vnc.service" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/kds-watchdog.sh" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/kds-watchdog.service" ]; then
   DOWNLOAD_DIR="$(mktemp -d)"
   trap 'rm -rf "$DOWNLOAD_DIR"' EXIT
   echo "    Arquivos locais não encontrados — baixando o agente da origem configurada"
@@ -134,12 +140,16 @@ if [ ! -f "$AGENT_SRC" ] || [ ! -f "$SERVICE_SRC" ] || [ ! -f "$REPO_ROOT/script
   curl -fsSL "$RAW_AGENT_BASE/kds-no-sleep.service" -o "$DOWNLOAD_DIR/kds-no-sleep.service"
   curl -fsSL "$RAW_AGENT_BASE/kds-no-suspend.rules" -o "$DOWNLOAD_DIR/kds-no-suspend.rules"
   curl -fsSL "$RAW_AGENT_BASE/kds-screen-vnc.service" -o "$DOWNLOAD_DIR/kds-screen-vnc.service"
+  curl -fsSL "$RAW_AGENT_BASE/kds-watchdog.sh" -o "$DOWNLOAD_DIR/kds-watchdog.sh"
+  curl -fsSL "$RAW_AGENT_BASE/kds-watchdog.service" -o "$DOWNLOAD_DIR/kds-watchdog.service"
   AGENT_SRC="$DOWNLOAD_DIR/agent.js"
   SERVICE_SRC="$DOWNLOAD_DIR/kds-agent.service"
   PACKAGE_SRC="$DOWNLOAD_DIR/package.json"
   NO_SLEEP_SRC="$DOWNLOAD_DIR/kds-no-sleep.service"
   NO_SUSPEND_SRC="$DOWNLOAD_DIR/kds-no-suspend.rules"
   VNC_SERVICE_SRC="$DOWNLOAD_DIR/kds-screen-vnc.service"
+  WATCHDOG_SRC="$DOWNLOAD_DIR/kds-watchdog.sh"
+  WATCHDOG_SERVICE_SRC="$DOWNLOAD_DIR/kds-watchdog.service"
 else
   PACKAGE_SRC="$REPO_ROOT/scripts/kds-agent/package.json"
   NO_SLEEP_SRC="$REPO_ROOT/scripts/kds-agent/kds-no-sleep.service"
@@ -178,6 +188,15 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now kds-screen-vnc 2>/dev/null || true
 echo "    kds-screen-vnc: $(systemctl is-active kds-screen-vnc 2>&1)"
 echo "    Acesse via túnel SSH/Tailscale (ver docs/VNC_KDS.md)"
+
+echo "==> [6.6/6] Instalando watchdog de rede local (Wi-Fi/reboot)"
+sudo cp "$WATCHDOG_SRC" /usr/local/sbin/kds-watchdog.sh
+sudo chmod +x /usr/local/sbin/kds-watchdog.sh
+sudo cp "$WATCHDOG_SERVICE_SRC" /etc/systemd/system/kds-watchdog.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now kds-watchdog
+echo "    kds-watchdog: $(systemctl is-active kds-watchdog 2>&1)"
+echo "    Gatilho: ping no gateway a cada 10s; após 3 falhas reinicia Wi-Fi e, se persistir, a placa"
 echo "    kds-agent: $(systemctl is-active kds-agent 2>&1) | kds-no-sleep: $(systemctl is-active kds-no-sleep 2>&1)"
 echo "    sudoers: $(cat /etc/sudoers.d/kds-agent 2>&1)"
 echo "    Configure KDS_TOKEN em /etc/systemd/system/kds-agent.service (Environment=KDS_TOKEN=seu_token_gerente)"
