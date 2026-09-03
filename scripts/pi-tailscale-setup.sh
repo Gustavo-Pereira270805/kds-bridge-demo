@@ -121,7 +121,7 @@ if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
 fi
 
 DOWNLOAD_DIR=""
-if [ ! -f "$AGENT_SRC" ] || [ ! -f "$SERVICE_SRC" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/package.json" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/kds-no-sleep.service" ]; then
+if [ ! -f "$AGENT_SRC" ] || [ ! -f "$SERVICE_SRC" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/package.json" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/kds-no-sleep.service" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/kds-no-suspend.rules" ]; then
   DOWNLOAD_DIR="$(mktemp -d)"
   trap 'rm -rf "$DOWNLOAD_DIR"' EXIT
   echo "    Arquivos locais não encontrados — baixando o agente da origem configurada"
@@ -129,13 +129,16 @@ if [ ! -f "$AGENT_SRC" ] || [ ! -f "$SERVICE_SRC" ] || [ ! -f "$REPO_ROOT/script
   curl -fsSL "$RAW_AGENT_BASE/kds-agent.service" -o "$DOWNLOAD_DIR/kds-agent.service"
   curl -fsSL "$RAW_AGENT_BASE/package.json" -o "$DOWNLOAD_DIR/package.json"
   curl -fsSL "$RAW_AGENT_BASE/kds-no-sleep.service" -o "$DOWNLOAD_DIR/kds-no-sleep.service"
+  curl -fsSL "$RAW_AGENT_BASE/kds-no-suspend.rules" -o "$DOWNLOAD_DIR/kds-no-suspend.rules"
   AGENT_SRC="$DOWNLOAD_DIR/agent.js"
   SERVICE_SRC="$DOWNLOAD_DIR/kds-agent.service"
   PACKAGE_SRC="$DOWNLOAD_DIR/package.json"
   NO_SLEEP_SRC="$DOWNLOAD_DIR/kds-no-sleep.service"
+  NO_SUSPEND_SRC="$DOWNLOAD_DIR/kds-no-suspend.rules"
 else
   PACKAGE_SRC="$REPO_ROOT/scripts/kds-agent/package.json"
   NO_SLEEP_SRC="$REPO_ROOT/scripts/kds-agent/kds-no-sleep.service"
+  NO_SUSPEND_SRC="$REPO_ROOT/scripts/kds-agent/kds-no-suspend.rules"
 fi
 
 echo "==> Instalando kds-agent"
@@ -144,6 +147,8 @@ sudo cp "$AGENT_SRC" /opt/kds-agent/agent.js
 sudo cp "$PACKAGE_SRC" /opt/kds-agent/package.json
 sudo cp "$SERVICE_SRC" /etc/systemd/system/kds-agent.service
 sudo cp "$NO_SLEEP_SRC" /etc/systemd/system/kds-no-sleep.service
+sudo mkdir -p /etc/polkit-1/rules.d
+sudo cp "$NO_SUSPEND_SRC" /etc/polkit-1/rules.d/99-kds-no-suspend.rules
 echo "    Instalando dependência socket.io-client"
 sudo npm --prefix /opt/kds-agent install --omit=dev 2>&1 | tail -n 5
 sudo tee /etc/sudoers.d/kds-agent >/dev/null <<'EOF'
@@ -153,6 +158,7 @@ sudo chmod 440 /etc/sudoers.d/kds-agent
 sudo visudo -c
 sudo systemctl daemon-reload
 sudo systemctl enable --now kds-no-sleep
+sudo systemctl try-restart polkit.service 2>/dev/null || true
 sudo systemctl enable --now kds-agent
 echo "    kds-agent: $(systemctl is-active kds-agent 2>&1) | kds-no-sleep: $(systemctl is-active kds-no-sleep 2>&1)"
 echo "    sudoers: $(cat /etc/sudoers.d/kds-agent 2>&1)"
