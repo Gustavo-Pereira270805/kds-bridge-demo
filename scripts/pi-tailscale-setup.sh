@@ -41,7 +41,12 @@ if [[ $SSH_ENABLE -eq 1 ]]; then
 fi
 
 echo "==> [2.5/6] Desativando suspensão e economia de energia do Wi-Fi"
-systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+for sleep_unit in \
+  sleep.target suspend.target hibernate.target hybrid-sleep.target \
+  systemd-suspend.service systemd-hibernate.service \
+  systemd-hybrid-sleep.service systemd-suspend-then-hibernate.service; do
+  systemctl mask "$sleep_unit" 2>/dev/null || true
+done
 mkdir -p /etc/systemd/logind.conf.d
 cat > /etc/systemd/logind.conf.d/kds-no-sleep.conf <<'EOF'
 [Login]
@@ -56,6 +61,20 @@ systemctl reload systemd-logind 2>/dev/null || true
 if command -v iw >/dev/null 2>&1; then
   iw dev wlan0 set power_save off 2>/dev/null || true
 fi
+# O kiosk não precisa do gerenciador de energia nem do bloqueador de tela;
+# ambos podem solicitar suspensão pela sessão gráfica.
+mkdir -p /home/framboa/.config/autostart
+for desktop_file in xfce4-power-manager.desktop light-locker.desktop; do
+  if [ -f "/etc/xdg/autostart/$desktop_file" ]; then
+    cp "/etc/xdg/autostart/$desktop_file" "/home/framboa/.config/autostart/$desktop_file"
+    if grep -q '^Hidden=' "/home/framboa/.config/autostart/$desktop_file"; then
+      sed -i 's/^Hidden=.*/Hidden=true/' "/home/framboa/.config/autostart/$desktop_file"
+    else
+      printf '\nHidden=true\n' >> "/home/framboa/.config/autostart/$desktop_file"
+    fi
+  fi
+done
+chown -R framboa:framboa /home/framboa/.config/autostart 2>/dev/null || true
 
 echo "==> [3/6] Instalando Tailscale (se não estiver instalado)"
 if ! command -v tailscale >/dev/null 2>&1; then
@@ -102,18 +121,21 @@ if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
 fi
 
 DOWNLOAD_DIR=""
-if [ ! -f "$AGENT_SRC" ] || [ ! -f "$SERVICE_SRC" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/package.json" ]; then
+if [ ! -f "$AGENT_SRC" ] || [ ! -f "$SERVICE_SRC" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/package.json" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/kds-no-sleep.service" ]; then
   DOWNLOAD_DIR="$(mktemp -d)"
   trap 'rm -rf "$DOWNLOAD_DIR"' EXIT
   echo "    Arquivos locais não encontrados — baixando o agente da origem configurada"
   curl -fsSL "$RAW_AGENT_BASE/agent.js" -o "$DOWNLOAD_DIR/agent.js"
   curl -fsSL "$RAW_AGENT_BASE/kds-agent.service" -o "$DOWNLOAD_DIR/kds-agent.service"
   curl -fsSL "$RAW_AGENT_BASE/package.json" -o "$DOWNLOAD_DIR/package.json"
+  curl -fsSL "$RAW_AGENT_BASE/kds-no-sleep.service" -o "$DOWNLOAD_DIR/kds-no-sleep.service"
   AGENT_SRC="$DOWNLOAD_DIR/agent.js"
   SERVICE_SRC="$DOWNLOAD_DIR/kds-agent.service"
   PACKAGE_SRC="$DOWNLOAD_DIR/package.json"
+  NO_SLEEP_SRC="$DOWNLOAD_DIR/kds-no-sleep.service"
 else
   PACKAGE_SRC="$REPO_ROOT/scripts/kds-agent/package.json"
+  NO_SLEEP_SRC="$REPO_ROOT/scripts/kds-agent/kds-no-sleep.service"
 fi
 
 echo "==> Instalando kds-agent"
@@ -121,6 +143,7 @@ sudo mkdir -p /opt/kds-agent
 sudo cp "$AGENT_SRC" /opt/kds-agent/agent.js
 sudo cp "$PACKAGE_SRC" /opt/kds-agent/package.json
 sudo cp "$SERVICE_SRC" /etc/systemd/system/kds-agent.service
+sudo cp "$NO_SLEEP_SRC" /etc/systemd/system/kds-no-sleep.service
 echo "    Instalando dependência socket.io-client"
 sudo npm --prefix /opt/kds-agent install --omit=dev 2>&1 | tail -n 5
 sudo tee /etc/sudoers.d/kds-agent >/dev/null <<'EOF'
@@ -129,6 +152,8 @@ EOF
 sudo chmod 440 /etc/sudoers.d/kds-agent
 sudo visudo -c
 sudo systemctl daemon-reload
+sudo systemctl enable --now kds-no-sleep
 sudo systemctl enable --now kds-agent
-echo "    kds-agent: $(systemctl is-active kds-agent 2>&1) | sudoers: $(cat /etc/sudoers.d/kds-agent 2>&1)"
+echo "    kds-agent: $(systemctl is-active kds-agent 2>&1) | kds-no-sleep: $(systemctl is-active kds-no-sleep 2>&1)"
+echo "    sudoers: $(cat /etc/sudoers.d/kds-agent 2>&1)"
 echo "    Configure KDS_TOKEN em /etc/systemd/system/kds-agent.service (Environment=KDS_TOKEN=seu_token_gerente)"
