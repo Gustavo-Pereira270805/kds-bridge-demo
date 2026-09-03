@@ -755,7 +755,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Pis: status online via lastHeartbeat (memória) + último at do DB como fallback
+  // Pis: status online via heartbeat recebido pelo servidor.
   fastify.get('/pis/status', async (request, reply) => {
     try {
       return getPiStatus();

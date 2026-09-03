@@ -7,6 +7,7 @@ set -euo pipefail
 AUTHKEY=""
 HOSTNAME=""
 SSH_ENABLE=1
+RAW_AGENT_BASE="${KDS_AGENT_RAW_BASE:-https://raw.githubusercontent.com/Gustavo-Pereira270805/kds-bridge-demo/main/scripts/kds-agent}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -76,41 +77,40 @@ else
   AGENT_SRC="scripts/kds-agent/agent.js"
   SERVICE_SRC="scripts/kds-agent/kds-agent.service"
 fi
+
+if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+  echo "    Node.js/npm não encontrados — instalando pelos pacotes do sistema"
+  apt-get update
+  DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs npm
+fi
+
+DOWNLOAD_DIR=""
+if [ ! -f "$AGENT_SRC" ] || [ ! -f "$SERVICE_SRC" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/package.json" ]; then
+  DOWNLOAD_DIR="$(mktemp -d)"
+  trap 'rm -rf "$DOWNLOAD_DIR"' EXIT
+  echo "    Arquivos locais não encontrados — baixando o agente da origem configurada"
+  curl -fsSL "$RAW_AGENT_BASE/agent.js" -o "$DOWNLOAD_DIR/agent.js"
+  curl -fsSL "$RAW_AGENT_BASE/kds-agent.service" -o "$DOWNLOAD_DIR/kds-agent.service"
+  curl -fsSL "$RAW_AGENT_BASE/package.json" -o "$DOWNLOAD_DIR/package.json"
+  AGENT_SRC="$DOWNLOAD_DIR/agent.js"
+  SERVICE_SRC="$DOWNLOAD_DIR/kds-agent.service"
+  PACKAGE_SRC="$DOWNLOAD_DIR/package.json"
+else
+  PACKAGE_SRC="$REPO_ROOT/scripts/kds-agent/package.json"
+fi
+
 echo "==> Instalando kds-agent"
 sudo mkdir -p /opt/kds-agent
-# ESM fix: package.json com type module para agent.js (import) funcionar em Node 20
-if [ ! -f /opt/kds-agent/package.json ]; then
-  echo '{"type":"module"}' | sudo tee /opt/kds-agent/package.json >/dev/null
-fi
-# Dependência socket.io-client se ainda não instalada
-if [ ! -d /opt/kds-agent/node_modules/socket.io-client ]; then
-  if command -v npm >/dev/null 2>&1; then
-    echo "    Instalando socket.io-client em /opt/kds-agent"
-    sudo npm --prefix /opt/kds-agent install socket.io-client --omit=dev 2>&1 | tail -n 5 || echo "    AVISO: npm install falhou — instale manualmente: sudo npm --prefix /opt/kds-agent install socket.io-client"
-  else
-    echo "    AVISO: npm não encontrado — instale Node.js e rode: sudo npm --prefix /opt/kds-agent install socket.io-client"
-  fi
-fi
-if [ -f "$AGENT_SRC" ]; then
-  sudo cp "$AGENT_SRC" /opt/kds-agent/
-else
-  echo "    AVISO: $AGENT_SRC não encontrado — copie manualmente para /opt/kds-agent/"
-  sudo cp scripts/kds-agent/agent.js /opt/kds-agent/ 2>/dev/null || true
-fi
-if [ -f "$SERVICE_SRC" ]; then
-  sudo cp "$SERVICE_SRC" /etc/systemd/system/
-else
-  sudo cp scripts/kds-agent/kds-agent.service /etc/systemd/system/ 2>/dev/null || true
-fi
-# Alternativa ESM: se houver package.json no repo, copia também
-if [ -f "$REPO_ROOT/scripts/kds-agent/package.json" ]; then
-  sudo cp "$REPO_ROOT/scripts/kds-agent/package.json" /opt/kds-agent/package.json 2>/dev/null || true
-fi
+sudo cp "$AGENT_SRC" /opt/kds-agent/agent.js
+sudo cp "$PACKAGE_SRC" /opt/kds-agent/package.json
+sudo cp "$SERVICE_SRC" /etc/systemd/system/kds-agent.service
+echo "    Instalando dependência socket.io-client"
+sudo npm --prefix /opt/kds-agent install --omit=dev 2>&1 | tail -n 5
 sudo tee /etc/sudoers.d/kds-agent >/dev/null <<'EOF'
 framboa ALL=(ALL) NOPASSWD: /sbin/poweroff, /sbin/reboot
 EOF
 sudo chmod 440 /etc/sudoers.d/kds-agent
-sudo visudo -c || echo "AVISO: visudo falhou — verifique /etc/sudoers.d/kds-agent"
+sudo visudo -c
 sudo systemctl daemon-reload
 sudo systemctl enable --now kds-agent
 echo "    kds-agent: $(systemctl is-active kds-agent 2>&1) | sudoers: $(cat /etc/sudoers.d/kds-agent 2>&1)"

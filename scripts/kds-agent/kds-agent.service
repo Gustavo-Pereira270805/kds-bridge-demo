@@ -8,6 +8,9 @@ Environment=KDS_SERVER=https://kds-framboa.duckdns.org
 Environment=KDS_TOKEN=
 ExecStart=/usr/bin/node /opt/kds-agent/agent.js
 Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
