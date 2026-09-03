@@ -7,6 +7,29 @@ import { computeDailyScores, getWeights } from '../services/performance.service'
 import { recomputeStationQueue } from '../services/queue.service';
 import { ensureTodayMenu } from '../services/menu.service';
 import { requireAuth } from '../middleware/auth';
+import { lastHeartbeat } from '../socket/handlers';
+
+const PI_ONLINE_MS = 45_000;
+const PI_HOSTS = {
+  quente: 'kds-quente-1',
+  fria: 'kds-fria-1',
+} as const;
+
+function getPiStatus() {
+  const now = Date.now();
+  return Object.fromEntries(
+    Object.entries(PI_HOSTS).map(([key, hostname]) => {
+      const lastAt = lastHeartbeat.get(hostname) ?? null;
+      const parsedAt = lastAt ? new Date(lastAt).getTime() : NaN;
+      const ageMs = Number.isFinite(parsedAt) ? now - parsedAt : null;
+      return [hostname, {
+        online: ageMs !== null && ageMs >= 0 && ageMs < PI_ONLINE_MS,
+        lastAt,
+        ageMs,
+      }];
+    })
+  );
+}
 
 export default async function adminRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', async (request, reply) => {
@@ -733,22 +756,11 @@ export default async function adminRoutes(fastify: FastifyInstance) {
   });
 
   // Pis: status online via lastHeartbeat (memória) + último at do DB como fallback
-  fastify.get('/pis/status', async (_request, reply) => {
+  fastify.get('/pis/status', async (request, reply) => {
     try {
-      const { lastHeartbeat } = await import('../socket/handlers');
-      const now = Date.now();
-      const ONLINE_MS = 45_000;
-      const hosts = ['kds-quente-1', 'kds-fria-1'];
-      const out: Record<string, { online: boolean; lastAt: string | null; ageMs: number | null }> = {};
-      for (const h of hosts) {
-        const at = lastHeartbeat.get(h) ?? null;
-        const age = at ? now - new Date(at).getTime() : null;
-        out[h] = { online: age !== null && age < ONLINE_MS, lastAt: at, ageMs: age };
-      }
-      // fallback DB: se memória vazia mas há pi_events recentes, não considerar online (só heartbeat confirma)
-      return out;
+      return getPiStatus();
     } catch (e) {
-      (reply as any).log?.error(e);
+      request.log.error(e);
       return reply.code(500).send({ error: 'Erro ao buscar status dos Pis' });
     }
   });
@@ -771,10 +783,21 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     const at = new Date().toISOString();
     const room = 'kds-pis';
     const payload = { target, action, by, at };
-    request.log.info({ piPower: payload }, 'pi:power emit');
-    fastify.io.to(room).emit('pi:power', payload);
-    await query(`INSERT INTO pi_events (target, action, by, online) VALUES ($1,$2,$3,$4)`, [target, action, by, false]);
-    return { status: 'sent', target, action, by, at };
+    const status = getPiStatus();
+    const targetKeys = target === 'ambos' ? ['quente', 'fria'] as const : [target];
+    const onlineTargets = targetKeys.filter((key) => status[PI_HOSTS[key]].online);
+    const anyOnline = onlineTargets.length > 0;
+    request.log.info({ piPower: payload, onlineTargets }, 'pi:power emit');
+    if (anyOnline) fastify.io.to(room).emit('pi:power', payload);
+    await query(`INSERT INTO pi_events (target, action, by, online) VALUES ($1,$2,$3,$4)`, [target, action, by, anyOnline]);
+    return reply.code(anyOnline ? 200 : 202).send({
+      status: anyOnline ? 'sent' : 'offline',
+      target,
+      action,
+      by,
+      at,
+      online_targets: onlineTargets,
+    });
   });
 
 }

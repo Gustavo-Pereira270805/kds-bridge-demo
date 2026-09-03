@@ -801,7 +801,13 @@ document.getElementById('reasonsTableBody').addEventListener('click', function(e
 function piPower(target, action){
   confirmDialog(`Confirmar ${action} em ${target}? ${action==='shutdown'?'Desligar requer ligar manualmente.':''}`).then(ok=>{
     if(!ok) return;
-    api(`/api/v1/admin/pis/${target}/${action}`, {method:'POST'}).then(d=> toast(`Comando ${action} enviado para ${target}`, true)).catch(e=> toast(e.message,false));
+    api(`/api/v1/admin/pis/${target}/${action}`, {method:'POST'}).then(d=> {
+      if (d.status === 'offline') {
+        toast(`Pi ${target} está offline; comando não executado`, false);
+        return;
+      }
+      toast(`Comando ${action} enviado para ${target}`, true);
+    }).catch(e=> toast(e.message,false));
   });
 }
 var _piLast = { quente: 0, fria: 0 };
