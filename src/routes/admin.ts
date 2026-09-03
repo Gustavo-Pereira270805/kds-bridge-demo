@@ -732,6 +732,27 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     }
   });
 
+  // Pis: status online via lastHeartbeat (memória) + último at do DB como fallback
+  fastify.get('/pis/status', async (_request, reply) => {
+    try {
+      const { lastHeartbeat } = await import('../socket/handlers');
+      const now = Date.now();
+      const ONLINE_MS = 45_000;
+      const hosts = ['kds-quente-1', 'kds-fria-1'];
+      const out: Record<string, { online: boolean; lastAt: string | null; ageMs: number | null }> = {};
+      for (const h of hosts) {
+        const at = lastHeartbeat.get(h) ?? null;
+        const age = at ? now - new Date(at).getTime() : null;
+        out[h] = { online: age !== null && age < ONLINE_MS, lastAt: at, ageMs: age };
+      }
+      // fallback DB: se memória vazia mas há pi_events recentes, não considerar online (só heartbeat confirma)
+      return out;
+    } catch (e) {
+      (reply as any).log?.error(e);
+      return reply.code(500).send({ error: 'Erro ao buscar status dos Pis' });
+    }
+  });
+
   // Pis: controle remoto (gerente/admin) — emite pi:power na sala kds-pis e audita em pi_events
   fastify.post<{ Params: { target: string; action: string } }>('/pis/:target/:action', {
     schema: {
@@ -750,6 +771,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     const at = new Date().toISOString();
     const room = 'kds-pis';
     const payload = { target, action, by, at };
+    request.log.info({ piPower: payload }, 'pi:power emit');
     fastify.io.to(room).emit('pi:power', payload);
     await query(`INSERT INTO pi_events (target, action, by, online) VALUES ($1,$2,$3,$4)`, [target, action, by, false]);
     return { status: 'sent', target, action, by, at };

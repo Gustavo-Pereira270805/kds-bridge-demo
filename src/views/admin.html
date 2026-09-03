@@ -804,12 +804,44 @@ function piPower(target, action){
     api(`/api/v1/admin/pis/${target}/${action}`, {method:'POST'}).then(d=> toast(`Comando ${action} enviado para ${target}`, true)).catch(e=> toast(e.message,false));
   });
 }
+var _piLast = { quente: 0, fria: 0 };
+function setPiBadge(key, online, lastAt){
+  const id = key==='quente' ? 'badge-quente' : 'badge-fria';
+  const b = document.getElementById(id);
+  if(!b) return;
+  b.textContent = online ? 'online' : 'offline';
+  b.style.color = online ? 'var(--c-accent-warm)' : 'var(--c-danger)';
+  b.title = lastAt ? ('último heartbeat: ' + new Date(lastAt).toLocaleTimeString()) : 'sem heartbeat';
+}
+function hostToKey(hostname){
+  if(hostname.includes('quente')) return 'quente';
+  if(hostname.includes('fria')) return 'fria';
+  return null;
+}
+function fetchPiStatus(){
+  api('/api/v1/admin/pis/status').then(data=>{
+    // data: { 'kds-quente-1': {online, lastAt}, 'kds-fria-1': {...} }
+    const q = data['kds-quente-1']; const f = data['kds-fria-1'];
+    if(q){ _piLast.quente = q.lastAt ? new Date(q.lastAt).getTime() : 0; setPiBadge('quente', q.online, q.lastAt); }
+    if(f){ _piLast.fria = f.lastAt ? new Date(f.lastAt).getTime() : 0; setPiBadge('fria', f.online, f.lastAt); }
+  }).catch(()=>{});
+}
 var socket = kdsSocket(io);
-socket.on('connect', function(){ socket.emit('join','kds-pis'); socket.emit('join','gerente'); });
-socket.on('pi:heartbeat', ({hostname})=>{
-  const badge = hostname.includes('quente') ? document.getElementById('badge-quente') : document.getElementById('badge-fria');
-  if(badge){ badge.textContent='online'; badge.style.color='var(--c-accent-warm)'; }
+socket.on('connect', function(){ socket.emit('join','kds-pis'); socket.emit('join','gerente'); fetchPiStatus(); });
+socket.on('pi:heartbeat', (data)=>{
+  const key = hostToKey(data.hostname || '');
+  if(!key) return;
+  _piLast[key] = new Date(data.at).getTime();
+  setPiBadge(key, true, data.at);
 });
+setInterval(function(){
+  const now = Date.now();
+  // se sem heartbeat há 45s, marcar offline
+  if(Date.now() - _piLast.quente > 45000) setPiBadge('quente', false, null);
+  if(Date.now() - _piLast.fria > 45000) setPiBadge('fria', false, null);
+  fetchPiStatus();
+}, 10000);
+fetchPiStatus();
 
 // Init
 loadStations();

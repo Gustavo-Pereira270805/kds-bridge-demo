@@ -24,6 +24,8 @@ export function canJoinRoom(room: string, user: AuthUser | undefined): boolean {
   return false;
 }
 
+export const lastHeartbeat = new Map<string, string>(); // hostname -> ISO at
+
 export function registerSocketHandlers(io: Server) {
   io.use((socket, next) => {
     const token = (socket.handshake.auth?.token as string | undefined) ?? '';
@@ -51,6 +53,8 @@ export function registerSocketHandlers(io: Server) {
       if (VALID_ROOMS.has(room) && canJoinRoom(room, socket.data.user as AuthUser | undefined)) {
         socket.join(room);
         console.log(`[Socket.io] Socket ${socket.id} entrou na sala: ${room}`);
+      } else {
+        console.log(`[Socket.io] join negado sala=${room} user=${(socket.data.user as AuthUser | undefined)?.role ?? 'anon'} id=${socket.id}`);
       }
     });
 
@@ -62,9 +66,12 @@ export function registerSocketHandlers(io: Server) {
     });
 
     socket.on('pi:heartbeat', (data: { hostname: string; at: string }) => {
-      if (canJoinRoom('kds-pis', socket.data.user as AuthUser | undefined)) {
-        io.to('gerente').to('kds-pis').emit('pi:heartbeat', data);
-      }
+      if (!data?.hostname) return;
+      if (!canJoinRoom('kds-pis', socket.data.user as AuthUser | undefined)) return;
+      lastHeartbeat.set(data.hostname, data.at);
+      console.log(`[pi:heartbeat] ${data.hostname} @ ${data.at} from ${socket.id}`);
+      io.to('gerente').emit('pi:heartbeat', data);
+      io.to('kds-pis').emit('pi:heartbeat', data);
     });
 
     socket.on('disconnect', () => {
