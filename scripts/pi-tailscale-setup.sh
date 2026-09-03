@@ -106,12 +106,15 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 if [ -f "$REPO_ROOT/scripts/kds-agent/agent.js" ]; then
   AGENT_SRC="$REPO_ROOT/scripts/kds-agent/agent.js"
   SERVICE_SRC="$REPO_ROOT/scripts/kds-agent/kds-agent.service"
+  VNC_SERVICE_SRC="$REPO_ROOT/scripts/kds-agent/kds-screen-vnc.service"
 elif [ -f "$SCRIPT_DIR/kds-agent/agent.js" ]; then
   AGENT_SRC="$SCRIPT_DIR/kds-agent/agent.js"
   SERVICE_SRC="$SCRIPT_DIR/kds-agent/kds-agent.service"
+  VNC_SERVICE_SRC="$SCRIPT_DIR/kds-agent/kds-screen-vnc.service"
 else
   AGENT_SRC="scripts/kds-agent/agent.js"
   SERVICE_SRC="scripts/kds-agent/kds-agent.service"
+  VNC_SERVICE_SRC="scripts/kds-agent/kds-screen-vnc.service"
 fi
 
 if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
@@ -121,7 +124,7 @@ if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
 fi
 
 DOWNLOAD_DIR=""
-if [ ! -f "$AGENT_SRC" ] || [ ! -f "$SERVICE_SRC" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/package.json" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/kds-no-sleep.service" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/kds-no-suspend.rules" ]; then
+if [ ! -f "$AGENT_SRC" ] || [ ! -f "$SERVICE_SRC" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/package.json" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/kds-no-sleep.service" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/kds-no-suspend.rules" ] || [ ! -f "$REPO_ROOT/scripts/kds-agent/kds-screen-vnc.service" ]; then
   DOWNLOAD_DIR="$(mktemp -d)"
   trap 'rm -rf "$DOWNLOAD_DIR"' EXIT
   echo "    Arquivos locais não encontrados — baixando o agente da origem configurada"
@@ -130,11 +133,13 @@ if [ ! -f "$AGENT_SRC" ] || [ ! -f "$SERVICE_SRC" ] || [ ! -f "$REPO_ROOT/script
   curl -fsSL "$RAW_AGENT_BASE/package.json" -o "$DOWNLOAD_DIR/package.json"
   curl -fsSL "$RAW_AGENT_BASE/kds-no-sleep.service" -o "$DOWNLOAD_DIR/kds-no-sleep.service"
   curl -fsSL "$RAW_AGENT_BASE/kds-no-suspend.rules" -o "$DOWNLOAD_DIR/kds-no-suspend.rules"
+  curl -fsSL "$RAW_AGENT_BASE/kds-screen-vnc.service" -o "$DOWNLOAD_DIR/kds-screen-vnc.service"
   AGENT_SRC="$DOWNLOAD_DIR/agent.js"
   SERVICE_SRC="$DOWNLOAD_DIR/kds-agent.service"
   PACKAGE_SRC="$DOWNLOAD_DIR/package.json"
   NO_SLEEP_SRC="$DOWNLOAD_DIR/kds-no-sleep.service"
   NO_SUSPEND_SRC="$DOWNLOAD_DIR/kds-no-suspend.rules"
+  VNC_SERVICE_SRC="$DOWNLOAD_DIR/kds-screen-vnc.service"
 else
   PACKAGE_SRC="$REPO_ROOT/scripts/kds-agent/package.json"
   NO_SLEEP_SRC="$REPO_ROOT/scripts/kds-agent/kds-no-sleep.service"
@@ -147,6 +152,7 @@ sudo cp "$AGENT_SRC" /opt/kds-agent/agent.js
 sudo cp "$PACKAGE_SRC" /opt/kds-agent/package.json
 sudo cp "$SERVICE_SRC" /etc/systemd/system/kds-agent.service
 sudo cp "$NO_SLEEP_SRC" /etc/systemd/system/kds-no-sleep.service
+sudo cp "$VNC_SERVICE_SRC" /etc/systemd/system/kds-screen-vnc.service
 sudo mkdir -p /etc/polkit-1/rules.d
 sudo cp "$NO_SUSPEND_SRC" /etc/polkit-1/rules.d/99-kds-no-suspend.rules
 echo "    Instalando dependência socket.io-client"
@@ -160,6 +166,18 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now kds-no-sleep
 sudo systemctl try-restart polkit.service 2>/dev/null || true
 sudo systemctl enable --now kds-agent
+
+echo "==> [6.5/6] Instalando espelho de tela (x11vnc, somente localhost)"
+if command -v x11vnc >/dev/null 2>&1; then
+  echo "    x11vnc já instalado: $(x11vnc -version 2>&1 | head -n1)"
+else
+  apt-get update
+  DEBIAN_FRONTEND=noninteractive apt-get install -y x11vnc
+fi
+sudo systemctl daemon-reload
+sudo systemctl enable --now kds-screen-vnc 2>/dev/null || true
+echo "    kds-screen-vnc: $(systemctl is-active kds-screen-vnc 2>&1)"
+echo "    Acesse via túnel SSH/Tailscale (ver docs/VNC_KDS.md)"
 echo "    kds-agent: $(systemctl is-active kds-agent 2>&1) | kds-no-sleep: $(systemctl is-active kds-no-sleep 2>&1)"
 echo "    sudoers: $(cat /etc/sudoers.d/kds-agent 2>&1)"
 echo "    Configure KDS_TOKEN em /etc/systemd/system/kds-agent.service (Environment=KDS_TOKEN=seu_token_gerente)"
