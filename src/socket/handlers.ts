@@ -68,10 +68,12 @@ export function registerSocketHandlers(io: Server) {
     socket.on('pi:heartbeat', (data: { hostname: string; at: string }) => {
       if (!data?.hostname) return;
       if (!canJoinRoom('kds-pis', socket.data.user as AuthUser | undefined)) return;
-      lastHeartbeat.set(data.hostname, data.at);
-      console.log(`[pi:heartbeat] ${data.hostname} @ ${data.at} from ${socket.id}`);
-      io.to('gerente').emit('pi:heartbeat', data);
-      io.to('kds-pis').emit('pi:heartbeat', data);
+      const receivedAt = new Date().toISOString();
+      const heartbeat = { ...data, at: receivedAt };
+      lastHeartbeat.set(data.hostname, receivedAt);
+      console.log(`[pi:heartbeat] ${data.hostname} clientAt=${data.at} receivedAt=${receivedAt} from ${socket.id}`);
+      io.to('gerente').emit('pi:heartbeat', heartbeat);
+      io.to('kds-pis').emit('pi:heartbeat', heartbeat);
     });
 
     socket.on('disconnect', () => {
