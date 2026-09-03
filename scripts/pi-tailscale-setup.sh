@@ -40,6 +40,23 @@ if [[ $SSH_ENABLE -eq 1 ]]; then
   id framboa >/dev/null 2>&1 || echo "Usuário framboa não encontrado — crie via armbian-config"
 fi
 
+echo "==> [2.5/6] Desativando suspensão e economia de energia do Wi-Fi"
+systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+mkdir -p /etc/systemd/logind.conf.d
+cat > /etc/systemd/logind.conf.d/kds-no-sleep.conf <<'EOF'
+[Login]
+IdleAction=ignore
+IdleActionSec=infinity
+HandleSuspendKey=ignore
+HandleHibernateKey=ignore
+HandleLidSwitch=ignore
+HandleLidSwitchExternalPower=ignore
+EOF
+systemctl reload systemd-logind 2>/dev/null || true
+if command -v iw >/dev/null 2>&1; then
+  iw dev wlan0 set power_save off 2>/dev/null || true
+fi
+
 echo "==> [3/6] Instalando Tailscale (se não estiver instalado)"
 if ! command -v tailscale >/dev/null 2>&1; then
   curl -fsSL https://tailscale.com/install.sh | sh
