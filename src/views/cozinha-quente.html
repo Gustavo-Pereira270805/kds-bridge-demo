@@ -11,6 +11,7 @@
     <script src="/scripts/kitchen-sounds.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="/scripts/security.js"></script>
+    <script src="/scripts/gerente-nav.js"></script>
 
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -169,8 +170,6 @@
         }
         .card .actions .ready-btn { background: var(--c-accent-warm); color: var(--c-text-invert); box-shadow: var(--shadow-btn-3d-dark); }
         .card .actions .ready-btn:hover { background: #238b7d; }
-        .card .actions .ready-btn.confirm-pending { background: var(--c-warn); color: #1a1a1a; }
-        .card .actions .ready-btn.confirm-pending:hover { background: #e76f51; color: #1a1a1a; }
         .card .actions .cancel-btn {
             background: var(--c-border-dark); color: var(--c-text-secondary); box-shadow: var(--shadow-btn-3d-dark);
             min-width: 64px; min-height: 56px; font-size: 16px;
@@ -279,6 +278,10 @@
         :root[data-theme="light"] #cancelModal > div { background: var(--c-bg-panel) !important; border-color: var(--c-border-default) !important; color: var(--c-text-body); }
         :root[data-theme="light"] #cancelModal h3, :root[data-theme="light"] #cancelModal label { color: var(--c-text-body) !important; }
         :root[data-theme="light"] #cancelModal select, :root[data-theme="light"] #cancelModal input { background: var(--c-bg-page) !important; color: var(--c-text-body) !important; border-color: var(--c-border-default) !important; }
+        :root[data-theme="light"] #confirmReadyModal > div { background: var(--c-bg-panel) !important; border-color: var(--c-border-default) !important; color: var(--c-text-body); }
+        :root[data-theme="light"] #confirmReadyModal h3 { color: var(--c-text-body) !important; }
+        :root[data-theme="light"] #confirmReadyModal p { color: var(--c-text-secondary) !important; }
+        :root[data-theme="light"] #closeReadyBtn { background: var(--c-bg-page) !important; color: var(--c-text-secondary) !important; }
     </style>
 </head>
 <body>
@@ -303,14 +306,25 @@
     <div id="cancelModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center;backdrop-filter:blur(4px);">
         <div style="background:#1a1a1a;border-radius:16px;padding:28px;max-width:420px;width:90%;border:1px solid #333;">
             <h3 style="color:#f1faee;margin:0 0 16px;font-size:18px;">Cancelar Demanda</h3>
-            <label style="color:#9ca3af;font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Motivo:</label>
+            <label style="color:#9ca3af;font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Motivo (opcional):</label>
             <select id="cancelReasonSelect" style="width:100%;padding:12px;border:2px solid #444;border-radius:10px;font-size:14px;font-family:inherit;background:#2a2a2a;color:#f1faee;margin-bottom:12px;">
-                <option value="">-- Selecione --</option>
+                <option value="">Sem motivo</option>
             </select>
             <input type="text" id="cancelReasonFree" placeholder="Observações adicionais (opcional)" style="width:100%;padding:12px;border:2px solid #444;border-radius:10px;font-size:14px;font-family:inherit;background:var(--c-border-dark);color:#f1faee;margin-bottom:16px;">
             <div style="display:flex;gap:10px;">
                 <button id="confirmCancelBtn" style="flex:1;padding:14px;background:var(--c-danger);color:white;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;">Confirmar Cancelamento</button>
                 <button id="closeCancelBtn" style="flex:1;padding:14px;background:#333;color:#9ca3af;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;">Voltar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirmReadyModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center;backdrop-filter:blur(4px);">
+        <div style="background:#1a1a1a;border-radius:16px;padding:28px;max-width:420px;width:90%;border:1px solid #333;">
+            <h3 style="color:#f1faee;margin:0 0 16px;font-size:18px;">Confirmar Conclusão</h3>
+            <p id="confirmReadyText" style="color:#d1d5db;font-size:14px;margin:0 0 16px;">Marcar este item como pronto?</p>
+            <div style="display:flex;gap:10px;">
+                <button id="confirmReadyBtn" style="flex:1;padding:14px;background:var(--c-accent-warm);color:white;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;">Sim, Marcar como Pronto</button>
+                <button id="closeReadyBtn" style="flex:1;padding:14px;background:#333;color:#9ca3af;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;">Cancelar</button>
             </div>
         </div>
     </div>
@@ -378,7 +392,7 @@
         let demands = [];
         let timeInterval;
         let stationIds = { quente_a: null, quente_b: null, jantar: null };
-        const pendingConfirm = {};
+        let readyTargetId = null;
         const flashIds = new Set();
         let crossCancelToastTimer = null;
 
@@ -501,10 +515,6 @@
         fetchShiftStatus();
 
         function render() {
-            for (const key in pendingConfirm) {
-                clearTimeout(pendingConfirm[key]);
-                delete pendingConfirm[key];
-            }
             const filterA = demands.filter(d =>
                 d.kitchen_station_id === stationIds.quente_a &&
                 (d.status === 'pending' || d.status === 'ready')
@@ -621,31 +631,7 @@
             const cancelBtn = e.target.closest('.cancel-btn');
 
             if (readyBtn) {
-                const id = readyBtn.dataset.id;
-                if (pendingConfirm[id]) {
-                    clearTimeout(pendingConfirm[id]);
-                    delete pendingConfirm[id];
-                    readyBtn.classList.remove('confirm-pending');
-                    readyBtn.disabled = true;
-                    readyBtn.textContent = '...';
-                    try {
-                        await fetch(`/api/v1/demands/${id}/ready`, { method: 'PATCH' });
-                    } catch (err) {
-                        console.error('Erro ao marcar pronto:', err);
-                        readyBtn.disabled = false;
-                        readyBtn.textContent = 'PRONTO';
-                    }
-                } else {
-                    readyBtn.classList.add('confirm-pending');
-                    readyBtn.textContent = 'CONFIRMAR?';
-                    pendingConfirm[id] = setTimeout(() => {
-                        delete pendingConfirm[id];
-                        if (readyBtn.isConnected) {
-                            readyBtn.classList.remove('confirm-pending');
-                            readyBtn.textContent = 'PRONTO';
-                        }
-                    }, 3000);
-                }
+                openReadyModal(readyBtn.dataset.id);
             }
 
             if (cancelBtn) {
@@ -653,6 +639,50 @@
                 document.getElementById('cancelModal').style.display = 'flex';
                 document.getElementById('cancelModal').dataset.demandId = id;
                 if (cancelReasons.length === 0) loadCancelReasons();
+            }
+        });
+
+        function openReadyModal(id) {
+            readyTargetId = id;
+            var d = null;
+            for (var i = 0; i < demands.length; i++) {
+                if (String(demands[i].id) === String(id)) { d = demands[i]; break; }
+            }
+            var textEl = document.getElementById('confirmReadyText');
+            if (textEl) {
+                if (d) {
+                    var qty = (typeof d.quantity === 'number' ? d.quantity : parseFloat(d.quantity) || d.quantity);
+                    var unit = d.unit_label ? ' (' + esc(d.unit_label) + ')' : '';
+                    textEl.innerHTML = 'Marcar <strong>' + qty + 'x ' + esc(d.product_name) + unit + '</strong> como pronto?';
+                } else {
+                    textEl.innerHTML = 'Marcar este item como pronto?';
+                }
+            }
+            var modal = document.getElementById('confirmReadyModal');
+            if (modal) modal.style.display = 'flex';
+        }
+
+        var closeReadyBtn = document.getElementById('closeReadyBtn');
+        if (closeReadyBtn) closeReadyBtn.addEventListener('click', () => {
+            document.getElementById('confirmReadyModal').style.display = 'none';
+            readyTargetId = null;
+        });
+        var confirmReadyBtn = document.getElementById('confirmReadyBtn');
+        if (confirmReadyBtn) confirmReadyBtn.addEventListener('click', async () => {
+            if (!readyTargetId) return;
+            var id = readyTargetId;
+            confirmReadyBtn.disabled = true;
+            confirmReadyBtn.textContent = '...';
+            try {
+                await fetch(`/api/v1/demands/${id}/ready`, { method: 'PATCH' });
+                document.getElementById('confirmReadyModal').style.display = 'none';
+                readyTargetId = null;
+            } catch (err) {
+                console.error('Erro ao marcar pronto:', err);
+                showToast('Erro ao marcar demanda como pronta. Tente novamente.', 'error');
+            } finally {
+                confirmReadyBtn.disabled = false;
+                confirmReadyBtn.textContent = 'Sim, Marcar como Pronto';
             }
         });
 
@@ -665,7 +695,7 @@
                 const all = await res.json();
                 cancelReasons = Array.isArray(all) ? all.filter(r => r.category === 'cozinha') : [];
                 const sel = document.getElementById('cancelReasonSelect');
-                sel.innerHTML = '<option value="">-- Selecione --</option>';
+                sel.innerHTML = '<option value="">Sem motivo</option>';
                 cancelReasons.forEach(r => {
                     const opt = document.createElement('option');
                     opt.value = r.id;

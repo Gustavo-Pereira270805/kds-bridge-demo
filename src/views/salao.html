@@ -9,6 +9,7 @@
     <script src="/scripts/station-theme.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="/scripts/security.js"></script>
+    <script src="/scripts/gerente-nav.js"></script>
     <style>
         * { box-sizing: border-box; }
 
@@ -85,6 +86,7 @@
             z-index: var(--z-toast); box-shadow: var(--shadow-elevated);
         }
         #toast.show { opacity: 1; transform: translate(-50%, 0); }
+        #toast.success { background: var(--c-accent-warm); }
 
         .product-search-wrapper { position: relative; }
         .product-search-wrapper > input { margin-bottom: 0; padding-right: 36px; }
@@ -341,13 +343,15 @@
         return '~' + remaining + ' min';
     }
 
-    function showToast(message) {
+    function showToast(message, kind) {
         var toast = document.getElementById('toast');
         if (!toast) return;
         toast.textContent = message;
+        toast.classList.remove('success');
+        if (kind === 'success') toast.classList.add('success');
         toast.classList.add('show');
         if (toastTimeout) clearTimeout(toastTimeout);
-        toastTimeout = setTimeout(function() { toast.classList.remove('show'); }, 4000);
+        toastTimeout = setTimeout(function() { toast.classList.remove('show'); }, kind === 'success' ? 6000 : 4000);
     }
 
     function renderDemands() {
@@ -602,7 +606,7 @@
             cancelReasons = data.filter(function(r) { return r.category === 'salao'; });
             var select = document.getElementById('cancelReasonSelect');
             if (!select) return;
-            select.innerHTML = '<option value="">Motivo...</option>' +
+            select.innerHTML = '<option value="">Sem motivo</option>' +
                 cancelReasons.map(function(r) { return '<option value="' + r.id + '">' + esc(r.label) + '</option>'; }).join('');
         }).catch(console.error);
     }
@@ -776,7 +780,15 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
-        }).then(function() {
+        }).then(function(created) {
+            if (created && created.product_name) {
+                var qty = (typeof created.quantity === 'number' ? created.quantity : parseFloat(created.quantity) || created.quantity);
+                var msg = 'Demanda registrada: ' + qty + 'x ' + created.product_name;
+                if (created.sla_minutes) msg += ' — pronto em ~' + created.sla_minutes + ' min';
+                showToast(msg, 'success');
+            } else {
+                showToast('Demanda registrada com sucesso.', 'success');
+            }
             document.getElementById('quantity').value = 1;
             document.getElementById('isUrgent').checked = false;
             var repl2 = document.getElementById('isReplacement');
