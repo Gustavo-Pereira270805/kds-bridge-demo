@@ -202,6 +202,45 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
   await upsertScore('salao', dateStr, sFinal, sTotal,
     sSla, sSlaDed, sCancel, sCancelDed, sStock, sStockDed);
 
+  // -- Salão Jantar: mesma fórmula, só com demandas criadas após ativar o jantar --
+  const [dinnerStartRow] = await query<{ value: string }>(
+    `SELECT value FROM system_settings WHERE key = 'shift_dinner_started_at'`
+  );
+  const dinnerStart = (dinnerStartRow?.value || '').trim();
+  if (dinnerStart && dinnerStart.slice(0, 10) === dateStr) {
+    const jSlaRows = await query<SlaTimingRow>(
+      `SELECT created_at, ready_at, retrieved_at
+       FROM demands WHERE created_at::date = $1 AND created_at >= $2::timestamptz
+        AND sla_breached_salao = true AND status != 'annulled'`,
+      [dateStr, dinnerStart]
+    );
+    const jCancel = await safeCount(
+      `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND created_at >= $2::timestamptz
+        AND status = 'cancelled_salao' AND status != 'annulled'`,
+      [dateStr, dinnerStart]
+    );
+    const jStock = await safeCount(
+      `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND created_at >= $2::timestamptz
+        AND stockout_reported = true AND status != 'annulled'`,
+      [dateStr, dinnerStart]
+    );
+    const jTotal = await safeCount(
+      `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND created_at >= $2::timestamptz
+        AND status != 'annulled'`,
+      [dateStr, dinnerStart]
+    );
+    const jSlaDed = round2(jSlaRows.reduce((sum, row) => {
+      const factor = slaFactor(row.ready_at, row.retrieved_at, tolerance);
+      return sum + penaltyForSlaFactor(factor, weights.sla_min, weights.sla_max);
+    }, 0));
+    const jCancelDed = round2(jCancel * weights.cancellation_salao);
+    const jStockDed = round2(jStock * weights.stockout_salao);
+    const jFinal = Math.max(0, Math.round((5.0 - (jSlaDed + jCancelDed + jStockDed)) * 10) / 10);
+
+    await upsertScore('salao_jantar', dateStr, jFinal, jTotal,
+      jSlaRows.length, jSlaDed, jCancel, jCancelDed, jStock, jStockDed);
+  }
+
   // -- Cozinha Geral = média das 3 estações --
   const stationRows = await query<{
     total_demands: string; sla_breaches: string; sla_breach_deduction: string;
@@ -337,20 +376,32 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
     }));
   }
 
-  if (entity === 'salao') {
+  if (entity === 'salao' || entity === 'salao_jantar') {
     const [tolRow] = await query<{ value: string }>(
       `SELECT value FROM system_settings WHERE key = 'pickup_tolerance_minutes'`
     );
     const toleranceValue = parseFloat(tolRow?.value || '3');
     const tolerance = Number.isFinite(toleranceValue) && toleranceValue > 0 ? toleranceValue : 3;
+    const stationLabel = entity === 'salao_jantar' ? 'Salão Jantar' : 'Salão';
+
+    // Jantar: só ocorrências de demandas criadas após ativar o turno.
+    let dinnerCutoff: string | null = null;
+    if (entity === 'salao_jantar') {
+      const [startRow] = await query<{ value: string }>(
+        `SELECT value FROM system_settings WHERE key = 'shift_dinner_started_at'`
+      );
+      dinnerCutoff = (startRow?.value || '').trim() || null;
+      if (!dinnerCutoff) return results;
+    }
 
     const sSlaRows = await query<{
       id: string; product_name: string; created_at: string | Date; ready_at: string | Date | null;
       retrieved_at: string | Date | null;
     }>(
       `SELECT id, product_name, created_at, ready_at, retrieved_at
-       FROM demands WHERE created_at::date >= $1 AND created_at::date <= $2 AND sla_breached_salao = true AND status != 'annulled'`,
-      [dateFrom, dateTo]
+       FROM demands WHERE created_at::date >= $1 AND created_at::date <= $2 AND sla_breached_salao = true AND status != 'annulled'
+       AND ($3::timestamptz IS NULL OR created_at >= $3::timestamptz)`,
+      [dateFrom, dateTo, dinnerCutoff]
     );
     sSlaRows.forEach(r => {
       const factor = slaFactor(r.ready_at, r.retrieved_at, tolerance);
@@ -359,31 +410,33 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
         demand_id: r.id, product_name: r.product_name,
         detail: `Excedeu em ${Math.max(0, (factor - 1) * tolerance).toFixed(1)} min (${formatFactor(factor)}× SLA)`,
         deduction: penaltyForSlaFactor(factor, weights.sla_min, weights.sla_max),
-        station: 'Salão',
+        station: stationLabel,
       });
     });
 
     const sCancelRows = await query<{ id: string; product_name: string; created_at: string | Date; cancel_reason: string | null }>(
       `SELECT id, product_name, created_at, cancel_reason
-       FROM demands WHERE created_at::date >= $1 AND created_at::date <= $2 AND status = 'cancelled_salao'`,
-      [dateFrom, dateTo]
+       FROM demands WHERE created_at::date >= $1 AND created_at::date <= $2 AND status = 'cancelled_salao'
+       AND ($3::timestamptz IS NULL OR created_at >= $3::timestamptz)`,
+      [dateFrom, dateTo, dinnerCutoff]
     );
     sCancelRows.forEach(r => results.push({
       type: 'Cancelamento', date: formatDate(r.created_at),
       demand_id: r.id, product_name: r.product_name,
       detail: r.cancel_reason || 'Sem motivo registrado',
-      deduction: round2(weights.cancellation_salao), station: 'Salão',
+      deduction: round2(weights.cancellation_salao), station: stationLabel,
     }));
 
     const sStockRows = await query<{ id: string; product_name: string; created_at: string | Date }>(
       `SELECT id, product_name, created_at
-       FROM demands WHERE created_at::date >= $1 AND created_at::date <= $2 AND stockout_reported = true AND status != 'annulled'`,
-      [dateFrom, dateTo]
+       FROM demands WHERE created_at::date >= $1 AND created_at::date <= $2 AND stockout_reported = true AND status != 'annulled'
+       AND ($3::timestamptz IS NULL OR created_at >= $3::timestamptz)`,
+      [dateFrom, dateTo, dinnerCutoff]
     );
     sStockRows.forEach(r => results.push({
       type: 'Zerado', date: formatDate(r.created_at),
       demand_id: r.id, product_name: r.product_name, detail: 'Reportado pelo salão',
-      deduction: round2(weights.stockout_salao), station: 'Salão',
+      deduction: round2(weights.stockout_salao), station: stationLabel,
     }));
   }
 

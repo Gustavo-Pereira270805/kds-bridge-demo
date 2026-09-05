@@ -561,6 +561,10 @@ export default async function adminRoutes(fastify: FastifyInstance) {
          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
         [today]
       );
+      await client.query(
+        `INSERT INTO system_settings (key, value) VALUES ('shift_dinner_started_at', now()::text)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`
+      );
 
       await client.query('COMMIT');
       client.release();
@@ -650,6 +654,9 @@ export default async function adminRoutes(fastify: FastifyInstance) {
 
       await client.query(
         `UPDATE system_settings SET value = '' WHERE key = 'shift_dinner_active_date'`
+      );
+      await client.query(
+        `UPDATE system_settings SET value = '' WHERE key = 'shift_dinner_started_at'`
       );
 
       await client.query('COMMIT');
