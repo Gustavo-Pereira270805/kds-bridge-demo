@@ -1242,6 +1242,30 @@ if (document.readyState === 'loading') {
         });
     }
 
+    function numScore(v) {
+        var n = Number(v);
+        return Number.isFinite(n) ? n : 5;
+    }
+
+    // Ocorrências vêm em UTC (ISO); exibe no horário de Brasília.
+    function fmtOccDate(v) {
+        var d = v instanceof Date ? v : new Date(String(v || ''));
+        if (isNaN(d.getTime())) return String(v || '').substring(0, 16);
+        var p = function(n) { return (n < 10 ? '0' : '') + n; };
+        try {
+            var parts = new Intl.DateTimeFormat('pt-BR', {
+                timeZone: 'America/Sao_Paulo',
+                day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+                hour12: false
+            }).formatToParts(d);
+            var g = {};
+            parts.forEach(function(x) { g[x.type] = x.value; });
+            return g.day + '/' + g.month + ' ' + g.hour + ':' + g.minute;
+        } catch (e) {
+            return p(d.getUTCDate()) + '/' + p(d.getUTCMonth() + 1) + ' ' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes());
+        }
+    }
+
     function scoreClass(v) {
         if(v >= 4.5) return 'score-great';
         if(v >= 3.5) return 'score-good';
@@ -1314,7 +1338,7 @@ if (document.readyState === 'loading') {
         for(var i=0; i<order.length; i++) {
             var s = source[order[i]];
             if(!s) continue;
-            var sc = Number(s.final_score) || 5;
+            var sc = numScore(s.final_score);
             var cls = scoreClass(sc);
             h += '<div class="score-card" data-entity="'+order[i]+'" title="Clique para ver detalhamento">';
             h += '<div class="score-entity">'+labels[order[i]]+'</div>';
@@ -1345,7 +1369,7 @@ if (document.readyState === 'loading') {
                 var p = maxD > 0 ? (Number(detractor.deduction) / maxD) * 100 : 0;
                 bars += '<div class="bar-row"><div class="bar-label" style="width:150px;">'+esc(detractor.label)+'</div><div class="bar-track"><div class="bar-fill" style="width:'+p+'%;background:#e63946;">'+(p>25?'<span>'+detractor.count+' ocorr.</span>':'')+'</div></div><div class="bar-value" style="width:55px;">-'+Number(detractor.deduction).toFixed(2)+'</div></div>';
             }
-            var sc = Number(s.final_score) || 5;
+            var sc = numScore(s.final_score);
             var datesList = (detractorDates && detractorDates[entity]) ? detractorDates[entity] : [];
             if (datesList.length > 0) {
                 bars += '<div style="margin-top:8px;border-top:1px solid var(--c-border-light);padding-top:8px;">' +
@@ -1355,17 +1379,7 @@ if (document.readyState === 'loading') {
                     '<thead><tr style="border-bottom:1px solid var(--c-border-light);text-align:left;">' +
                     '<th style="padding:3px 4px;">Data</th><th style="padding:3px 4px;">Tipo</th><th style="padding:3px 4px;">Produto</th><th style="padding:3px 4px;">Detalhe</th><th style="padding:3px 4px;">Dedução</th><th style="padding:3px 4px;">Estação</th></tr></thead><tbody>';
                 datesList.forEach(function(occ) {
-                    var d = String(occ.date || '');
-                    var formatted = '';
-                    if (d.indexOf('T') > -1) {
-                        var parts = d.split('T');
-                        var datePart = parts[0];
-                        var timePart = parts[1] ? parts[1].substring(0, 5) : '';
-                        var dp = datePart.split('-');
-                        formatted = dp.length === 3 ? dp[2] + '/' + dp[1] + ' ' + timePart : d.substring(0, 16);
-                    } else {
-                        formatted = d.substring(0, 16);
-                    }
+                    var formatted = fmtOccDate(occ.date);
                     bars += '<tr style="border-bottom:1px solid var(--c-border-light);">' +
                         '<td style="padding:3px 4px;font-family:var(--font-mono);">' + formatted + '</td>' +
                         '<td style="padding:3px 4px;">' + exportEscape(occ.type || '') + '</td>' +

@@ -655,9 +655,8 @@ export default async function adminRoutes(fastify: FastifyInstance) {
       await client.query(
         `UPDATE system_settings SET value = '' WHERE key = 'shift_dinner_active_date'`
       );
-      await client.query(
-        `UPDATE system_settings SET value = '' WHERE key = 'shift_dinner_started_at'`
-      );
+      // shift_dinner_started_at é propositalmente mantido: a janela do jantar
+      // continua valendo para a nota salao_jantar e as ocorrências do dia.
 
       await client.query('COMMIT');
       client.release();
