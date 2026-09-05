@@ -10,9 +10,11 @@ Idioma do repo: pt-BR (código, commits, docs). TS strict (`npx tsc --noEmit` ap
   no focus de campo readonly. Dropdown de troca não abre mais por engano.
 - Verificado E2E local (7 PASS, print `outputs/verificacao-lote2/trocar-fix/` — dir
   ignorado pelo git, fica só local) + `/salao` em produção contém o fix.
-- Deploy: usuário `ubuntu` NÃO está no grupo `docker` → usar `sudo -n docker compose ...`
-  (sem senha). `curl -sk https://localhost/health` na VM dá RC 35 (quirk TLS local);
-  checar `docker compose ps` (healthy) + `/health` externo em vez disso.
+- Deploy: o usuário `ubuntu` NUNCA esteve no grupo `docker` (`setup-instance.sh` não dá
+  `usermod`; socket é `root:docker 660`) — nada foi perdido, o erro inicial foi
+  interpretação minha. Usar `sudo -n docker compose ...` (sem senha), como já fazem
+  `ssh-kds.bat`, `logs-kds.bat` e `restart-kds.bat`. Não adicionar ao grupo docker
+  (equivale a root e não traz benefício, pois o sudo já é passwordless).
 
 ## Ambiente
 - Dev: `npm run dev` (ts-node-dev) na porta 3000. Views HTML lidas do disco a cada request
