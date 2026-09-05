@@ -3,11 +3,16 @@
 Data: 2026-09-05. Repo: `C:\Users\Milena\OneDrive\Documentos\programas\KDS_demo`, branch `main`.
 Idioma do repo: pt-BR (código, commits, docs). TS strict (`npx tsc --noEmit` após mudar TS).
 
-## ⚠️ PENDENTE (não commitado, não testado, não no servidor)
-- `src/views/salao.html` → `prefillReplaceForm` (Trocar): busca principal fica VAZIA e focada;
-  só o item substituído vem preenchido (troca marcada + `replacedProduct` + busca de troca).
-  Motivação: usuário reclamou que vinha preenchida com o cancelado e obrigava apagar.
-  Falta: testar (atualizar step 9 do script lote2), commitar, subir.
+## Trocar — RESOLVIDO (commit `42cd873`, em produção)
+- Ao clicar Trocar: busca principal fica VAZIA e focada; campo do item substituído
+  virou somente-leitura no fluxo do aviso (o substituído é fixo = item cancelado);
+  fluxo manual do checkbox "Troca" continua editável. `makeProductDropdown` não abre
+  no focus de campo readonly. Dropdown de troca não abre mais por engano.
+- Verificado E2E local (7 PASS, print `outputs/verificacao-lote2/trocar-fix/` — dir
+  ignorado pelo git, fica só local) + `/salao` em produção contém o fix.
+- Deploy: usuário `ubuntu` NÃO está no grupo `docker` → usar `sudo -n docker compose ...`
+  (sem senha). `curl -sk https://localhost/health` na VM dá RC 35 (quirk TLS local);
+  checar `docker compose ps` (healthy) + `/health` externo em vez disso.
 
 ## Ambiente
 - Dev: `npm run dev` (ts-node-dev) na porta 3000. Views HTML lidas do disco a cada request
