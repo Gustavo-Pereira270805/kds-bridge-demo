@@ -316,6 +316,10 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
       try {
         const { id } = request.params;
         const { reason, cancel_reason_id } = request.body || {};
+        const trimmedReason = typeof reason === 'string' ? reason.trim() : '';
+        if (!cancel_reason_id && !trimmedReason) {
+          return reply.code(400).send({ error: 'Informe o motivo do cancelamento' });
+        }
 
         const [demand] = await query<{
           status: string;
@@ -336,8 +340,8 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
         }
 
         const reasonLabel = cancel_reason_id
-          ? ((await query<{ label: string }>('SELECT label FROM cancel_reasons WHERE id = $1', [cancel_reason_id]))[0]?.label || reason || null)
-          : reason || null;
+          ? ((await query<{ label: string }>('SELECT label FROM cancel_reasons WHERE id = $1', [cancel_reason_id]))[0]?.label || trimmedReason || null)
+          : trimmedReason || null;
 
         await query(
           `UPDATE demands SET status = 'cancelled_salao', cancelled_at = now(), cancel_reason = $1, cancel_reason_id = $2
@@ -402,6 +406,10 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
       try {
         const { id } = request.params;
         const { reason, cancel_reason_id } = request.body || {};
+        const trimmedReason = typeof reason === 'string' ? reason.trim() : '';
+        if (!cancel_reason_id && !trimmedReason) {
+          return reply.code(400).send({ error: 'Informe o motivo do cancelamento' });
+        }
 
         const [demand] = await query<{
           status: string;
@@ -422,8 +430,8 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
         }
 
         const reasonLabel = cancel_reason_id
-          ? ((await query<{ label: string }>('SELECT label FROM cancel_reasons WHERE id = $1', [cancel_reason_id]))[0]?.label || reason || null)
-          : reason || null;
+          ? ((await query<{ label: string }>('SELECT label FROM cancel_reasons WHERE id = $1', [cancel_reason_id]))[0]?.label || trimmedReason || null)
+          : trimmedReason || null;
 
         await query(
           `UPDATE demands SET status = 'cancelled_cozinha', cancelled_at = now(), cancel_reason = $1, cancel_reason_id = $2

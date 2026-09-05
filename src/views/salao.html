@@ -345,7 +345,7 @@
         <div class="modal">
             <h3>Cancelar Demanda</h3>
             <select id="cancelReasonSelect" style="margin-bottom: 8px;"></select>
-            <textarea id="cancelReason" rows="2" placeholder="Motivo (opcional)"></textarea>
+            <textarea id="cancelReason" rows="2" placeholder="Descreva o motivo (obrigatório se não selecionar acima)"></textarea>
             <div style="display:flex; flex-direction: column; gap: 8px;">
                 <button id="confirmCancelBtn" style="background: var(--c-danger); color: white;">Confirmar Cancelamento</button>
                 <button id="closeCancelModal">Fechar</button>
@@ -638,8 +638,12 @@
         if (!cancelTargetId) return;
         var crEl = document.getElementById('cancelReason');
         var crsEl = document.getElementById('cancelReasonSelect');
-        var reason = (crEl && crEl.value) ? crEl.value : null;
+        var reason = (crEl && crEl.value) ? crEl.value.trim() : '';
         var selectedReasonId = (crsEl && crsEl.value) ? crsEl.value : null;
+        if (!selectedReasonId && !reason) {
+            showToast('Informe o motivo do cancelamento.');
+            return;
+        }
         confirmCancelBtn.disabled = true;
         api('/api/v1/demands/' + cancelTargetId + '/cancel-salao', {
             method: 'PATCH',
@@ -788,7 +792,7 @@
             cancelReasons = data.filter(function(r) { return r.category === 'salao'; });
             var select = document.getElementById('cancelReasonSelect');
             if (!select) return;
-            select.innerHTML = '<option value="">Sem motivo</option>' +
+            select.innerHTML = '<option value="">Selecione o motivo...</option>' +
                 cancelReasons.map(function(r) { return '<option value="' + r.id + '">' + esc(r.label) + '</option>'; }).join('');
         }).catch(console.error);
     }

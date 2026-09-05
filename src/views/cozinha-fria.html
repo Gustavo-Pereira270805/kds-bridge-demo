@@ -293,11 +293,11 @@
     <div id="cancelModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center;backdrop-filter:blur(4px);">
         <div style="background:var(--c-surface-dark-cold);border-radius:16px;padding:28px;max-width:420px;width:90%;border:1px solid var(--c-border-dark-cold);">
             <h3 style="color:#f1faee;margin:0 0 16px;font-size:18px;">Cancelar Demanda</h3>
-            <label style="color:#8899bb;font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Motivo (opcional):</label>
+            <label style="color:#8899bb;font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Motivo (obrigatório):</label>
             <select id="cancelReasonSelect" style="width:100%;padding:12px;border:2px solid var(--c-border-dark-cold);border-radius:10px;font-size:14px;font-family:inherit;background:var(--c-border-dark-cold);color:#f1faee;margin-bottom:12px;">
-                <option value="">Sem motivo</option>
+                <option value="">Selecione o motivo...</option>
             </select>
-            <input type="text" id="cancelReasonFree" placeholder="Observações adicionais (opcional)" style="width:100%;padding:12px;border:2px solid var(--c-border-dark-cold);border-radius:10px;font-size:14px;font-family:inherit;background:var(--c-border-dark-cold);color:#f1faee;margin-bottom:16px;">
+            <input type="text" id="cancelReasonFree" placeholder="Descreva o motivo (obrigatório se não selecionar acima)" style="width:100%;padding:12px;border:2px solid var(--c-border-dark-cold);border-radius:10px;font-size:14px;font-family:inherit;background:var(--c-border-dark-cold);color:#f1faee;margin-bottom:16px;">
             <div style="display:flex;gap:10px;">
                 <button id="confirmCancelBtn" style="flex:1;padding:14px;background:var(--c-danger);color:white;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;">Confirmar Cancelamento</button>
                 <button id="closeCancelBtn" style="flex:1;padding:14px;background:var(--c-border-dark-cold);color:#8899bb;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;">Voltar</button>
@@ -617,7 +617,7 @@
                 const all = await res.json();
                 cancelReasons = Array.isArray(all) ? all.filter(r => r.category === 'cozinha') : [];
                 const sel = document.getElementById('cancelReasonSelect');
-                sel.innerHTML = '<option value="">Sem motivo</option>';
+                sel.innerHTML = '<option value="">Selecione o motivo...</option>';
                 cancelReasons.forEach(r => {
                     const opt = document.createElement('option');
                     opt.value = r.id;
@@ -642,7 +642,11 @@
             const modal = document.getElementById('cancelModal');
             const id = modal.dataset.demandId;
             const reasonId = document.getElementById('cancelReasonSelect').value || null;
-            const freeText = document.getElementById('cancelReasonFree').value || null;
+            const freeText = (document.getElementById('cancelReasonFree').value || '').trim() || null;
+            if (!reasonId && !freeText) {
+                showToast('Informe o motivo do cancelamento.', 'error');
+                return;
+            }
 
             const confirmBtn = document.getElementById('confirmCancelBtn');
             confirmBtn.disabled = true;

@@ -431,14 +431,19 @@
 
             if (cancelBtn) {
                 const id = cancelBtn.dataset.id;
-                const reason = prompt('Motivo do cancelamento (opcional):');
+                const reason = prompt('Motivo do cancelamento (obrigatório):');
+                if (!reason || !reason.trim()) {
+                    cancelBtn.disabled = false;
+                    cancelBtn.textContent = 'X';
+                    return;
+                }
                 cancelBtn.disabled = true;
                 cancelBtn.textContent = '...';
                 try {
                     await fetch(`/api/v1/demands/${id}/cancel-cozinha`, {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ reason: reason || null })
+                        body: JSON.stringify({ reason: reason.trim() })
                     });
                 } catch (err) {
                     console.error('Erro ao cancelar:', err);
