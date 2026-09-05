@@ -421,6 +421,11 @@ body {
   transition: all var(--t-fast) var(--ease-out);
 }
 .btn-shift-dinner:hover { background: rgba(212, 165, 116, 0.15); }
+.btn-shift-dinner .shift-icon {
+  width: 16px; height: 16px; flex: none;
+  stroke: currentColor; fill: none;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
 .btn-shift-dinner:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-shift-dinner.btn-shift-active {
   background: #d4a574;

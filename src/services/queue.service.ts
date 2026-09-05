@@ -28,15 +28,38 @@ export async function recomputeStationQueue(stationId: string): Promise<void> {
   const locked = pending.filter((d) => d.cooking_started);
   const waiting = pending.filter((d) => !d.cooking_started);
 
+  // Teto rígido de capacidade: se a capacidade encolheu e há mais itens em
+  // preparo do que bocas, mantém em preparo os de ETA mais próximo e devolve
+  // o excedente à espera (cooking_started=false). ETA nulo conta como +infinito.
+  const toUnlock: string[] = [];
+  if (locked.length > station.capacity) {
+    const etaOf = (d: QueueDemand) => {
+      const t = d.expected_ready_at ? new Date(d.expected_ready_at).getTime() : NaN;
+      return Number.isFinite(t) ? (t as number) : Number.POSITIVE_INFINITY;
+    };
+    locked.sort((a, b) => {
+      const diff = etaOf(a) - etaOf(b);
+      if (diff !== 0) return diff;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
+    const excess = locked.splice(station.capacity);
+    for (const d of excess) {
+      d.cooking_started = false;
+      waiting.push(d);
+      toUnlock.push(d.id);
+    }
+  }
+
   waiting.sort((a, b) => {
     if (a.priority !== b.priority) return a.priority === 'urgent' ? -1 : 1;
     return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
   });
 
-  const slots: number[] = locked.map((d) =>
+  let slots: number[] = locked.map((d) =>
     new Date(d.expected_ready_at!).getTime()
   );
   while (slots.length < station.capacity) slots.push(now);
+  slots = slots.slice(0, station.capacity);
 
   const urgentWaiting = waiting.filter(d => d.priority === 'urgent');
   const nonUrgentLocked = locked.filter(d => d.priority !== 'urgent');
@@ -72,7 +95,7 @@ export async function recomputeStationQueue(stationId: string): Promise<void> {
 
   const toLock: { id: string; expectedReadyAt: string }[] = [];
   const toUpdate: { id: string; expectedReadyAt: string }[] = [];
-  const toUnlock: string[] = [...preemptedIds];
+  for (const id of preemptedIds) toUnlock.push(id);
 
   for (const demand of waiting) {
     let earliestIdx = 0;

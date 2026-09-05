@@ -321,6 +321,17 @@ async function seedDatabase() {
         console.log(`[Seed] ${puInserted} vínculos product_units criados`);
       }
 
+      // Convergência (lote 2): todo produto aceita todas as unidades ativas.
+      // As favoritas (units.featured) aparecem primeiro no salão via ORDER BY.
+      const puAll = await client.query(
+        `INSERT INTO product_units (product_id, unit_id)
+         SELECT p.id, u.id FROM products p CROSS JOIN units u WHERE u.active = true
+         ON CONFLICT (product_id, unit_id) DO NOTHING`
+      );
+      if ((puAll.rowCount || 0) > 0) {
+        console.log(`[Seed] ${puAll.rowCount} vínculos product_units (todas ativas) criados`);
+      }
+
       await client.query(
         `INSERT INTO system_settings (key, value) VALUES ('data_retention_days', '180')
          ON CONFLICT (key) DO NOTHING`

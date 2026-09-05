@@ -145,9 +145,28 @@
         .demand-card.urgent { border-left: 3px solid var(--c-danger); background: var(--alert-urgent-bg-dark); }
         .demand-card.stockout { border-left: 3px solid var(--c-warn); background: var(--alert-warn-bg-dark); }
         :root[data-theme="light"] .demand-card.ready { background: var(--alert-ok-bg-light); }
-        :root[data-theme="light"] .demand-card.urgent { background: var(--alert-urgent-bg-light); }
-        :root[data-theme="light"] .demand-card.stockout { background: var(--alert-warn-bg-light); }
+        :root[data-theme="light"] .demand-card.urgent {
+            background: var(--alert-urgent-bg-light);
+            border-left: 6px solid var(--c-danger);
+            animation: urgentPulse 1.1s ease-in-out infinite;
+        }
+        :root[data-theme="light"] .demand-card.stockout {
+            background: var(--alert-warn-bg-light);
+            border-left: 6px solid var(--c-warn);
+            animation: stockoutPulse 1.1s ease-in-out infinite;
+        }
+        :root[data-theme="light"] .demand-card.urgent .name,
+        :root[data-theme="light"] .demand-card.stockout .name { font-size: 19px; font-weight: 800; }
         :root[data-theme="light"] .top-header { background: var(--c-primary); color: var(--c-on-primary); border-bottom-color: var(--c-primary); }
+
+        @keyframes urgentPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.01); opacity: 0.92; }
+        }
+        @keyframes stockoutPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.85; }
+        }
 
         .demand-card .name { font-weight: var(--fw-bold); font-size: 16px; display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;}
         .demand-card .meta { font-size: 12px; color: var(--c-text-muted); }
@@ -179,6 +198,66 @@
         .badge.normal { background: var(--c-bg-page); color: var(--c-text-secondary); border: 1px solid var(--c-border-default); }
         .badge.ready-badge { background: var(--c-accent-warm); color: var(--c-text-invert); }
         .badge.stockout-badge { background: var(--c-warn); color: var(--c-primary); }
+        .badge.cancelled-badge { background: var(--c-warn); color: var(--c-primary); }
+        .demand-card.cancelled-notice {
+            border: 2px solid var(--c-warn);
+            background: var(--alert-warn-bg-dark);
+        }
+        :root[data-theme="light"] .demand-card.cancelled-notice { background: var(--alert-warn-bg-light); }
+        .demand-card .actions .replace-btn { background: linear-gradient(180deg, var(--c-accent-warm) 0%, #059669 100%); color: var(--c-on-primary); border-color: rgba(255,255,255,0.12); }
+        .demand-card .actions .dismiss-btn { background: var(--c-bg-panel); color: var(--c-text-secondary); }
+
+        :root body[data-shift="dinner"] { background: var(--dinner-bg); color: #f3ede1; }
+        :root body[data-shift="dinner"] .top-header { background: #1e1b24; border-bottom: 1px solid rgba(243, 237, 225, 0.14); }
+        :root body[data-shift="dinner"] .top-header .kds-title,
+        :root body[data-shift="dinner"] .top-header #headerDate,
+        :root body[data-shift="dinner"] .top-header #headerMenu { color: var(--dinner-accent); }
+        :root body[data-shift="dinner"] .section { background: transparent; border-color: transparent; }
+        :root body[data-shift="dinner"] .section h2,
+        :root body[data-shift="dinner"] .section h3 { color: var(--dinner-accent); }
+        :root body[data-shift="dinner"] #demandForm label { color: var(--dinner-accent); }
+        :root body[data-shift="dinner"] form button[type="submit"] { background: linear-gradient(180deg, var(--dinner-accent) 0%, #b07a45 100%); color: #0b1020; }
+        /* Navegação lateral no jantar: mesmo painel escuro da cozinha. */
+        :root body[data-shift="dinner"] #gerenteNav { background: #1e1b24; border-right: 1px solid rgba(243, 237, 225, 0.12); }
+        :root body[data-shift="dinner"] #gerenteNav .gnav-link { color: #f3ede1; }
+        :root body[data-shift="dinner"] #gerenteNav .gnav-toggle { color: var(--dinner-accent); }
+        :root body[data-shift="dinner"] #gerenteNav .gnav-link:hover,
+        :root body[data-shift="dinner"] #gerenteNav .gnav-link.active { background: rgba(243, 237, 225, 0.06); border-color: rgba(243, 237, 225, 0.25); color: #f3ede1; }
+        :root body[data-shift="dinner"] #gerenteNav .gnav-toggle:hover { background: rgba(243, 237, 225, 0.06); color: #f3ede1; }
+        /* Dropdowns de produto no jantar: painel escuro. */
+        :root body[data-shift="dinner"] .product-search-wrapper > input,
+        :root body[data-shift="dinner"] #quantity,
+        :root body[data-shift="dinner"] #unitSelect { background: #1e1b24; border-color: rgba(243, 237, 225, 0.16); color: #f3ede1; }
+        :root body[data-shift="dinner"] .product-search-wrapper > input::placeholder { color: rgba(243, 237, 225, 0.45); }
+        :root body[data-shift="dinner"] .product-dropdown { background: #1e1b24; border-color: rgba(243, 237, 225, 0.16); }
+        :root body[data-shift="dinner"] .product-option { border-bottom-color: rgba(243, 237, 225, 0.08); }
+        :root body[data-shift="dinner"] .product-option:hover { background: rgba(243, 237, 225, 0.06); }
+        :root body[data-shift="dinner"] .product-option .opt-name { color: #f3ede1; }
+        :root body[data-shift="dinner"] .product-option .opt-cat { color: var(--dinner-accent); }
+        :root body[data-shift="dinner"] .product-empty { color: var(--dinner-accent); }
+        /* Cards no jantar: mesmo painel da cozinha jantar; status com a cor forte. */
+        :root body[data-shift="dinner"] .demand-card { background: var(--dinner-surface); border: 1px solid rgba(243, 237, 225, 0.14); }
+        :root body[data-shift="dinner"] .demand-card .name { color: #f3ede1; }
+        :root body[data-shift="dinner"] .demand-card .meta { color: var(--dinner-accent); }
+        :root body[data-shift="dinner"] .demand-card .eta { color: #f3ede1; }
+        :root body[data-shift="dinner"] .demand-card.ready { background: #022c22; border-color: rgba(52, 211, 153, 0.5); border-left: 4px solid #34d399; }
+        :root body[data-shift="dinner"] .demand-card.urgent { background: #4c0519; border-color: rgba(225, 29, 72, 0.55); border-left: 6px solid var(--c-danger); animation: urgentPulse 1.1s ease-in-out infinite; }
+        :root body[data-shift="dinner"] .demand-card.urgent .name,
+        :root body[data-shift="dinner"] .demand-card.stockout .name { font-size: 19px; font-weight: 800; color: #ffffff; }
+        :root body[data-shift="dinner"] .demand-card.stockout,
+        :root body[data-shift="dinner"] .demand-card.cancelled-notice { background: #451a03; border: 2px solid var(--c-warn); border-left-width: 6px; animation: stockoutPulse 1.1s ease-in-out infinite; }
+        :root body[data-shift="dinner"] .demand-card.stockout .name { color: #ffffff; }
+        /* Ações no jantar: linguagem da cozinha (primária dourada, perigo claro). */
+        :root body[data-shift="dinner"] .demand-card .actions .retrieve-btn { background: var(--dinner-accent); color: #141218; border-color: var(--dinner-accent); box-shadow: none; }
+        :root body[data-shift="dinner"] .demand-card .actions .cancel-btn { background: transparent; color: #fb7185; border-color: rgba(251, 113, 133, 0.5); box-shadow: none; }
+        :root body[data-shift="dinner"] .demand-card .actions .cancel-btn:hover { background: var(--c-danger); color: #fff; border-color: var(--c-danger); }
+        :root body[data-shift="dinner"] .demand-card .actions .stockout-btn { background: var(--dinner-accent); color: #141218; border-color: var(--dinner-accent); box-shadow: none; }
+        :root body[data-shift="dinner"] .demand-card .actions .replace-btn { background: var(--dinner-accent); color: #141218; border-color: var(--dinner-accent); box-shadow: none; }
+        :root body[data-shift="dinner"] .demand-card .actions .dismiss-btn { background: transparent; color: #f3ede1; border-color: rgba(243, 237, 225, 0.4); box-shadow: none; }
+        :root body[data-shift="dinner"] #shiftBadge { background: var(--dinner-accent); color: #0b1020; }
+        :root body[data-shift="dinner"] .empty-state { color: var(--dinner-accent); }
+        /* ZEROU legível também fora do jantar: âmbar escuro no tema claro. */
+        :root[data-theme="light"] .demand-card .actions .stockout-btn { color: #92400e; border-color: #92400e; }
 
         .empty-state { text-align: center; color: var(--c-text-muted); padding: var(--sp-6) 0; font-size: 13px; }
 
@@ -246,6 +325,10 @@
                 <label><input type="checkbox" id="isReplacement"> Troca</label>
             </div>
             <select id="replacedProduct" style="display:none;"></select>
+            <div class="product-search-wrapper" id="replacedSearchWrapper" style="display:none;">
+                <input type="search" id="replacedSearch" placeholder="Buscar item substituído..." autocomplete="off">
+                <div class="product-dropdown" id="replacedDropdown"></div>
+            </div>
             <button type="submit">Enviar para Cozinha</button>
         </form>
     </div>
@@ -296,10 +379,11 @@
     var cancelTargetId = null;
     var retrieveTargetId = null;
     var cancelReasons = [];
+    var cancelledNotices = [];
+    var replaceNoticeId = null;
     var timeInterval;
     var searchTimeout = null;
     var toastTimeout = null;
-    var currentDropdownItems = [];
     var currentShift = 'lunch';
 
     function updateShiftBadge() {
@@ -309,6 +393,7 @@
         var active = currentShift === 'dinner';
         badge.style.display = active ? '' : 'none';
         if (sep) sep.style.display = active ? '' : 'none';
+        document.body.setAttribute('data-shift', active ? 'dinner' : 'lunch');
     }
 
     function toDate(v) {
@@ -343,6 +428,60 @@
         return '~' + remaining + ' min';
     }
 
+    function fmtHourMin(dateStr) {
+        if (!dateStr) return '';
+        return toDate(dateStr).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function upsertCancelledNotice(d) {
+        cancelledNotices = cancelledNotices.filter(function(x) { return x.id !== d.id; });
+        cancelledNotices.unshift(d);
+        renderDemands();
+    }
+
+    function dismissCancelledNotice(id) {
+        if (!id) return;
+        cancelledNotices = cancelledNotices.filter(function(x) { return x.id !== id; });
+        if (replaceNoticeId === id) replaceNoticeId = null;
+        renderDemands();
+    }
+
+    function ensureSelectOption(selectId, value, text) {
+        var select = document.getElementById(selectId);
+        if (!select || !value) return select;
+        var opt = select.querySelector('option[value="' + value + '"]');
+        if (!opt) {
+            opt = document.createElement('option');
+            opt.value = value;
+            opt.textContent = text;
+            select.appendChild(opt);
+        }
+        select.value = value;
+        return select;
+    }
+
+    function prefillReplaceForm(notice) {
+        if (!notice) return;
+        ensureSelectOption('productSelect', notice.product_id, notice.product_name);
+        var searchInput = document.getElementById('productSearch');
+        if (searchInput) searchInput.value = notice.product_name || '';
+        closeProductDropdown();
+        loadUnitsForProduct(notice.product_id);
+        var qty = document.getElementById('quantity');
+        if (qty && notice.quantity) qty.value = notice.quantity;
+        var repl = document.getElementById('isReplacement');
+        if (repl) repl.checked = true;
+        populateReplacedProducts();
+        ensureSelectOption('replacedProduct', notice.product_id, notice.product_name);
+        var wrapper = document.getElementById('replacedSearchWrapper');
+        if (wrapper) wrapper.style.display = '';
+        var replSearch = document.getElementById('replacedSearch');
+        if (replSearch) replSearch.value = notice.product_name || '';
+        replaceNoticeId = notice.id;
+        if (searchInput) searchInput.focus();
+        window.scrollTo(0, 0);
+    }
+
     function showToast(message, kind) {
         var toast = document.getElementById('toast');
         if (!toast) return;
@@ -358,17 +497,44 @@
         var container = document.getElementById('demandList');
         if (!container) return;
         var active = demands.filter(function(d) { return d.status === 'pending' || d.status === 'ready'; });
-        if (active.length === 0) {
+        if (active.length === 0 && cancelledNotices.length === 0) {
             container.innerHTML = '<div class="empty-state">Nenhuma demanda ativa.</div>';
             return;
         }
         active.sort(function(a, b) {
-            if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
-            if (a.priority !== 'urgent' && b.priority === 'urgent') return 1;
+            var aReady = a.status === 'ready';
+            var bReady = b.status === 'ready';
+            if (aReady && !bReady) return -1;
+            if (!aReady && bReady) return 1;
+            if (aReady && bReady) {
+                var aReadyAt = a.ready_at ? toDate(a.ready_at).getTime() : toDate(a.created_at).getTime();
+                var bReadyAt = b.ready_at ? toDate(b.ready_at).getTime() : toDate(b.created_at).getTime();
+                return aReadyAt - bReadyAt;
+            }
+            var aUrgent = a.priority === 'urgent';
+            var bUrgent = b.priority === 'urgent';
+            if (aUrgent && !bUrgent) return -1;
+            if (!aUrgent && bUrgent) return 1;
             return toDate(a.created_at).getTime() - toDate(b.created_at).getTime();
         });
 
-        container.innerHTML = active.map(function(d) {
+        container.innerHTML = cancelledNotices.map(function(d) {
+            var unitText = d.unit_label ? ' (' + esc(d.unit_label) + ')' : '';
+            var qtyText = (typeof d.quantity === 'number' ? d.quantity : parseFloat(d.quantity) || d.quantity) + 'x';
+            var reason = d.cancel_reason ? esc(d.cancel_reason) : 'Sem motivo';
+            var when = d.cancelled_at ? timeAgo(d.cancelled_at) : timeAgo(d.created_at);
+            return '<div class="demand-card cancelled-notice">' +
+                '<div class="info">' +
+                    '<div class="name">' + qtyText + ' ' + esc(d.product_name) + unitText + ' ' +
+                        '<span class="badge cancelled-badge">CANCELADA PELA COZINHA</span></div>' +
+                    '<div class="meta">Motivo: ' + reason + ' · ' + when + '</div>' +
+                '</div>' +
+                '<div class="actions">' +
+                    '<button class="replace-btn" data-id="' + d.id + '">Trocar</button>' +
+                    '<button class="dismiss-btn" data-id="' + d.id + '">Esquecer</button>' +
+                '</div>' +
+            '</div>';
+        }).join('') + active.map(function(d) {
             var isReady = d.status === 'ready';
             var cls = isReady ? 'ready' : (d.priority === 'urgent' ? 'urgent' : 'pending');
             if (d.stockout_reported) cls += ' stockout';
@@ -378,7 +544,10 @@
                 ? '<span class="badge urgent">URGENTE</span>'
                 : '';
             if (isReady) badges += '<span class="badge ready-badge">PRONTO</span>';
-            if (d.stockout_reported) badges += '<span class="badge stockout-badge">ZERADO</span>';
+            if (d.stockout_reported) {
+                var stockoutTime = d.stockout_reported_at ? fmtHourMin(d.stockout_reported_at) : '';
+                badges += '<span class="badge stockout-badge">ZERADO' + (stockoutTime ? ' às ' + stockoutTime : '') + '</span>';
+            }
 
             var actions = '';
             if (!isReady) {
@@ -441,6 +610,17 @@
                     showToast(err.message);
                     btn.disabled = false;
                 });
+        }
+        if (btn.classList.contains('replace-btn')) {
+            var noticeId = btn.dataset.id;
+            var notice = null;
+            for (var i = 0; i < cancelledNotices.length; i++) {
+                if (cancelledNotices[i].id === noticeId) { notice = cancelledNotices[i]; break; }
+            }
+            prefillReplaceForm(notice);
+        }
+        if (btn.classList.contains('dismiss-btn')) {
+            dismissCancelledNotice(btn.dataset.id);
         }
     });
 
@@ -624,10 +804,8 @@
         });
     }
 
-    function renderProductDropdown(items) {
-        var dropdown = document.getElementById('productDropdown');
-        if (!dropdown) return;
-        var sorted = (items || []).slice().sort(function(a, b) {
+    function sortProductItems(items) {
+        return (items || []).slice().sort(function(a, b) {
             var aj = (a.station_code === 'jantar') ? 1 : 0;
             var bj = (b.station_code === 'jantar') ? 1 : 0;
             if (aj !== bj) return bj - aj;
@@ -636,31 +814,88 @@
             if (at !== bt) return bt - at;
             return a.name.localeCompare(b.name);
         });
-        currentDropdownItems = sorted;
-        if (currentDropdownItems.length === 0) {
-            dropdown.innerHTML = '<div class="product-empty">Nenhum produto encontrado</div>';
-            dropdown.classList.add('open');
-            return;
-        }
-        dropdown.innerHTML = currentDropdownItems.map(function(p, i) {
-            var badge = p.station_code === 'jantar'
-                ? '<span class="today-badge badge-jantar">JANTAR</span>'
-                : (p.in_today_menu
-                    ? (currentShift === 'dinner' ? '<span class="today-badge">ALMOÇO</span>' : '<span class="today-badge">HOJE</span>')
-                    : '');
-            return '<div class="product-option" data-idx="' + i + '">' +
-                '<span><span class="opt-name">' + esc(p.name) + '</span>' +
-                (p.category ? '<span class="opt-cat">' + esc(p.category) + '</span>' : '') +
-                '</span>' + badge +
-            '</div>';
-        }).join('');
-        dropdown.classList.add('open');
     }
 
-    function closeProductDropdown() {
-        var dropdown = document.getElementById('productDropdown');
-        if (dropdown) dropdown.classList.remove('open');
+    // Fábrica de dropdown de produto: mesma ordenação, selo e marcação para
+    // o campo principal e para a busca do item substituído (troca).
+    // cfg: { inputId, dropdownId, wrapperId, initialItems(), onPick(item) }
+    function makeProductDropdown(cfg) {
+        var dropdown = document.getElementById(cfg.dropdownId);
+        var input = document.getElementById(cfg.inputId);
+        var wrapper = document.getElementById(cfg.wrapperId);
+        var state = { items: [] };
+        function setItems(items) {
+            state.items = sortProductItems(items);
+            if (!dropdown) return;
+            if (state.items.length === 0) {
+                dropdown.innerHTML = '<div class="product-empty">Nenhum produto encontrado</div>';
+                dropdown.classList.add('open');
+                return;
+            }
+            dropdown.innerHTML = state.items.map(function(p, i) {
+                var badge = p.station_code === 'jantar'
+                    ? '<span class="today-badge badge-jantar">JANTAR</span>'
+                    : (p.in_today_menu
+                        ? (currentShift === 'dinner' ? '<span class="today-badge">ALMOÇO</span>' : '<span class="today-badge">HOJE</span>')
+                        : '');
+                return '<div class="product-option" data-idx="' + i + '">' +
+                    '<span><span class="opt-name">' + esc(p.name) + '</span>' +
+                    (p.category ? '<span class="opt-cat">' + esc(p.category) + '</span>' : '') +
+                    '</span>' + badge +
+                '</div>';
+            }).join('');
+            dropdown.classList.add('open');
+        }
+        function open() { setItems(cfg.initialItems ? cfg.initialItems() : []); }
+        function close() { if (dropdown) dropdown.classList.remove('open'); }
+        if (input) input.addEventListener('focus', open);
+        if (dropdown) dropdown.addEventListener('click', function(e) {
+            var t = e.target;
+            var optEl = (t && t.closest) ? t.closest('.product-option') : null;
+            if (!optEl) return;
+            var idx = parseInt(optEl.dataset.idx, 10);
+            if (!isNaN(idx) && state.items[idx]) cfg.onPick(state.items[idx]);
+        });
+        document.addEventListener('click', function(e) {
+            if (wrapper && !wrapper.contains(e.target)) close();
+        });
+        return { setItems: setItems, open: open, close: close };
     }
+
+    var mainProductDD = makeProductDropdown({
+        inputId: 'productSearch',
+        dropdownId: 'productDropdown',
+        wrapperId: 'productSearchWrapper',
+        initialItems: normalizeTodayProducts,
+        onPick: selectProduct
+    });
+
+    function renderProductDropdown(items) { mainProductDD.setItems(items); }
+
+    function closeProductDropdown() { mainProductDD.close(); }
+
+    var replacedDD = makeProductDropdown({
+        inputId: 'replacedSearch',
+        dropdownId: 'replacedDropdown',
+        wrapperId: 'replacedSearchWrapper',
+        initialItems: normalizeTodayProducts,
+        onPick: function(item) {
+            var select = document.getElementById('replacedProduct');
+            if (select) {
+                var opt = select.querySelector('option[value="' + item.id + '"]');
+                if (!opt) {
+                    opt = document.createElement('option');
+                    opt.value = item.id;
+                    opt.textContent = item.name;
+                    select.appendChild(opt);
+                }
+                select.value = item.id;
+            }
+            var input = document.getElementById('replacedSearch');
+            if (input) input.value = item.name;
+            replacedDD.close();
+        }
+    });
 
     function selectProduct(item) {
         if (!item) return;
@@ -682,13 +917,8 @@
     }
 
     var productSearchEl = document.getElementById('productSearch');
-    var productDropdownEl = document.getElementById('productDropdown');
-    var productSearchWrapperEl = document.getElementById('productSearchWrapper');
 
     if (productSearchEl) {
-        productSearchEl.addEventListener('focus', function() {
-            renderProductDropdown(normalizeTodayProducts());
-        });
         productSearchEl.addEventListener('input', function() {
             var q = productSearchEl.value.trim();
             var select = document.getElementById('productSelect');
@@ -711,22 +941,6 @@
         });
     }
 
-    if (productDropdownEl) {
-        productDropdownEl.addEventListener('click', function(e) {
-            var t = e.target;
-            var optEl = (t && t.closest) ? t.closest('.product-option') : null;
-            if (!optEl) return;
-            var idx = parseInt(optEl.dataset.idx, 10);
-            if (!isNaN(idx) && currentDropdownItems[idx]) selectProduct(currentDropdownItems[idx]);
-        });
-    }
-
-    document.addEventListener('click', function(e) {
-        if (productSearchWrapperEl && !productSearchWrapperEl.contains(e.target)) {
-            closeProductDropdown();
-        }
-    });
-
     var productSelectEl = document.getElementById('productSelect');
     if (productSelectEl) productSelectEl.addEventListener('change', function() {
         loadUnitsForProduct(this.value);
@@ -735,13 +949,18 @@
     var isReplacementEl = document.getElementById('isReplacement');
     if (isReplacementEl) isReplacementEl.addEventListener('change', function() {
         var select = document.getElementById('replacedProduct');
-        if (!select) return;
+        var wrapper = document.getElementById('replacedSearchWrapper');
+        var search = document.getElementById('replacedSearch');
+        if (!select || !wrapper) return;
         if (this.checked) {
             populateReplacedProducts();
-            select.style.display = '';
+            wrapper.style.display = '';
+            if (search) search.value = '';
         } else {
-            select.style.display = 'none';
+            wrapper.style.display = 'none';
             select.value = '';
+            if (search) search.value = '';
+            replacedDD.close();
         }
     });
 
@@ -791,6 +1010,15 @@
             }
             document.getElementById('quantity').value = 1;
             document.getElementById('isUrgent').checked = false;
+            var searchInput = document.getElementById('productSearch');
+            if (searchInput) searchInput.value = '';
+            var productSelectMain = document.getElementById('productSelect');
+            if (productSelectMain) {
+                productSelectMain.value = '';
+                productSelectMain.style.display = 'none';
+            }
+            var unitSelectReset = document.getElementById('unitSelect');
+            if (unitSelectReset) unitSelectReset.value = '';
             var repl2 = document.getElementById('isReplacement');
             if (repl2) repl2.checked = false;
             var replSelect2 = document.getElementById('replacedProduct');
@@ -798,6 +1026,12 @@
                 replSelect2.value = '';
                 replSelect2.style.display = 'none';
             }
+            var replSearchReset = document.getElementById('replacedSearch');
+            if (replSearchReset) replSearchReset.value = '';
+            var replWrapperReset = document.getElementById('replacedSearchWrapper');
+            if (replWrapperReset) replWrapperReset.style.display = 'none';
+            replacedDD.close();
+            if (replaceNoticeId) dismissCancelledNotice(replaceNoticeId);
         }).catch(function(err) {
             console.error(err);
             showToast(err.message);
@@ -816,8 +1050,16 @@
         if (idx !== -1) demands[idx] = d; else demands.push(d);
         renderDemands();
     });
-    socket.on('demand:retrieved', function(d) { demands = demands.filter(function(x) { return x.id !== d.id; }); renderDemands(); });
-    socket.on('demand:cancelled', function(d) { demands = demands.filter(function(x) { return x.id !== d.id; }); renderDemands(); });
+    socket.on('demand:retrieved', function(d) { demands = demands.filter(function(x) { return x.id !== d.id; }); if (d && d.id) dismissCancelledNotice(d.id); else renderDemands(); });
+    socket.on('demand:cancelled', function(d) {
+        demands = demands.filter(function(x) { return x.id !== d.id; });
+        if (d && d.status === 'cancelled_cozinha') {
+            showToast('A cozinha cancelou: ' + (d.quantity || '') + 'x ' + (d.product_name || 'item'));
+            upsertCancelledNotice(d);
+        } else {
+            renderDemands();
+        }
+    });
     socket.on('demand:stockout', function(d) {
         var idx = demands.findIndex(function(x) { return x.id === d.id; });
         if (idx !== -1) demands[idx] = d;
@@ -825,17 +1067,21 @@
     });
     socket.on('demand:queue-updated', loadActiveDemands);
     socket.on('demand:cross-cancel', function(d) {
-        if (d && d.cancelled_by === 'cozinha') {
-            showToast('A cozinha cancelou um item que já estava em preparo');
-        }
         if (d && d.id) {
             demands = demands.filter(function(x) { return x.id !== d.id; });
+        }
+        if (d && d.cancelled_by === 'cozinha') {
+            showToast('A cozinha cancelou um item que já estava em preparo');
+            upsertCancelledNotice(d);
+        } else {
             renderDemands();
         }
     });
     socket.on('demand:annulled', function(d) {
         if (d && d.id) {
             demands = demands.filter(function(x) { return x.id !== d.id; });
+            dismissCancelledNotice(d.id);
+        } else {
             renderDemands();
         }
     });

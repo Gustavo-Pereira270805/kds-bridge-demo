@@ -80,7 +80,29 @@
         body[data-station="jantar"] .ready-strip-header { color: var(--dinner-accent); }
         body[data-station="jantar"] .ready-strip .ready-pill { background: #1d2436; border-color: var(--dinner-accent); }
         body[data-station="jantar"] .ready-strip .ready-pill .pill-name { color: #e5bc90; }
-        body[data-station="jantar"] .column-jantar .grid { max-width: 860px; margin: 0 auto; width: 100%; }
+        body[data-station="jantar"] .column-jantar .grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px; align-content: start;
+            max-width: 1600px; margin: 0 auto; width: 100%;
+        }
+        @media (max-width: 1100px) {
+            body[data-station="jantar"] .column-jantar .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        body[data-station="jantar"] .column-jantar .grid .card { display: flex; flex-direction: column; }
+        body[data-station="jantar"] .column-jantar .grid .card .actions { margin-top: auto; padding-top: 14px; }
+        body[data-station="jantar"] .empty-state { color: var(--dinner-accent); }
+        body[data-station="jantar"] .empty-state h4 { color: #f3ede1; }
+        body[data-station="jantar"] .empty-state svg { stroke: var(--dinner-accent); }
+        body[data-station="jantar"] .card.urgent {
+            background: #4c0519; border-left-color: var(--c-danger); border-left-width: 6px;
+            animation: urgentPulse 1.1s ease-in-out infinite;
+        }
+        body[data-station="jantar"] .card.urgent .name { color: #fff; }
+        body[data-station="jantar"] .card.stockout {
+            background: #451a03; border: 2px solid var(--c-warn); border-left-width: 6px;
+            animation: stockoutPulse 1.1s ease-in-out infinite;
+        }
 
         .grid { display: flex; flex-direction: column; gap: 12px; flex: 1; }
 
@@ -112,6 +134,10 @@
         .card .urgent-label {
             font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px;
             color: var(--c-danger); margin-bottom: 6px;
+        }
+        .card .stockout-label {
+            font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px;
+            color: var(--c-warn); margin-bottom: 6px;
         }
 
         .card .card-top { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 6px; }
@@ -197,7 +223,7 @@
         .ready-strip .ready-pill .pill-name { color: #d0d0d0; }
         .ready-strip .ready-pill .pill-unit { color: #777; font-size: 11px; }
 
-        .empty-state { text-align: center; padding: 40px 20px; color: #444; font-size: 16px; font-weight: 500; }
+        .empty-state { grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: #444; font-size: 16px; font-weight: 500; }
 
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -244,8 +270,9 @@
         }
 
         @media (max-width: 768px) {
-            body { flex-direction: column; height: auto; }
-            .column { padding: 12px; }
+            body { flex-direction: column; height: auto; min-height: 100vh; overflow-y: auto; }
+            body[data-station="jantar"] .column-jantar .grid { grid-template-columns: minmax(0, 1fr); }
+            .column { padding: 12px; overflow-y: visible; }
             .column-a { border-right: none; border-bottom: 2px solid var(--c-border-dark); }
             .column-b { border-left: none; }
             .card .name { font-size: 18px; }
@@ -264,6 +291,21 @@
         :root[data-theme="light"] .ready-strip .ready-pill .pill-qty,
         :root[data-theme="light"] .ready-strip .ready-pill .pill-unit { color: var(--c-text-secondary); }
         :root[data-theme="light"] .card.cooking { background: #d1fae5; border-color: #0e9f6e; }
+        :root[data-theme="light"] .card.urgent {
+            background: var(--alert-urgent-bg-light);
+            border-left-color: var(--c-danger); border-left-width: 6px;
+            animation: urgentPulse 2s infinite;
+        }
+        :root[data-theme="light"] .card.urgent .name { font-size: 25px; font-weight: 800; color: var(--c-danger-strong); }
+        :root[data-theme="light"] .card.stockout {
+            background: var(--alert-warn-bg-light);
+            border: 2px solid var(--c-warn); border-left-width: 6px;
+            animation: stockoutPulse 1.5s infinite;
+        }
+        :root[data-theme="light"] .card.stockout .name { font-size: 25px; font-weight: 800; }
+        :root[data-theme="light"] .card.urgent .elapsed,
+        :root[data-theme="light"] .card.urgent .eta { color: var(--c-text-secondary); }
+        :root[data-theme="light"] .card.urgent .elapsed span { color: var(--c-danger-strong); }
         :root[data-theme="light"] .card.replacement { background: var(--alert-replacement-bg-light); }
         :root[data-theme="light"] .empty-state { color: var(--c-text-secondary); }
         :root[data-theme="light"] .col-timer,
@@ -463,6 +505,11 @@
             return `~${remaining} min`;
         }
 
+        function fmtHourMin(dateStr) {
+            if (!dateStr) return '';
+            return parseDate(dateStr).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        }
+
         function isOverdue(expectedReadyAt) {
             if (!expectedReadyAt) return false;
             return parseDate(expectedReadyAt).getTime() < Date.now();
@@ -571,6 +618,8 @@
                 const unitText = d.unit_label ? ` <span class="unit-label">(${esc(d.unit_label)})</span>` : '';
                 const cookingBadge = d.cooking_started ? ' <span class="cooking-badge">EM PREPARO</span>' : '';
                 const urgentLabel = d.priority === 'urgent' ? '<div class="urgent-label">URGENTE</div>' : '';
+                const stockoutTime = d.stockout_reported_at ? fmtHourMin(d.stockout_reported_at) : '';
+                const stockoutLabel = d.stockout_reported ? `<div class="stockout-label">ZERADO${stockoutTime ? ' às ' + stockoutTime : ''}</div>` : '';
                 const replacementBadge = d.is_replacement ? '<div class="replacement-badge">TROCA</div>' : '';
                 const replacedInfo = d.is_replacement && d.replaced_name ? `<div class="replaced-name">Substitui: ${esc(d.replaced_name)}</div>` : '';
 
@@ -583,7 +632,7 @@
 
                 return `
                 <div class="${classes.join(' ')}">
-                    ${urgentLabel}${replacementBadge}
+                    ${urgentLabel}${stockoutLabel}${replacementBadge}
                     <div class="card-top">
                         <div class="qty">${d.quantity}x</div>
                         <div class="product-info">

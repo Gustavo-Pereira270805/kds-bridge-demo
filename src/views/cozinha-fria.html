@@ -94,6 +94,10 @@
             font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px;
             color: var(--c-danger); margin-bottom: 6px;
         }
+        .card .stockout-label {
+            font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px;
+            color: var(--c-warn); margin-bottom: 6px;
+        }
 
         .card .card-top { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 6px; }
 
@@ -241,6 +245,21 @@
         :root[data-theme="light"] .ready-strip .ready-pill .pill-qty,
         :root[data-theme="light"] .ready-strip .ready-pill .pill-unit { color: var(--c-text-secondary); }
         :root[data-theme="light"] .card.cooking { background: #d1fae5; border-color: #0e9f6e; }
+        :root[data-theme="light"] .card.urgent {
+            background: var(--alert-urgent-bg-light);
+            border-left-color: var(--c-danger); border-left-width: 6px;
+            animation: urgentPulse 2s infinite;
+        }
+        :root[data-theme="light"] .card.urgent .name { font-size: 25px; font-weight: 800; color: var(--c-danger-strong); }
+        :root[data-theme="light"] .card.stockout {
+            background: var(--alert-warn-bg-light);
+            border: 2px solid var(--c-warn); border-left-width: 6px;
+            animation: stockoutPulse 1.5s infinite;
+        }
+        :root[data-theme="light"] .card.stockout .name { font-size: 25px; font-weight: 800; }
+        :root[data-theme="light"] .card.urgent .elapsed,
+        :root[data-theme="light"] .card.urgent .eta { color: var(--c-text-secondary); }
+        :root[data-theme="light"] .card.urgent .elapsed span { color: var(--c-danger-strong); }
         :root[data-theme="light"] .card.replacement { background: var(--alert-replacement-bg-light); }
         :root[data-theme="light"] .empty-state { color: var(--c-text-secondary); }
         :root[data-theme="light"] #globalTimer, :root[data-theme="light"] .card-timer { background: var(--c-bg-page); color: var(--c-text-secondary); border-color: var(--c-border-default); }
@@ -374,6 +393,11 @@
             return `~${remaining} min`;
         }
 
+        function fmtHourMin(dateStr) {
+            if (!dateStr) return '';
+            return parseDate(dateStr).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        }
+
         function isOverdue(expectedReadyAt) {
             if (!expectedReadyAt) return false;
             return parseDate(expectedReadyAt).getTime() < Date.now();
@@ -465,6 +489,8 @@
                 const unitText = d.unit_label ? ` <span class="unit-label">(${esc(d.unit_label)})</span>` : '';
                 const cookingBadge = d.cooking_started ? ' <span class="cooking-badge">EM PREPARO</span>' : '';
                 const urgentLabel = d.priority === 'urgent' ? '<div class="urgent-label">URGENTE</div>' : '';
+                const stockoutTime = d.stockout_reported_at ? fmtHourMin(d.stockout_reported_at) : '';
+                const stockoutLabel = d.stockout_reported ? `<div class="stockout-label">ZERADO${stockoutTime ? ' às ' + stockoutTime : ''}</div>` : '';
                 const replacementBadge = d.is_replacement ? '<div class="replacement-badge">TROCA</div>' : '';
                 const replacedInfo = d.is_replacement && d.replaced_name ? `<div class="replaced-name">Substitui: ${esc(d.replaced_name)}</div>` : '';
 
@@ -477,7 +503,7 @@
 
                 return `
                 <div class="${classes.join(' ')}">
-                    ${urgentLabel}${replacementBadge}
+                    ${urgentLabel}${stockoutLabel}${replacementBadge}
                     <div class="card-top">
                         <div class="qty">${d.quantity}x</div>
                         <div class="product-info">
