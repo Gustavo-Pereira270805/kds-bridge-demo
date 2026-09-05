@@ -461,7 +461,7 @@
              <div class="criteria-chip" style="background:#e63946;"><div class="cs-range">&lt;2,5</div><div class="cs-label">Ruim</div></div>
          </div>
         <div class="criteria-entities">
-            <strong>Entidades avaliadas:</strong> Cozinha Quente A, Cozinha Quente B, Cozinha Fria, Sal&atilde;o e Cozinha Geral (m&eacute;dia das cozinhas); na aba Jantar, apenas a Cozinha Jantar. A nota parte de 5.0 e sofre as penalidades da tabela; &eacute; recalculada a cada mudan&ccedil;a de status das demandas do dia.
+            <strong>Entidades avaliadas:</strong> Cozinha Quente A, Cozinha Quente B, Cozinha Fria, Sal&atilde;o e Cozinha Geral (m&eacute;dia das cozinhas); na aba Jantar, a Cozinha Jantar e o Salão. A nota parte de 5.0 e sofre as penalidades da tabela; &eacute; recalculada a cada mudan&ccedil;a de status das demandas do dia.
         </div>
         <div class="modal-actions">
             <button id="btnCriteriaClose" class="btn-modal-confirm" type="button">Fechar</button>
@@ -1217,7 +1217,7 @@ if (document.readyState === 'loading') {
 
     function perfEntities() {
         return state.turn === 'dinner'
-            ? ['cozinha_jantar']
+            ? ['cozinha_jantar', 'salao']
             : ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'salao'];
     }
 
@@ -1329,7 +1329,7 @@ if (document.readyState === 'loading') {
     function renderPerfDetractors(perf, detractorDates) {
         var source = perf && perf.averages && Object.keys(perf.averages).length ? perf.averages : (perf && perf.current);
         if(!source) return '';
-        var order = state.turn === 'dinner' ? ['cozinha_jantar'] : ['cozinha_geral','salao','cozinha_quente_a','cozinha_quente_b','cozinha_fria'];
+        var order = state.turn === 'dinner' ? ['cozinha_jantar', 'salao'] : ['cozinha_geral','salao','cozinha_quente_a','cozinha_quente_b','cozinha_fria'];
         var labels = PERF_LABELS;
         var h = '<div class="panels" style="grid-column:1 / -1;width:100%;grid-template-columns:minmax(0, 1fr);">';
         for(var i=0; i<order.length; i++) {
