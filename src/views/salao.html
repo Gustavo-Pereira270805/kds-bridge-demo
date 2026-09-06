@@ -511,7 +511,15 @@
         var replSearch = document.getElementById('replacedSearch');
         if (replSearch) { replSearch.value = notice.product_name || ''; replSearch.readOnly = true; }
         replaceNoticeId = notice.id;
-        if (searchInput) searchInput.focus();
+        // Não foca a busca (evita abrir o teclado): só abre a lista do
+        // substituto para rolar até o item. Quem preferir digitar, toca na busca.
+        // setTimeout: o clique no Trocar borbulha até o document e fecharia a
+        // lista na mesma hora (fecha-clique fora do dropdown).
+        if (searchInput) searchInput.blur();
+        setTimeout(function() {
+            if (typeof mainProductDD !== 'undefined' && mainProductDD) mainProductDD.open();
+            else if (searchInput) searchInput.focus();
+        }, 0);
         window.scrollTo(0, 0);
     }
 
