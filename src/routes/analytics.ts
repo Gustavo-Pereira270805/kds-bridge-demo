@@ -733,7 +733,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           cur.setDate(cur.getDate() + 1);
         }
 
-        const entities = ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'cozinha_jantar', 'salao', 'salao_jantar'];
+        const entities = ['operacao', 'cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'cozinha_jantar', 'salao', 'salao_jantar'];
 
         // Current scores
         const currentRows = await query<PerformanceScoreRow>(

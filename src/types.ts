@@ -132,6 +132,7 @@ export interface Demand {
   cancel_reason: string | null;
   stockout_reported: boolean;
   stockout_reported_at: string | null;
+  stockout_sla_factor: number | null;
   expected_ready_at: string | null;
   cooking_started: boolean;
   cooking_started_at: string | null;

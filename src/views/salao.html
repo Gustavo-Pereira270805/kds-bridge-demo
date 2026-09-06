@@ -442,9 +442,40 @@
 
     function dismissCancelledNotice(id) {
         if (!id) return;
+        markNoticeSeen(id);
         cancelledNotices = cancelledNotices.filter(function(x) { return x.id !== id; });
         if (replaceNoticeId === id) replaceNoticeId = null;
         renderDemands();
+    }
+
+    // Avisos já resolvidos nesta tela (Esquecer ou troca enviada): ficam no
+    // localStorage para não reaparecerem após F5. O servidor lista os
+    // cancelamentos do dia e a tela filtra esses ids.
+    var SEEN_NOTICE_KEY = 'kds_cancelled_seen';
+    function getSeenNoticeIds() {
+        try {
+            var raw = localStorage.getItem(SEEN_NOTICE_KEY);
+            var arr = raw ? JSON.parse(raw) : [];
+            return Array.isArray(arr) ? arr : [];
+        } catch (e) { return []; }
+    }
+    function markNoticeSeen(id) {
+        if (!id) return;
+        try {
+            var seen = getSeenNoticeIds();
+            if (seen.indexOf(id) === -1) {
+                seen.push(id);
+                localStorage.setItem(SEEN_NOTICE_KEY, JSON.stringify(seen.slice(-200)));
+            }
+        } catch (e) { /* sem localStorage, o aviso volta no F5 */ }
+    }
+    function loadCancelledNotices() {
+        var seen = getSeenNoticeIds();
+        api('/api/v1/demands/cancelled-cozinha').then(function(rows) {
+            (rows || []).forEach(function(d) {
+                if (d && d.id && seen.indexOf(d.id) === -1) upsertCancelledNotice(d);
+            });
+        }).catch(function(err) { console.error(err); });
     }
 
     function ensureSelectOption(selectId, value, text) {
@@ -802,6 +833,7 @@
             demands = data;
             renderDemands();
         }).catch(console.error);
+        loadCancelledNotices();
     }
 
     function normalizeTodayProducts() {

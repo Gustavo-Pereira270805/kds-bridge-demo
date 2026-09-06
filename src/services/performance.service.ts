@@ -131,6 +131,20 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
       [sid, dateStr]
     );
     const slaBreaches = slaRows.length;
+    // Zeramentos com SLA já estourado no reporte: culpa da cozinha (estouro),
+    // exceto os que também estouraram no ready (já contados acima, sem duplicar).
+    const lateStockRows = await query<{ stockout_sla_factor: number | string | null }>(
+      `SELECT stockout_sla_factor
+       FROM demands
+       WHERE kitchen_station_id = $1 AND created_at::date = $2 AND stockout_reported = true
+         AND stockout_sla_factor > 1 AND sla_breached_cozinha = false
+         AND status != 'annulled'`,
+      [sid, dateStr]
+    );
+    const lateStockBreaches = lateStockRows.length;
+    const lateStockDed = round2(lateStockRows.reduce((sum, row) => {
+      return sum + penaltyForSlaFactor(Number(row.stockout_sla_factor), weights.sla_min, weights.sla_max);
+    }, 0));
     const cancellations = await safeCount(
       `SELECT COUNT(*)::int AS cnt FROM demands
        WHERE kitchen_station_id = $1 AND created_at::date = $2 AND status = 'cancelled_cozinha'
@@ -153,14 +167,14 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
     const slaDed = round2(slaRows.reduce((sum, row) => {
       const factor = slaFactor(row.created_at, row.ready_at, Number(row.sla_minutes));
       return sum + penaltyForSlaFactor(factor, weights.sla_min, weights.sla_max);
-    }, 0));
+    }, 0) + lateStockDed);
     const cancelDed = round2(cancellations * weights.cancellation_cozinha);
     const stockDed = 0; // Removido o peso para cozinha: "Zerou" não tira nota da cozinha
     const totalDed = slaDed + cancelDed + stockDed;
     const finalScore = Math.max(0, Math.round((5.0 - totalDed) * 10) / 10);
 
     await upsertScore(entity, dateStr, finalScore, total,
-      slaBreaches, slaDed, cancellations, cancelDed, stockouts, stockDed);
+      slaBreaches + lateStockBreaches, slaDed, cancellations, cancelDed, stockouts, stockDed);
   }
 
   // -- Salão --
@@ -180,8 +194,11 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
     `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND status = 'cancelled_salao' AND status != 'annulled'`,
     [dateStr]
   );
+  // Zeramento dentro do SLA (ou sem veredito, dados antigos): detrator do salão.
+  // Zeramento com SLA estourado vai para o estouro da cozinha (bloco acima).
   const sStock = await safeCount(
-    `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND stockout_reported = true AND status != 'annulled'`,
+    `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND stockout_reported = true
+      AND (stockout_sla_factor IS NULL OR stockout_sla_factor <= 1) AND status != 'annulled'`,
     [dateStr]
   );
 
@@ -221,7 +238,8 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
     );
     const jStock = await safeCount(
       `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND created_at >= $2::timestamptz
-        AND stockout_reported = true AND status != 'annulled'`,
+        AND stockout_reported = true AND (stockout_sla_factor IS NULL OR stockout_sla_factor <= 1)
+        AND status != 'annulled'`,
       [dateStr, dinnerStart]
     );
     const jTotal = await safeCount(
@@ -240,6 +258,60 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
     await upsertScore('salao_jantar', dateStr, jFinal, jTotal,
       jSlaRows.length, jSlaDed, jCancel, jCancelDed, jStock, jStockDed);
   }
+
+  // -- Operação: todas as cozinhas + salões numa nota só (união das demandas do dia) --
+  const opCookRows = await query<SlaTimingRow>(
+    `SELECT created_at, ready_at, sla_minutes
+     FROM demands WHERE created_at::date = $1 AND sla_breached_cozinha = true AND status != 'annulled'`,
+    [dateStr]
+  );
+  const opLateStockRows = await query<{ stockout_sla_factor: number | string | null }>(
+    `SELECT stockout_sla_factor FROM demands
+     WHERE created_at::date = $1 AND stockout_reported = true
+       AND stockout_sla_factor > 1 AND sla_breached_cozinha = false AND status != 'annulled'`,
+    [dateStr]
+  );
+  const opPickupRows = await query<SlaTimingRow>(
+    `SELECT created_at, ready_at, retrieved_at
+     FROM demands WHERE created_at::date = $1 AND sla_breached_salao = true AND status != 'annulled'`,
+    [dateStr]
+  );
+  const opCancelC = await safeCount(
+    `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND status = 'cancelled_cozinha' AND status != 'annulled'`,
+    [dateStr]
+  );
+  const opCancelS = await safeCount(
+    `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND status = 'cancelled_salao' AND status != 'annulled'`,
+    [dateStr]
+  );
+  const opStockOk = await safeCount(
+    `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND stockout_reported = true
+      AND (stockout_sla_factor IS NULL OR stockout_sla_factor <= 1) AND status != 'annulled'`,
+    [dateStr]
+  );
+  const opTotal = await safeCount(
+    `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND status != 'annulled'`,
+    [dateStr]
+  );
+
+  const opCookDed = round2(opCookRows.reduce((sum, row) => {
+    const factor = slaFactor(row.created_at, row.ready_at, Number(row.sla_minutes));
+    return sum + penaltyForSlaFactor(factor, weights.sla_min, weights.sla_max);
+  }, 0) + opLateStockRows.reduce((sum, row) => {
+    return sum + penaltyForSlaFactor(Number(row.stockout_sla_factor), weights.sla_min, weights.sla_max);
+  }, 0));
+  const opPickupDed = round2(opPickupRows.reduce((sum, row) => {
+    const factor = slaFactor(row.ready_at, row.retrieved_at, tolerance);
+    return sum + penaltyForSlaFactor(factor, weights.sla_min, weights.sla_max);
+  }, 0));
+  const opCancelDed = round2(opCancelC * weights.cancellation_cozinha + opCancelS * weights.cancellation_salao);
+  const opStockDed = round2(opStockOk * weights.stockout_salao);
+  const opBreaches = opCookRows.length + opLateStockRows.length + opPickupRows.length;
+  const opCancellations = opCancelC + opCancelS;
+  const opFinal = Math.max(0, Math.round((5.0 - (opCookDed + opPickupDed + opCancelDed + opStockDed)) * 10) / 10);
+
+  await upsertScore('operacao', dateStr, opFinal, opTotal,
+    opBreaches, round2(opCookDed + opPickupDed), opCancellations, opCancelDed, opStockOk, opStockDed);
 
   // -- Cozinha Geral = média das 3 estações --
   const stationRows = await query<{
@@ -366,7 +438,8 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
     const stockRows = await query<{ id: string; product_name: string; created_at: string | Date; station: string }>(
       `SELECT d.id, d.product_name, d.created_at, ks.name AS station
        FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
-       WHERE ks.code = $1 AND d.created_at::date >= $2 AND d.created_at::date <= $3 AND d.stockout_reported = true AND d.status != 'annulled'`,
+       WHERE ks.code = $1 AND d.created_at::date >= $2 AND d.created_at::date <= $3 AND d.stockout_reported = true
+        AND (d.stockout_sla_factor IS NULL OR d.stockout_sla_factor <= 1) AND d.status != 'annulled'`,
       [stationCode, dateFrom, dateTo]
     );
     stockRows.forEach(r => results.push({
@@ -374,6 +447,28 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
       demand_id: r.id, product_name: r.product_name, detail: 'Produto zerou na cozinha',
       deduction: 0, station: r.station,
     }));
+
+    // Zeramentos com SLA já estourado: entram no estouro de SLA da cozinha.
+    const lateStockRows = await query<{
+      id: string; product_name: string; created_at: string | Date;
+      stockout_sla_factor: number | string | null; station: string;
+    }>(
+      `SELECT d.id, d.product_name, d.created_at, d.stockout_sla_factor, ks.name AS station
+       FROM demands d JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
+       WHERE ks.code = $1 AND d.created_at::date >= $2 AND d.created_at::date <= $3 AND d.stockout_reported = true
+        AND d.stockout_sla_factor > 1 AND d.sla_breached_cozinha = false AND d.status != 'annulled'`,
+      [stationCode, dateFrom, dateTo]
+    );
+    lateStockRows.forEach(r => {
+      const factor = Number(r.stockout_sla_factor);
+      results.push({
+        type: 'Estouro de SLA', date: formatDate(r.created_at),
+        demand_id: r.id, product_name: r.product_name,
+        detail: `Zerou com SLA já estourado (${formatFactor(factor)}× SLA)`,
+        deduction: penaltyForSlaFactor(factor, weights.sla_min, weights.sla_max),
+        station: r.station,
+      });
+    });
   }
 
   if (entity === 'salao' || entity === 'salao_jantar') {
@@ -429,7 +524,8 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
 
     const sStockRows = await query<{ id: string; product_name: string; created_at: string | Date }>(
       `SELECT id, product_name, created_at
-       FROM demands WHERE created_at::date >= $1 AND created_at::date <= $2 AND stockout_reported = true AND status != 'annulled'
+       FROM demands WHERE created_at::date >= $1 AND created_at::date <= $2 AND stockout_reported = true
+        AND (stockout_sla_factor IS NULL OR stockout_sla_factor <= 1) AND status != 'annulled'
        AND ($3::timestamptz IS NULL OR created_at >= $3::timestamptz)`,
       [dateFrom, dateTo, dinnerCutoff]
     );
@@ -447,6 +543,16 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
         code === 'quente_a' ? 'cozinha_quente_a' : code === 'quente_b' ? 'cozinha_quente_b' : 'cozinha_fria',
         dateFrom, dateTo
       );
+      results.push(...subResults);
+    }
+  }
+
+  // Operação: ocorrências de todas as cozinhas + salão do dia inteiro
+  // (salao_jantar já está contido no salão — não incluir para não duplicar).
+  if (entity === 'operacao') {
+    const subEntities = ['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'cozinha_jantar', 'salao'];
+    for (const sub of subEntities) {
+      const subResults = await getDetractorDates(sub, dateFrom, dateTo);
       results.push(...subResults);
     }
   }

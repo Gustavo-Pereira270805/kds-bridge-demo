@@ -34,6 +34,24 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
     }
   });
 
+  // Canceladas pela cozinha no dia (fuso BRT): o salão remonta os avisos após F5.
+  // Dispensas (Esquecer/troca enviada) ficam no localStorage de cada tela.
+  fastify.get('/cancelled-cozinha', async (request, reply) => {
+    try {
+      const rows = await query<Demand>(
+        `SELECT * FROM demands
+         WHERE status = 'cancelled_cozinha'
+           AND (created_at AT TIME ZONE 'America/Sao_Paulo')::date =
+               (now() AT TIME ZONE 'America/Sao_Paulo')::date
+         ORDER BY cancelled_at DESC`
+      );
+      return rows;
+    } catch (error) {
+      request.log.error(error);
+      reply.code(500).send({ error: 'Erro ao buscar cancelamentos da cozinha' });
+    }
+  });
+
   fastify.post<{ Body: CreateDemandBody }>('/', {
     preHandler: salaoOrGestao,
     schema: {
@@ -486,8 +504,9 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           priority: string;
           sla_minutes: number | null;
           product_id: string | null;
+          created_at: string;
         }>(
-          'SELECT status, priority, sla_minutes, product_id FROM demands WHERE id = $1',
+          'SELECT status, priority, sla_minutes, product_id, created_at FROM demands WHERE id = $1',
           [id]
         );
 
@@ -500,10 +519,19 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           });
         }
 
+        // Veredito Zeramento x SLA: compara o tempo decorrido com o SLA em vigor
+        // ANTES da troca para urgente (o update abaixo sobrescreve sla_minutes).
+        const slaInForce = Number(demand.sla_minutes);
+        const elapsedMin = (Date.now() - new Date(demand.created_at).getTime()) / 60000;
+        const stockoutFactor = slaInForce > 0 && Number.isFinite(elapsedMin)
+          ? Math.round((elapsedMin / slaInForce) * 100) / 100
+          : null;
+
         await query(
-          `UPDATE demands SET stockout_reported = true, stockout_reported_at = now()
+          `UPDATE demands SET stockout_reported = true, stockout_reported_at = now(),
+            stockout_sla_factor = $2
            WHERE id = $1 AND status = 'pending'`,
-          [id]
+          [id, stockoutFactor]
         );
 
         // Ao promover de normal para urgente, ajusta o SLA para o SLA urgente do produto

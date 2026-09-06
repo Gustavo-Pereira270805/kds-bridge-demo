@@ -1213,12 +1213,12 @@ if (document.readyState === 'loading') {
         });
     }
 
-    var PERF_LABELS = { cozinha_geral: 'Cozinha Geral', cozinha_quente_a: 'Quente A', cozinha_quente_b: 'Quente B', cozinha_fria: 'Fria', salao: 'Salão', cozinha_jantar: 'Cozinha Jantar', salao_jantar: 'Salão Jantar' };
+    var PERF_LABELS = { operacao: 'Operação', cozinha_geral: 'Cozinha Geral', cozinha_quente_a: 'Quente A', cozinha_quente_b: 'Quente B', cozinha_fria: 'Fria', salao: 'Salão', cozinha_jantar: 'Cozinha Jantar', salao_jantar: 'Salão Jantar' };
 
     function perfEntities() {
         return state.turn === 'dinner'
-            ? ['cozinha_jantar', 'salao_jantar']
-            : ['cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'salao'];
+            ? ['operacao', 'cozinha_jantar', 'salao_jantar']
+            : ['operacao', 'cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'salao'];
     }
 
     function createPerfTrendChart(canvas, data) {
@@ -1353,7 +1353,7 @@ if (document.readyState === 'loading') {
     function renderPerfDetractors(perf, detractorDates) {
         var source = perf && perf.averages && Object.keys(perf.averages).length ? perf.averages : (perf && perf.current);
         if(!source) return '';
-        var order = state.turn === 'dinner' ? ['cozinha_jantar', 'salao_jantar'] : ['cozinha_geral','salao','cozinha_quente_a','cozinha_quente_b','cozinha_fria'];
+        var order = state.turn === 'dinner' ? ['operacao', 'cozinha_jantar', 'salao_jantar'] : ['operacao','cozinha_geral','salao','cozinha_quente_a','cozinha_quente_b','cozinha_fria'];
         var labels = PERF_LABELS;
         var h = '<div class="panels" style="grid-column:1 / -1;width:100%;grid-template-columns:minmax(0, 1fr);">';
         for(var i=0; i<order.length; i++) {
