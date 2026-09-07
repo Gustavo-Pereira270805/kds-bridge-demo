@@ -794,41 +794,55 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         }
 
         // Média e deduções acumuladas do período selecionado, inclusive um único dia
+        // Deduções efetivas: quando 5 - deduções < 0 a nota vai para 0, mas a
+        // dedução bruta (ex.: 10,1) distorceria a média do período. Usamos a
+        // dedução efetiva min(5, sla+cancel+stock) e distribuímos proporcionalmente.
         let averages: Record<string, any> = {};
-        const avgRows = await query<{
-          entity: string; avg_score: string; total_demands: string;
-          sla_breaches: string; sla_breach_deduction: string;
-          cancellations: string; cancellation_deduction: string;
-          stockouts: string; stockout_deduction: string;
-        }>(
-          `SELECT entity,
-             ROUND(AVG(final_score)::numeric, 1) AS avg_score,
-             SUM(total_demands)::int AS total_demands,
-             SUM(sla_breaches)::int AS sla_breaches,
-             SUM(sla_breach_deduction) AS sla_breach_deduction,
-             SUM(cancellations)::int AS cancellations,
-             SUM(cancellation_deduction) AS cancellation_deduction,
-             SUM(stockouts)::int AS stockouts,
-             SUM(stockout_deduction) AS stockout_deduction
-           FROM performance_scores
+        const periodRows = await query<PerformanceScoreRow>(
+          `SELECT * FROM performance_scores
            WHERE date >= $1 AND date <= $2 AND entity = ANY($3)
-           GROUP BY entity`,
+           ORDER BY date`,
           [dateFrom, dateTo, entities]
         );
-        const periodDays = intervaloInclusivo(dateFrom, dateTo);
-        for (const row of avgRows) {
+        const byEntity = new Map<string, PerformanceScoreRow[]>();
+        for (const r of periodRows) {
+          const arr = byEntity.get(r.entity) || [];
+          arr.push(r);
+          byEntity.set(r.entity, arr);
+        }
+        for (const entity of entities) {
+          const rows = byEntity.get(entity) || [];
+          if (rows.length === 0) continue;
+          const daysWithData = rows.length;
+          const avgScore = Math.round((rows.reduce((s, r) => s + Number(r.final_score), 0) / daysWithData) * 10) / 10;
+          const totalDemands = rows.reduce((s, r) => s + Number(r.total_demands), 0);
+          const slaBreaches = rows.reduce((s, r) => s + Number(r.sla_breaches), 0);
+          const cancellations = rows.reduce((s, r) => s + Number(r.cancellations), 0);
+          const stockouts = rows.reduce((s, r) => s + Number(r.stockouts), 0);
+          let sumEffSla = 0, sumEffCancel = 0, sumEffStock = 0;
+          for (const r of rows) {
+            const sla = Number(r.sla_breach_deduction) || 0;
+            const canc = Number(r.cancellation_deduction) || 0;
+            const stock = Number(r.stockout_deduction) || 0;
+            const totalRaw = sla + canc + stock;
+            const effective = Math.min(5, totalRaw);
+            const scale = totalRaw > 0 ? effective / totalRaw : 0;
+            sumEffSla += sla * scale;
+            sumEffCancel += canc * scale;
+            sumEffStock += stock * scale;
+          }
           const average = {
-            entity: row.entity,
-            final_score: parseFloat(row.avg_score),
-            total_demands: parseInt(row.total_demands),
-            sla_breaches: parseInt(row.sla_breaches),
-            sla_breach_deduction: Math.round(parseFloat(row.sla_breach_deduction || '0') / periodDays * 100) / 100,
-            cancellations: parseInt(row.cancellations),
-            cancellation_deduction: Math.round(parseFloat(row.cancellation_deduction || '0') / periodDays * 100) / 100,
-            stockouts: parseInt(row.stockouts),
-            stockout_deduction: Math.round(parseFloat(row.stockout_deduction || '0') / periodDays * 100) / 100,
+            entity,
+            final_score: avgScore,
+            total_demands: totalDemands,
+            sla_breaches: slaBreaches,
+            sla_breach_deduction: Math.round((sumEffSla / daysWithData) * 100) / 100,
+            cancellations,
+            cancellation_deduction: Math.round((sumEffCancel / daysWithData) * 100) / 100,
+            stockouts,
+            stockout_deduction: Math.round((sumEffStock / daysWithData) * 100) / 100,
           };
-          averages[row.entity] = Object.assign(average, { detractors: buildDetractors(average) });
+          averages[entity] = Object.assign(average, { detractors: buildDetractors(average) });
         }
 
         return { current, history, averages, detractor_dates: detractorDates, weights: await getWeights() };

@@ -388,6 +388,12 @@ export default async function adminRoutes(fastify: FastifyInstance) {
       if (!demand) { client.release(); return reply.code(404).send({ error: 'Demanda não encontrada' }); }
       if (demand.status === 'annulled') { client.release(); return reply.code(400).send({ error: 'Demanda já anulada' }); }
 
+      const { rows: [dayRow] } = await client.query<{ is_today: boolean }>(
+        `SELECT ($1::timestamptz AT TIME ZONE 'America/Sao_Paulo')::date = (now() AT TIME ZONE 'America/Sao_Paulo')::date AS is_today`,
+        [demand.created_at]
+      );
+      if (!dayRow.is_today) { client.release(); return reply.code(403).send({ error: 'Só é possível anular demandas do dia atual' }); }
+
       const annulledBy = request.user?.email ?? 'gerente';
       const wasPending = demand.status === 'pending';
       const stationId = demand.kitchen_station_id;
@@ -426,6 +432,107 @@ export default async function adminRoutes(fastify: FastifyInstance) {
       client.release();
       request.log.error(error);
       reply.code(500).send({ error: 'Erro ao anular demanda' });
+    }
+  });
+
+  // Demandas: anular passo específico com cascata (volta ao estado anterior)
+  fastify.post<{ Params: { id: string }; Body: { step?: string; reason?: string } }>(
+    '/demands/:id/annul-step', async (request, reply) => {
+    const client = await pool.connect();
+    try {
+      const { id } = request.params;
+      const step = request.body?.step;
+      const reason = request.body?.reason?.trim();
+      const ANNULLABLE = ['created', 'marked_ready', 'retrieved', 'cancelled_salao', 'cancelled_cozinha'];
+      if (!step || !ANNULLABLE.includes(step)) { client.release(); return reply.code(400).send({ error: 'Passo inválido para anulação' }); }
+      if (!reason) { client.release(); return reply.code(400).send({ error: 'Informe o motivo da anulação' }); }
+
+      const { rows: [demand] } = await client.query<Demand>('SELECT * FROM demands WHERE id = $1', [id]);
+      if (!demand) { client.release(); return reply.code(404).send({ error: 'Demanda não encontrada' }); }
+      if (demand.status === 'annulled') { client.release(); return reply.code(400).send({ error: 'Demanda já anulada' }); }
+
+      const { rows: [stepDayRow] } = await client.query<{ is_today: boolean }>(
+        `SELECT ($1::timestamptz AT TIME ZONE 'America/Sao_Paulo')::date = (now() AT TIME ZONE 'America/Sao_Paulo')::date AS is_today`,
+        [demand.created_at]
+      );
+      if (!stepDayRow.is_today) { client.release(); return reply.code(403).send({ error: 'Só é possível anular demandas do dia atual' }); }
+
+      const by = request.user?.email ?? 'gerente';
+      const demandDate = new Date(demand.created_at).toISOString().split('T')[0];
+
+      // Passo 'created' equivale à anulação total (mesmo efeito do botão Anular)
+      if (step === 'created') {
+        await client.query('BEGIN');
+        const { rows: [annulled] } = await client.query<Demand>(
+          `UPDATE demands SET status = 'annulled', annulled_at = NOW(), annulled_by = $1, annul_reason = $2
+           WHERE id = $3 AND status != 'annulled' RETURNING *`,
+          [by, reason, id]
+        );
+        if (!annulled) { await client.query('ROLLBACK'); client.release(); return reply.code(409).send({ error: 'Demanda mudou de estado, recarregue o histórico' }); }
+        await client.query(
+          `INSERT INTO demand_events (demand_id, event_type, actor, notes) VALUES ($1, 'annulled', 'sistema', $2)`,
+          [id, reason]
+        );
+        await client.query('COMMIT');
+        client.release();
+        if (demand.kitchen_station_id) { recomputeStationQueue(demand.kitchen_station_id).catch((e) => request.log.error(e)); }
+        computeDailyScores(demandDate).catch((e) => request.log.error(e));
+        fastify.io.emit('demand:annulled', annulled);
+        return annulled;
+      }
+
+      let setClauses: string[] = [];
+      let cascade: string[] = [];
+      let backTo = '';
+      if (step === 'retrieved') {
+        if (demand.status !== 'retrieved') { client.release(); return reply.code(409).send({ error: 'A retirada só pode ser anulada em demanda retirada' }); }
+        setClauses = [`status = 'ready'`, `retrieved_at = NULL`, `sla_breached_salao = false`, `sla_breach_minutes_salao = NULL`];
+        cascade = ['retrieved', 'sla_breach_salao'];
+        backTo = 'pronta (aguardando retirada)';
+      } else if (step === 'marked_ready') {
+        if (demand.status !== 'ready' && demand.status !== 'retrieved') { client.release(); return reply.code(409).send({ error: 'A pronta só pode ser anulada em demanda pronta ou retirada' }); }
+        setClauses = [`status = 'pending'`, `ready_at = NULL`, `ready_out_of_order = false`, `sla_breached_cozinha = false`, `sla_breach_minutes_cozinha = NULL`];
+        cascade = ['marked_ready', 'sla_breach_cozinha', 'retrieved', 'sla_breach_salao'];
+        if (demand.status === 'retrieved') {
+          setClauses.push(`retrieved_at = NULL`, `sla_breached_salao = false`, `sla_breach_minutes_salao = NULL`);
+        }
+        backTo = 'em preparo';
+      } else {
+        if (demand.status !== step) { client.release(); return reply.code(409).send({ error: 'Este cancelamento não é o estado atual da demanda' }); }
+        const reopen = demand.ready_at ? `'ready'` : `'pending'`;
+        backTo = demand.ready_at ? 'pronta (aguardando retirada)' : 'em preparo';
+        setClauses = [`status = ${reopen}`, `cancelled_at = NULL`, `cancel_reason = NULL`, `cancel_reason_id = NULL`];
+        cascade = [step];
+      }
+
+      await client.query('BEGIN');
+      const { rows: [updated] } = await client.query<Demand>(
+        `UPDATE demands SET ${setClauses.join(', ')} WHERE id = $1 AND status = $2 RETURNING *`,
+        [id, demand.status]
+      );
+      if (!updated) { await client.query('ROLLBACK'); client.release(); return reply.code(409).send({ error: 'Demanda mudou de estado, recarregue o histórico' }); }
+      await client.query(
+        `UPDATE demand_events SET annulled_at = NOW(), annulled_by = $2, annul_reason = $3
+         WHERE demand_id = $1 AND event_type = ANY($4) AND annulled_at IS NULL`,
+        [id, by, reason, cascade]
+      );
+      await client.query(
+        `INSERT INTO demand_events (demand_id, event_type, actor, notes) VALUES ($1, 'step_rollback', 'sistema', $2)`,
+        [id, `Passo '${step}' anulado por ${by}; voltou para ${backTo}. Motivo: ${reason}`]
+      );
+      await client.query('COMMIT');
+      client.release();
+
+      if (updated.kitchen_station_id) { recomputeStationQueue(updated.kitchen_station_id).catch((e) => request.log.error(e)); }
+      computeDailyScores(demandDate).catch((e) => request.log.error(e));
+      fastify.io.emit('demand:step-rollback', updated);
+      fastify.io.emit('demand:queue-updated');
+      return updated;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      client.release();
+      request.log.error(error);
+      reply.code(500).send({ error: 'Erro ao anular passo' });
     }
   });
 

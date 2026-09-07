@@ -1113,6 +1113,11 @@
         renderDemands();
     });
     socket.on('demand:queue-updated', loadActiveDemands);
+    socket.on('demand:step-rollback', function(d) {
+        var idx = demands.findIndex(function(x) { return x.id === d.id; });
+        if (idx !== -1) demands[idx] = d; else demands.push(d);
+        renderDemands();
+    });
     socket.on('demand:cross-cancel', function(d) {
         if (d && d.id) {
             demands = demands.filter(function(x) { return x.id !== d.id; });

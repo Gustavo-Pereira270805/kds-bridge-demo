@@ -495,6 +495,10 @@
         socket.on('demand:queue-updated', () => {
             carregarDemandasPendentes();
         });
+
+        socket.on('demand:step-rollback', () => {
+            carregarDemandasPendentes();
+        });
     </script>
 </body>
 </html>

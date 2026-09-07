@@ -14,6 +14,17 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function capDeductions(sla: number, canc: number, stock: number): { sla: number; canc: number; stock: number; total: number } {
+  const total = sla + canc + stock;
+  if (total <= 5) return { sla, canc, stock, total };
+  const scale = 5 / total;
+  // distribui proporcionalmente e corrige arredondamento no stock
+  const s = round2(sla * scale);
+  const c = round2(canc * scale);
+  const st = round2(5 - s - c);
+  return { sla: s, canc: c, stock: Math.max(0, st), total: 5 };
+}
+
 export function penaltyForSlaFactor(factor: number, slaMin: number, slaMax: number): number {
   if (!Number.isFinite(factor) || !Number.isFinite(slaMin) || !Number.isFinite(slaMax) || slaMin < 0 || slaMax < slaMin) return 0;
   if (factor <= 1) return 0;
@@ -164,17 +175,17 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
       [sid, dateStr]
     );
 
-    const slaDed = round2(slaRows.reduce((sum, row) => {
+    const slaDedRaw = round2(slaRows.reduce((sum, row) => {
       const factor = slaFactor(row.created_at, row.ready_at, Number(row.sla_minutes));
       return sum + penaltyForSlaFactor(factor, weights.sla_min, weights.sla_max);
     }, 0) + lateStockDed);
-    const cancelDed = round2(cancellations * weights.cancellation_cozinha);
-    const stockDed = 0; // Removido o peso para cozinha: "Zerou" não tira nota da cozinha
-    const totalDed = slaDed + cancelDed + stockDed;
-    const finalScore = Math.max(0, Math.round((5.0 - totalDed) * 10) / 10);
+    const cancelDedRaw = round2(cancellations * weights.cancellation_cozinha);
+    const stockDedRaw = 0; // Removido o peso para cozinha: "Zerou" não tira nota da cozinha
+    const cappedK = capDeductions(slaDedRaw, cancelDedRaw, stockDedRaw);
+    const finalScore = Math.max(0, Math.round((5.0 - cappedK.total) * 10) / 10);
 
     await upsertScore(entity, dateStr, finalScore, total,
-      slaBreaches + lateStockBreaches, slaDed, cancellations, cancelDed, stockouts, stockDed);
+      slaBreaches + lateStockBreaches, cappedK.sla, cancellations, cappedK.canc, stockouts, cappedK.stock);
   }
 
   // -- Salão --
@@ -207,24 +218,27 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
     [dateStr]
   );
 
-  const sSlaDed = round2(sSlaRows.reduce((sum, row) => {
+  const sSlaDedRaw = round2(sSlaRows.reduce((sum, row) => {
     const factor = slaFactor(row.ready_at, row.retrieved_at, tolerance);
     return sum + penaltyForSlaFactor(factor, weights.sla_min, weights.sla_max);
   }, 0));
-  const sCancelDed = round2(sCancel * weights.cancellation_salao);
-  const sStockDed = round2(sStock * weights.stockout_salao);
-  const sTotalDed = sSlaDed + sCancelDed + sStockDed;
-  const sFinal = Math.max(0, Math.round((5.0 - sTotalDed) * 10) / 10);
+  const sCancelDedRaw = round2(sCancel * weights.cancellation_salao);
+  const sStockDedRaw = round2(sStock * weights.stockout_salao);
+  const cappedS = capDeductions(sSlaDedRaw, sCancelDedRaw, sStockDedRaw);
+  const sFinal = Math.max(0, Math.round((5.0 - cappedS.total) * 10) / 10);
 
   await upsertScore('salao', dateStr, sFinal, sTotal,
-    sSla, sSlaDed, sCancel, sCancelDed, sStock, sStockDed);
+    sSla, cappedS.sla, sCancel, cappedS.canc, sStock, cappedS.stock);
 
   // -- Salão Jantar: mesma fórmula, só com demandas criadas após ativar o jantar --
+  // (sem janela de jantar no dia, registra 5.0 zerado como as demais entidades)
   const [dinnerStartRow] = await query<{ value: string }>(
     `SELECT value FROM system_settings WHERE key = 'shift_dinner_started_at'`
   );
   const dinnerStart = (dinnerStartRow?.value || '').trim();
-  if (dinnerStart && dinnerStart.slice(0, 10) === dateStr) {
+  if (!dinnerStart || dinnerStart.slice(0, 10) !== dateStr) {
+    await upsertScore('salao_jantar', dateStr, 5.0, 0, 0, 0, 0, 0, 0, 0);
+  } else {
     const jSlaRows = await query<SlaTimingRow>(
       `SELECT created_at, ready_at, retrieved_at
        FROM demands WHERE created_at::date = $1 AND created_at >= $2::timestamptz
@@ -247,73 +261,75 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
         AND status != 'annulled'`,
       [dateStr, dinnerStart]
     );
-    const jSlaDed = round2(jSlaRows.reduce((sum, row) => {
+    const jSlaDedRaw = round2(jSlaRows.reduce((sum, row) => {
       const factor = slaFactor(row.ready_at, row.retrieved_at, tolerance);
       return sum + penaltyForSlaFactor(factor, weights.sla_min, weights.sla_max);
     }, 0));
-    const jCancelDed = round2(jCancel * weights.cancellation_salao);
-    const jStockDed = round2(jStock * weights.stockout_salao);
-    const jFinal = Math.max(0, Math.round((5.0 - (jSlaDed + jCancelDed + jStockDed)) * 10) / 10);
+    const jCancelDedRaw = round2(jCancel * weights.cancellation_salao);
+    const jStockDedRaw = round2(jStock * weights.stockout_salao);
+    const cappedJ = capDeductions(jSlaDedRaw, jCancelDedRaw, jStockDedRaw);
+    const jFinal = Math.max(0, Math.round((5.0 - cappedJ.total) * 10) / 10);
 
     await upsertScore('salao_jantar', dateStr, jFinal, jTotal,
-      jSlaRows.length, jSlaDed, jCancel, jCancelDed, jStock, jStockDed);
+      jSlaRows.length, cappedJ.sla, jCancel, cappedJ.canc, jStock, cappedJ.stock);
   }
 
-  // -- Operação: todas as cozinhas + salões numa nota só (união das demandas do dia) --
-  const opCookRows = await query<SlaTimingRow>(
-    `SELECT created_at, ready_at, sla_minutes
-     FROM demands WHERE created_at::date = $1 AND sla_breached_cozinha = true AND status != 'annulled'`,
-    [dateStr]
-  );
-  const opLateStockRows = await query<{ stockout_sla_factor: number | string | null }>(
-    `SELECT stockout_sla_factor FROM demands
-     WHERE created_at::date = $1 AND stockout_reported = true
-       AND stockout_sla_factor > 1 AND sla_breached_cozinha = false AND status != 'annulled'`,
-    [dateStr]
-  );
-  const opPickupRows = await query<SlaTimingRow>(
-    `SELECT created_at, ready_at, retrieved_at
-     FROM demands WHERE created_at::date = $1 AND sla_breached_salao = true AND status != 'annulled'`,
-    [dateStr]
-  );
-  const opCancelC = await safeCount(
-    `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND status = 'cancelled_cozinha' AND status != 'annulled'`,
-    [dateStr]
-  );
-  const opCancelS = await safeCount(
-    `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND status = 'cancelled_salao' AND status != 'annulled'`,
-    [dateStr]
-  );
-  const opStockOk = await safeCount(
-    `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND stockout_reported = true
-      AND (stockout_sla_factor IS NULL OR stockout_sla_factor <= 1) AND status != 'annulled'`,
-    [dateStr]
-  );
-  const opTotal = await safeCount(
-    `SELECT COUNT(*)::int AS cnt FROM demands WHERE created_at::date = $1 AND status != 'annulled'`,
+  // -- Operação: média simples das entidades com movimento no dia --
+  // (só entra quem tem demandas; estação vazia em 5.0 não infla a média)
+  const opLeaves = await query<{
+    entity: string; final_score: string; total_demands: string;
+    sla_breaches: string; sla_breach_deduction: string;
+    cancellations: string; cancellation_deduction: string;
+    stockouts: string; stockout_deduction: string;
+  }>(
+    `SELECT entity, final_score, total_demands, sla_breaches, sla_breach_deduction,
+       cancellations, cancellation_deduction, stockouts, stockout_deduction
+     FROM performance_scores
+     WHERE date = $1 AND total_demands > 0
+       AND entity IN ('cozinha_quente_a','cozinha_quente_b','cozinha_fria','cozinha_jantar','salao')`,
     [dateStr]
   );
 
-  const opCookDed = round2(opCookRows.reduce((sum, row) => {
-    const factor = slaFactor(row.created_at, row.ready_at, Number(row.sla_minutes));
-    return sum + penaltyForSlaFactor(factor, weights.sla_min, weights.sla_max);
-  }, 0) + opLateStockRows.reduce((sum, row) => {
-    return sum + penaltyForSlaFactor(Number(row.stockout_sla_factor), weights.sla_min, weights.sla_max);
-  }, 0));
-  const opPickupDed = round2(opPickupRows.reduce((sum, row) => {
-    const factor = slaFactor(row.ready_at, row.retrieved_at, tolerance);
-    return sum + penaltyForSlaFactor(factor, weights.sla_min, weights.sla_max);
-  }, 0));
-  const opCancelDed = round2(opCancelC * weights.cancellation_cozinha + opCancelS * weights.cancellation_salao);
-  const opStockDed = round2(opStockOk * weights.stockout_salao);
-  const opBreaches = opCookRows.length + opLateStockRows.length + opPickupRows.length;
-  const opCancellations = opCancelC + opCancelS;
-  const opFinal = Math.max(0, Math.round((5.0 - (opCookDed + opPickupDed + opCancelDed + opStockDed)) * 10) / 10);
+  if (opLeaves.length === 0) {
+    await upsertScore('operacao', dateStr, 5.0, 0, 0, 0, 0, 0, 0, 0);
+  } else {
+    const n = opLeaves.length;
+    const avgScore = opLeaves.reduce((s, r) => s + parseFloat(r.final_score || '5'), 0) / n;
+    // Deduções efetivas: quando a nota foi para 0, a dedução real foi >=5 mas é
+    // exibida como 5 (5 - 0). Para a média da operação usar a dedução efetiva
+    // evita inconsistência do tipo 5 - 2,22 = 2,78 vs nota 3,8.
+    const eff = (r: (typeof opLeaves)[number]): number => {
+      const s = parseFloat(r.final_score || '5');
+      if (s <= 0) return 5;
+      const d = parseFloat(r.sla_breach_deduction || '0') + parseFloat(r.cancellation_deduction || '0') + parseFloat(r.stockout_deduction || '0');
+      return Math.min(5, d);
+    };
+    const avgEffDed = round2(opLeaves.reduce((s, r) => s + eff(r), 0) / n);
+    // Quebra proporcional pelas categorias (mantém a soma = avgEffDed)
+    const sumCat = (get: (r: (typeof opLeaves)[number]) => string): number =>
+      opLeaves.reduce((s, r) => s + parseFloat(get(r) || '0'), 0);
+    const totalRaw = sumCat((r) => String(parseFloat(r.sla_breach_deduction || '0') + parseFloat(r.cancellation_deduction || '0') + parseFloat(r.stockout_deduction || '0')));
+    const scale = totalRaw > 0 ? avgEffDed / (totalRaw / n) : 0;
+    // Para robustez, quando houver clamp (ex.: salão 10,1 → 5), a escala corrige.
+    const avgSla = round2(sumCat((r) => r.sla_breach_deduction) / n * (scale || 1));
+    const avgCanc = round2(sumCat((r) => r.cancellation_deduction) / n * (scale || 1));
+    const avgStock = round2(sumCat((r) => r.stockout_deduction) / n * (scale || 1));
+    // Ajuste de arredondamento para garantir soma = avgEffDed
+    const adj = round2(avgEffDed - (avgSla + avgCanc + avgStock));
+    const finalAvgStock = round2(avgStock + adj);
+    const sumInt = (get: (r: (typeof opLeaves)[number]) => string): number =>
+      opLeaves.reduce((s, r) => s + parseInt(get(r) || '0', 10), 0);
+    await upsertScore('operacao', dateStr,
+      Math.round(avgScore * 10) / 10,
+      opLeaves.reduce((m, r) => Math.max(m, parseInt(r.total_demands || '0', 10)), 0),
+      sumInt((r) => r.sla_breaches), avgSla,
+      sumInt((r) => r.cancellations), avgCanc,
+      opLeaves.filter((r) => r.entity === 'salao').reduce((s, r) => s + parseInt(r.stockouts || '0', 10), 0),
+      finalAvgStock);
+  }
 
-  await upsertScore('operacao', dateStr, opFinal, opTotal,
-    opBreaches, round2(opCookDed + opPickupDed), opCancellations, opCancelDed, opStockOk, opStockDed);
-
-  // -- Cozinha Geral = média das 3 estações --
+  // -- Cozinha Geral = média das estações COM movimento (vazia não entra) --
+  // Deduções também em média para manter 5 - deduções ≈ nota (robustez).
   const stationRows = await query<{
     total_demands: string; sla_breaches: string; sla_breach_deduction: string;
     cancellations: string; cancellation_deduction: string;
@@ -323,19 +339,20 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
     `SELECT
        SUM(total_demands)::int AS total_demands,
        SUM(sla_breaches)::int AS sla_breaches,
-       SUM(sla_breach_deduction) AS sla_breach_deduction,
+       AVG(sla_breach_deduction) AS sla_breach_deduction,
        SUM(cancellations)::int AS cancellations,
-       SUM(cancellation_deduction) AS cancellation_deduction,
+       AVG(cancellation_deduction) AS cancellation_deduction,
        SUM(stockouts)::int AS stockouts,
-       SUM(stockout_deduction) AS stockout_deduction,
+       AVG(stockout_deduction) AS stockout_deduction,
        ROUND(AVG(final_score), 1) AS final_score
-     FROM performance_scores
-     WHERE date = $1 AND entity IN ('cozinha_quente_a','cozinha_quente_b','cozinha_fria')`,
+      FROM performance_scores
+      WHERE date = $1 AND entity IN ('cozinha_quente_a','cozinha_quente_b','cozinha_fria')
+        AND total_demands > 0`,
     [dateStr]
   );
 
   const agg = stationRows[0];
-  if (agg) {
+  if (agg && agg.total_demands !== null) {
     await upsertScore('cozinha_geral', dateStr,
       parseFloat(agg.final_score || '5.0'),
       parseInt(agg.total_demands || '0', 10),
@@ -345,6 +362,8 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
        parseFloat(agg.cancellation_deduction || '0'),
        parseInt(agg.stockouts || '0', 10),
        parseFloat(agg.stockout_deduction || '0'));
+  } else {
+    await upsertScore('cozinha_geral', dateStr, 5.0, 0, 0, 0, 0, 0, 0, 0);
   }
 }
 
@@ -353,7 +372,7 @@ export async function ensureScoresForDate(dateStr: string): Promise<void> {
     `SELECT COUNT(*)::int AS cnt FROM performance_scores WHERE date = $1`,
     [dateStr]
   );
-  if (parseInt(row?.cnt || '0', 10) < 6) {
+  if (parseInt(row?.cnt || '0', 10) < 8) {
     await computeDailyScores(dateStr);
   }
 }

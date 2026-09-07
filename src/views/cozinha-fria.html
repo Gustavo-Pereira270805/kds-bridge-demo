@@ -733,6 +733,10 @@
             carregarDemandas();
         });
 
+        socket.on('demand:step-rollback', () => {
+            carregarDemandas();
+        });
+
         socket.on('kitchen:capacity-updated', () => {
             carregarDemandas();
         });

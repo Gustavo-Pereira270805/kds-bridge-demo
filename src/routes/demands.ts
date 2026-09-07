@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { query } from '../db/client';
-import { Demand, CreateDemandBody } from '../types';
+import { Demand, CreateDemandBody, DemandEventType, DemandHistoryEvent, DemandHistoryRow } from '../types';
 import { ensureTodayMenu } from '../services/menu.service';
 import { recomputeStationQueue } from '../services/queue.service';
 import { evaluateCookingSla, evaluatePickupSla } from '../services/sla.service';
@@ -604,6 +604,7 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           station.length > 0 ? getStationRoom(station[0].code) : 'cozinha_quente';
         fastify.io.to(room).emit('demand:stockout', updated);
         fastify.io.to('salao').emit('demand:stockout', updated);
+        fastify.io.to('gerente').emit('demand:stockout', updated);
         fastify.io.emit('demand:queue-updated');
 
         return updated;
@@ -616,10 +617,83 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
 
   fastify.get('/history', async (request, reply) => {
     try {
-      const demands = await query<Demand>(
-        'SELECT * FROM demands ORDER BY created_at DESC LIMIT 100'
+      const q = request.query as { date?: string; q?: string; limit?: string; offset?: string };
+      let day: string;
+      if (q.date !== undefined) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(q.date)) {
+          return reply.code(400).send({ error: 'Data inválida. Use o formato YYYY-MM-DD' });
+        }
+        day = q.date;
+      } else {
+        const [today] = await query<{ day: string }>(
+          `SELECT (now() AT TIME ZONE 'America/Sao_Paulo')::date::text AS day`
+        );
+        day = today.day;
+      }
+      const rawQ = (q.q || '').trim();
+      const seqQ = rawQ.replace(/^#/, '').trim();
+      const seqNum = /^[0-9]+$/.test(seqQ) ? parseInt(seqQ, 10) : null;
+      const likeQ = rawQ ? rawQ.replace(/[\\%_]/g, (m) => '\\' + m) : null;
+      const limit = Math.min(Math.max(parseInt(q.limit || '200', 10) || 200, 1), 2000);
+      const offset = Math.max(parseInt(q.offset || '0', 10) || 0, 0);
+
+      const ranked = await query<Demand & { daily_seq: number; total: string }>(
+        `WITH ranked AS (
+           SELECT d.*,
+             ROW_NUMBER() OVER (
+               PARTITION BY (d.created_at AT TIME ZONE 'America/Sao_Paulo')::date
+               ORDER BY d.created_at, d.id
+             ) AS daily_seq
+           FROM demands d
+           WHERE (d.created_at AT TIME ZONE 'America/Sao_Paulo')::date = $1::date
+         ),
+         filtered AS (
+           SELECT * FROM ranked r
+           WHERE ($2::text IS NULL
+             OR r.product_name ILIKE '%' || $2 || '%' ESCAPE '\'
+             OR ($3::int IS NOT NULL AND r.daily_seq = $3))
+         )
+         SELECT f.*, rp.name AS replaced_name, COUNT(*) OVER() AS total
+         FROM filtered f
+         LEFT JOIN products rp ON rp.id = f.replaced_product_id
+         ORDER BY f.created_at DESC, f.id DESC
+         LIMIT $4 OFFSET $5`,
+        [day, likeQ, seqNum, limit, offset]
       );
-      return demands;
+      const total = ranked.length > 0 ? parseInt(ranked[0].total, 10) : 0;
+      if (ranked.length === 0) return { rows: [], total, limit, offset };
+      const ids = ranked.map((d) => d.id);
+      const events = await query<{
+        demand_id: string;
+        event_type: DemandEventType;
+        actor: 'salao' | 'cozinha' | 'sistema' | null;
+        notes: string | null;
+        created_at: string;
+        annulled_at: string | null;
+        annulled_by: string | null;
+        annul_reason: string | null;
+      }>(
+        `SELECT e.demand_id, e.event_type, e.actor, e.notes, e.created_at,
+                e.annulled_at, e.annulled_by, e.annul_reason
+         FROM demand_events e
+         WHERE e.demand_id = ANY($1::uuid[])
+         ORDER BY e.created_at ASC`,
+        [ids]
+      );
+      const byDemand = new Map<string, DemandHistoryEvent[]>();
+      for (const e of events) {
+        const list = byDemand.get(e.demand_id) || [];
+        list.push({ event_type: e.event_type, actor: e.actor, notes: e.notes, created_at: e.created_at, annulled_at: e.annulled_at, annulled_by: e.annulled_by, annul_reason: e.annul_reason });
+        byDemand.set(e.demand_id, list);
+      }
+      let rows: DemandHistoryRow[] = ranked.map((d) => {
+        const evs = byDemand.get(d.id) || [];
+        if (!evs.some((e) => e.event_type === 'created')) {
+          evs.unshift({ event_type: 'created', actor: 'salao', notes: null, created_at: d.created_at, annulled_at: null, annulled_by: null, annul_reason: null });
+        }
+        return { ...d, daily_seq: Number((d as { daily_seq: number }).daily_seq), events: evs };
+      });
+      return { rows, total, limit, offset };
     } catch (error) {
       request.log.error(error);
       reply.code(500).send({ error: 'Erro ao buscar histórico' });

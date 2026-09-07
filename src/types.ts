@@ -158,6 +158,9 @@ export interface DemandEvent {
   actor: 'salao' | 'cozinha' | 'sistema' | null;
   notes: string | null;
   created_at: string;
+  annulled_at: string | null;
+  annulled_by: string | null;
+  annul_reason: string | null;
 }
 
 export type DemandEventType =
@@ -170,7 +173,23 @@ export type DemandEventType =
   | 'sla_breach_cozinha'
   | 'sla_breach_salao'
   | 'annulled'
-  | 'shift_transfer';
+  | 'shift_transfer'
+  | 'step_rollback';
+
+// Histórico real por evento (gerente): uma linha por demanda do dia com os passos aninhados
+export interface DemandHistoryEvent {
+  event_type: DemandEventType;
+  actor: 'salao' | 'cozinha' | 'sistema' | null;
+  notes: string | null;
+  created_at: string;
+  annulled_at: string | null;
+  annulled_by: string | null;
+  annul_reason: string | null;
+}
+export interface DemandHistoryRow extends Demand {
+  daily_seq: number;
+  events: DemandHistoryEvent[];
+}
 
 export type PiTarget = 'quente' | 'fria' | 'ambos';
 export type PiAction = 'shutdown' | 'reboot';

@@ -215,6 +215,8 @@
             transition: all var(--t-fast) var(--ease-out);
         }
         .btn-annul:hover { background: var(--c-danger); color: var(--c-text-invert); }
+        .step-annulled { text-decoration: line-through; opacity: 0.65; }
+        .btn-step-annul { margin-left: 8px; font-size: 11px; padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(239,68,68,.5); background: transparent; color: #f87171; cursor: pointer; }
         .badge-annulled {
             display: inline-block; background: transparent; color: var(--c-text-secondary); font-size: 10px;
             font-weight: var(--fw-bold); padding: 2px 8px; border: 1px solid var(--c-border-default);
@@ -281,8 +283,20 @@
 
     <div class="section">
         <h2> Histórico de Demandas</h2>
+        <div class="history-controls" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+            <input type="date" id="historyDate" aria-label="Dia do histórico">
+            <input type="search" id="historySearch" placeholder="Buscar #007 ou produto..." aria-label="Buscar no histórico" style="flex:1;min-width:180px;">
+            <button type="button" id="historyExport" class="btn-dashboard">Exportar dia</button>
+            <button type="button" id="historyWarnToggle" class="btn-dashboard" style="display:none;"></button>
+        </div>
+        <p id="historyError" style="display:none;color:#b91c1c;"></p>
+        <div class="history-pager" style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+            <button type="button" id="historyPrev" class="btn-dashboard">‹ Anterior</button>
+            <span id="historyPageInfo" style="font-size:12px;color:var(--c-text-secondary);"></span>
+            <button type="button" id="historyNext" class="btn-dashboard">Próxima ›</button>
+        </div>
         <table>
-            <thead><tr><th>Produto</th><th>Qtd</th><th>Unidade</th><th>Prioridade</th><th>Status</th><th>Horário</th><th>Ações</th></tr></thead>
+            <thead><tr><th>#</th><th>Produto</th><th>Qtd</th><th>Unidade</th><th>Status</th><th>Criada em</th><th></th></tr></thead>
             <tbody id="historyTableBody">
 <tr><td colspan="7"><div class="skeleton-block" style="height:14px;width:100%;"></div></td></tr>
 <tr><td colspan="7"><div class="skeleton-block" style="height:14px;width:100%;"></div></td></tr>
@@ -318,6 +332,27 @@
             <div class="modal-actions">
                 <button type="button" class="btn-modal-cancel" id="annulCancel">Cancelar</button>
                 <button type="button" class="btn-modal-danger" id="annulConfirm" disabled>Confirmar Anulação</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="stepAnnulModal">
+        <div class="modal-card">
+            <h3>Anular passo</h3>
+            <p class="modal-hint"><strong id="stepAnnulInfo"></strong></p>
+            <p class="modal-hint" id="stepAnnulCascade"></p>
+            <div id="stepAnnulFullWarn">
+                <p class="modal-hint">Os passos anulados permanecem visíveis no histórico, riscados, com o motivo registrado. A fila da estação e as notas do dia serão recalculadas.</p>
+                <label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:13px;">
+                    <input type="checkbox" id="stepAnnulQuiet"> Não mostrar este aviso até o fim do turno
+                </label>
+            </div>
+            <label for="stepAnnulReason">Motivo da anulação *</label>
+            <textarea id="stepAnnulReason" rows="3" placeholder="Ex: cliente desistiu do item, erro de lançamento..."></textarea>
+            <div class="modal-error" id="stepAnnulError" style="display:none;"></div>
+            <div class="modal-actions">
+                <button type="button" class="btn-modal-cancel" id="stepAnnulCancel">Voltar</button>
+                <button type="button" class="btn-modal-danger" id="stepAnnulConfirm" disabled>Confirmar anulação</button>
             </div>
         </div>
     </div>
@@ -426,30 +461,93 @@
         }).catch(console.error);
     }
 
+    var EVENT_LABELS = { created: 'criada', marked_ready: 'pronta', retrieved: 'retirada pelo salão', cancelled_salao: 'cancelada (salão)', cancelled_cozinha: 'cancelada (cozinha)', stockout_reported: 'zerada', sla_breach_cozinha: 'SLA cozinha estourado', sla_breach_salao: 'SLA salão estourado', annulled: 'anulada', shift_transfer: 'transferência jantar', step_rollback: 'anulação de passo' };
+    var ACTOR_LABELS = { salao: 'salão', cozinha: 'cozinha', sistema: 'sistema' };
+    function pad3(n) { return (n < 10 ? '00' : n < 100 ? '0' : '') + n; }
+    function historyDay() {
+        var el = document.getElementById('historyDate');
+        if (el && el.value) return el.value;
+        var now = new Date();
+        return now.getFullYear() + '-' + ('0' + (now.getMonth() + 1)).slice(-2) + '-' + ('0' + now.getDate()).slice(-2);
+    }
+    var HISTORY_PAGE_SIZE = 100;
+    var historyPage = 1;
+    var historyTotal = 0;
     function fetchHistory() {
-        api('/api/v1/demands/history').then(function(demands) {
-            lastDemands = demands || [];
+        var day = historyDay();
+        var searchEl = document.getElementById('historySearch');
+        var q = searchEl ? searchEl.value.trim() : '';
+        var errEl = document.getElementById('historyError');
+        if (errEl) errEl.style.display = 'none';
+        var offset = (historyPage - 1) * HISTORY_PAGE_SIZE;
+        api('/api/v1/demands/history?date=' + encodeURIComponent(day) + '&q=' + encodeURIComponent(q) + '&limit=' + HISTORY_PAGE_SIZE + '&offset=' + offset).then(function(data) {
+            var demands = Array.isArray(data) ? data : (data.rows || []);
+            historyTotal = Array.isArray(data) ? demands.length : (data.total || 0);
+            lastDemands = demands;
+            lastHistoryDay = day;
+            renderHistory(lastDemands);
+            renderHistoryPager();
+        }).catch(function(err) {
+            console.error(err);
             var tbody = document.getElementById('historyTableBody');
-            if (!lastDemands.length) {
-                tbody.innerHTML = '<div class="empty-state"><svg viewBox="0 0 48 48" aria-hidden="true"><rect x="10" y="14" width="28" height="22" rx="2"></rect><path d="M16 20h16M16 26h12"></path></svg><h4>Nenhuma demanda registrada ainda</h4><p>Demandas aparecem aqui assim que forem criadas na cozinha ou no salão.</p></div>';
+            if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="color:#b91c1c;">Erro ao carregar histórico: ' + esc(err.message) + '</td></tr>';
+            if (errEl) { errEl.textContent = 'Erro ao carregar histórico: ' + err.message; errEl.style.display = 'block'; }
+        });
+    }
+    function renderHistoryPager() {
+        var info = document.getElementById('historyPageInfo');
+        var prev = document.getElementById('historyPrev');
+        var next = document.getElementById('historyNext');
+        var pages = Math.max(1, Math.ceil(historyTotal / HISTORY_PAGE_SIZE));
+        if (historyPage > pages) historyPage = pages;
+        if (info) info.textContent = historyTotal ? ('Página ' + historyPage + ' de ' + pages + ' · ' + historyTotal + ' demandas') : '';
+        if (prev) prev.disabled = historyPage <= 1;
+        if (next) next.disabled = historyPage >= pages;
+    }
+    function demandDayBRT(d) {
+        var dt = parseDate(d.created_at);
+        if (!dt) return '';
+        return dt.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    }
+    function isTodayDemand(d) { return demandDayBRT(d) === todayBRT(); }
+    function renderHistory(demands) {
+        var tbody = document.getElementById('historyTableBody');
+        if (!tbody) return;
+        try {
+            if (!demands.length) {
+                tbody.innerHTML = '<div class="empty-state"><h4>Nenhuma demanda neste dia</h4><p>Ajuste o dia ou a busca acima.</p></div>';
                 return;
             }
-            tbody.innerHTML = lastDemands.map(function(d) {
+            tbody.innerHTML = demands.map(function(d) {
                 var isAnnulled = d.status === 'annulled';
-                var rowAttrs = isAnnulled
-                    ? ' class="row-annulled"' + (d.annul_reason ? ' title="Motivo da anulação: ' + escAttr(d.annul_reason) + '"' : '')
-                    : '';
+                var annullable = isTodayDemand(d);
+                var rowAttrs = ' class="history-row' + (isAnnulled ? ' row-annulled' : '') + '"' + (isAnnulled && d.annul_reason ? ' title="Motivo da anulação: ' + escAttr(d.annul_reason) + '"' : '');
                 var statusCell = isAnnulled
                     ? '<td class="cell-status"><span class="badge-annulled">ANULADA</span></td>'
                     : '<td>' + (statusMap[d.status] || d.status) + '</td>';
-                var actionCell = isAnnulled
-                    ? '<td class="cell-actions"><span style="color:#9ca3af;">—</span></td>'
+                var actionCell = (isAnnulled || !annullable)
+                    ? '<td class="cell-actions"><span style="color:#9ca3af;"' + (!isAnnulled ? ' title="Só demandas de hoje podem ser anuladas"' : '') + '>—</span></td>'
                     : '<td><button type="button" class="btn-annul" data-id="' + d.id + '">Anular</button></td>';
-                return '<tr' + rowAttrs + '><td><strong>' + esc(d.product_name) + '</strong></td><td>' + d.quantity + '</td><td>' + esc(d.unit_label || '') + '</td>' +
-                    '<td>' + (d.priority === 'urgent' ? 'Urgente' : 'Normal') + '</td>' + statusCell +
+                var main = '<tr' + rowAttrs + ' data-id="' + d.id + '" tabindex="0" style="cursor:pointer;"><td class="mono">#' + pad3(d.daily_seq) + '</td><td><strong>' + esc(d.product_name) + '</strong></td><td>' + d.quantity + '</td><td>' + esc(d.unit_label || '') + '</td>' + statusCell +
                     '<td class="mono">' + formatTime(d.created_at) + '</td>' + actionCell + '</tr>';
+                var ANNUL_STEPS = { created: 1, marked_ready: 1, retrieved: 1, cancelled_salao: 1, cancelled_cozinha: 1 };
+                var steps = (d.events || []).map(function(e) {
+                    var label = esc(EVENT_LABELS[e.event_type] || e.event_type);
+                    if (e.annulled_at) {
+                        return '<li class="step-annulled"><span class="mono">' + formatTime(e.created_at) + '</span> <strong>' + label + '</strong> <span>· ' + esc(ACTOR_LABELS[e.actor] || '—') + '</span><br><small>anulado ' + formatTime(e.annulled_at) + (e.annul_reason ? ' — ' + esc(e.annul_reason) : '') + '</small></li>';
+                    }
+                    var stepBtn = (ANNUL_STEPS[e.event_type] && stepApplies(d, e.event_type))
+                        ? ' <button type="button" class="btn-step-annul" data-id="' + d.id + '" data-step="' + e.event_type + '">Anular passo</button>'
+                        : '';
+                    return '<li><span class="mono">' + formatTime(e.created_at) + '</span> <strong>' + label + '</strong> <span>· ' + esc(ACTOR_LABELS[e.actor] || '—') + '</span>' + (e.notes ? '<br><small>' + esc(e.notes) + '</small>' : '') + stepBtn + '</li>';
+                }).join('');
+                var detail = '<tr class="history-detail" id="history-detail-' + d.id + '" style="display:none;"><td colspan="7"><ul style="list-style:none;padding:8px 0;margin:0;display:grid;gap:6px;">' + steps + '</ul></td></tr>';
+                return main + detail;
             }).join('');
-        }).catch(console.error);
+        } catch (err) {
+            console.error(err);
+            tbody.innerHTML = '<tr><td colspan="7" style="color:#b91c1c;">Erro ao exibir histórico.</td></tr>';
+        }
     }
 
     function fetchProducts() {
@@ -512,6 +610,7 @@
     var menuDayTarget = null;
     var annulTargetId = null;
     var lastDemands = [];
+    var lastHistoryDay = '';
 
     function fetchCalendar() {
         var grid = document.getElementById('calendarGrid');
@@ -635,6 +734,65 @@
         if (modal) modal.style.display = 'flex';
     }
 
+    /* ===== Modal: anular passo da timeline ===== */
+    var stepAnnulTarget = null; // { id: string, step: string }
+    var STEP_FALL_LABELS = { created: 'criação', marked_ready: 'pronta', retrieved: 'retirada pelo salão', cancelled_salao: 'cancelada (salão)', cancelled_cozinha: 'cancelada (cozinha)' };
+    var STEP_BACK_LABELS = { created: 'anulação total', marked_ready: 'em preparo', retrieved: 'pronta (aguardando retirada)', cancelled_salao: 'estado anterior', cancelled_cozinha: 'estado anterior' };
+    function todayBRT() { return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); }
+    function stepAnnulQuietKey() { return 'kds_stepannul_compact_' + todayBRT(); }
+    function isStepAnnulQuiet() { try { return window.localStorage.getItem(stepAnnulQuietKey()) === '1'; } catch (e) { return false; } }
+    function refreshWarnToggle() {
+        var el = document.getElementById('historyWarnToggle');
+        if (!el) return;
+        if (isStepAnnulQuiet()) { el.style.display = ''; el.textContent = 'Avisos resumidos até o fim do turno — mostrar completos'; }
+        else { el.style.display = 'none'; }
+    }
+    function stepApplies(d, type) {
+        if (d.status === 'annulled') return false;
+        if (!isTodayDemand(d)) return false;
+        if (type === 'created') return true;
+        if (type === 'marked_ready') return !!d.ready_at || d.status === 'ready' || d.status === 'retrieved';
+        if (type === 'retrieved') return !!d.retrieved_at;
+        if (type === 'cancelled_salao' || type === 'cancelled_cozinha') return d.status === type;
+        return false;
+    }
+    function openStepAnnulModal(demandId, step) {
+        var demand = null;
+        for (var i = 0; i < lastDemands.length; i++) { if (lastDemands[i].id === demandId) { demand = lastDemands[i]; break; } }
+        if (!demand) return;
+        stepAnnulTarget = { id: demandId, step: step };
+        var falls = [];
+        var seen = false;
+        (demand.events || []).forEach(function(e) {
+            if (e.annulled_at) return;
+            if (e.event_type === step) { seen = true; return; }
+            if (seen && STEP_FALL_LABELS[e.event_type]) falls.push(STEP_FALL_LABELS[e.event_type]);
+        });
+        var info = document.getElementById('stepAnnulInfo');
+        if (info) info.textContent = '#' + pad3(demand.daily_seq) + ' ' + demand.product_name + ' — anular: ' + (EVENT_LABELS[step] || step);
+        var casc = document.getElementById('stepAnnulCascade');
+        if (casc) casc.textContent = 'Vai voltar para ' + (STEP_BACK_LABELS[step] || 'o estado anterior') + (falls.length ? '; cairão juntos: ' + falls.join(', ') + '.' : '.');
+        var quiet = isStepAnnulQuiet();
+        var full = document.getElementById('stepAnnulFullWarn');
+        if (full) full.style.display = quiet ? 'none' : '';
+        var chk = document.getElementById('stepAnnulQuiet');
+        if (chk) chk.checked = false;
+        var ta = document.getElementById('stepAnnulReason');
+        if (ta) ta.value = '';
+        var btn = document.getElementById('stepAnnulConfirm');
+        if (btn) btn.disabled = true;
+        var err = document.getElementById('stepAnnulError');
+        if (err) err.style.display = 'none';
+        var modal = document.getElementById('stepAnnulModal');
+        if (modal) modal.style.display = 'flex';
+        refreshWarnToggle();
+    }
+    function closeStepAnnulModal() {
+        var modal = document.getElementById('stepAnnulModal');
+        if (modal) modal.style.display = 'none';
+        stepAnnulTarget = null;
+    }
+
     /* ===== Bindings (protegidos com if) ===== */
     var calPrev = document.getElementById('calPrev');
     if (calPrev) calPrev.addEventListener('click', function() { shiftMonth(-1); });
@@ -674,8 +832,98 @@
     });
     var historyTableBody = document.getElementById('historyTableBody');
     if (historyTableBody) historyTableBody.addEventListener('click', function(e) {
+        var stepBtn = e.target.closest('.btn-step-annul');
+        if (stepBtn && stepBtn.dataset.id && stepBtn.dataset.step) { openStepAnnulModal(stepBtn.dataset.id, stepBtn.dataset.step); return; }
         var btn = e.target.closest('.btn-annul');
-        if (btn && btn.dataset.id) openAnnulModal(btn.dataset.id);
+        if (btn && btn.dataset.id) { openAnnulModal(btn.dataset.id); return; }
+        var row = e.target.closest('.history-row');
+        if (!row || !row.dataset.id) return;
+        var detail = document.getElementById('history-detail-' + row.dataset.id);
+        if (detail) detail.style.display = detail.style.display === 'none' ? '' : 'none';
+    });
+    var historyDate = document.getElementById('historyDate');
+    if (historyDate && !historyDate.value) historyDate.value = historyDay();
+    if (historyDate) historyDate.addEventListener('change', function() { historyPage = 1; fetchHistory(); });
+    var historySearch = document.getElementById('historySearch');
+    if (historySearch) { var historySearchTimer = null; historySearch.addEventListener('input', function() { if (historySearchTimer) clearTimeout(historySearchTimer); historySearchTimer = setTimeout(function() { historyPage = 1; fetchHistory(); }, 300); }); }
+    var historyPrev = document.getElementById('historyPrev');
+    if (historyPrev) historyPrev.addEventListener('click', function() { if (historyPage > 1) { historyPage--; fetchHistory(); } });
+    var historyNext = document.getElementById('historyNext');
+    if (historyNext) historyNext.addEventListener('click', function() { historyPage++; fetchHistory(); });
+    function csvCell(v) {
+        var s = String(v == null ? '' : v);
+        return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }
+    function exportHistoryCsv() {
+        var day = historyDay();
+        var searchEl = document.getElementById('historySearch');
+        var q = searchEl ? searchEl.value.trim() : '';
+        showToast('Gerando CSV do dia...', 'info');
+        api('/api/v1/demands/history?date=' + encodeURIComponent(day) + '&q=' + encodeURIComponent(q) + '&limit=2000&offset=0').then(function(data) {
+            var demands = Array.isArray(data) ? data : (data.rows || []);
+            if (!demands.length) { showToast('Nada para exportar neste dia.', 'warn'); return; }
+            var lines = ['#;produto;qtd;un;status_atual;criada_em;evento;hora_evento;ator;detalhe'];
+            demands.forEach(function(d) {
+                (d.events || []).forEach(function(e) {
+                    lines.push([
+                        '#' + pad3(d.daily_seq), d.product_name, d.quantity, d.unit_label || '',
+                        (statusMap[d.status] || d.status), formatTime(d.created_at),
+                        (EVENT_LABELS[e.event_type] || e.event_type), formatTime(e.created_at),
+                        (ACTOR_LABELS[e.actor] || '—'), (e.notes || '').replace(/\r?\n/g, ' ')
+                    ].map(csvCell).join(';'));
+                });
+            });
+            var blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'historico_' + day + '.csv';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function() { URL.revokeObjectURL(a.href); if (a.parentNode) a.parentNode.removeChild(a); }, 500);
+        }).catch(function(err) { console.error(err); showToast('Erro ao exportar: ' + err.message, 'error'); });
+    }
+    var historyExport = document.getElementById('historyExport');
+    if (historyExport) historyExport.addEventListener('click', exportHistoryCsv);
+    var stepAnnulReason = document.getElementById('stepAnnulReason');
+    if (stepAnnulReason) stepAnnulReason.addEventListener('input', function() {
+        var btn = document.getElementById('stepAnnulConfirm');
+        if (btn) btn.disabled = stepAnnulReason.value.trim().length === 0;
+    });
+    var stepAnnulCancel = document.getElementById('stepAnnulCancel');
+    if (stepAnnulCancel) stepAnnulCancel.addEventListener('click', closeStepAnnulModal);
+    var stepAnnulModal = document.getElementById('stepAnnulModal');
+    if (stepAnnulModal) stepAnnulModal.addEventListener('click', function(e) {
+        if (e.target === stepAnnulModal) closeStepAnnulModal();
+    });
+    var stepAnnulConfirm = document.getElementById('stepAnnulConfirm');
+    if (stepAnnulConfirm) stepAnnulConfirm.addEventListener('click', function() {
+        var ta = document.getElementById('stepAnnulReason');
+        var reason = ta ? ta.value.trim() : '';
+        if (!reason || !stepAnnulTarget) return;
+        stepAnnulConfirm.disabled = true;
+        api('/api/v1/admin/demands/' + stepAnnulTarget.id + '/annul-step', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ step: stepAnnulTarget.step, reason: reason })
+        }).then(function() {
+            var chk = document.getElementById('stepAnnulQuiet');
+            if (chk && chk.checked) { try { window.localStorage.setItem(stepAnnulQuietKey(), '1'); } catch (e) { /* sem localStorage: segue sem dispensa */ } }
+            closeStepAnnulModal();
+            refreshWarnToggle();
+            fetchHistory();
+            fetchMetrics();
+            showToast('Passo anulado com sucesso.', 'info');
+        }).catch(function(err) {
+            stepAnnulConfirm.disabled = false;
+            var el = document.getElementById('stepAnnulError');
+            if (el) { el.textContent = err.message; el.style.display = 'block'; }
+        });
+    });
+    var historyWarnToggle = document.getElementById('historyWarnToggle');
+    if (historyWarnToggle) historyWarnToggle.addEventListener('click', function() {
+        try { window.localStorage.removeItem(stepAnnulQuietKey()); } catch (e) { /* sem localStorage: nada a reativar */ }
+        refreshWarnToggle();
+        showToast('Avisos completos reativados.', 'info');
     });
     var annulCancel = document.getElementById('annulCancel');
     if (annulCancel) annulCancel.addEventListener('click', closeAnnulModal);
@@ -816,7 +1064,7 @@
         if (e.target === dinnerEndModal) dinnerEndModal.style.display = 'none';
     });
 
-    function refreshAll() { Promise.all([fetchMetrics(), fetchHistory(), fetchProducts()]); }
+    function refreshAll() { refreshWarnToggle(); Promise.all([fetchMetrics(), fetchHistory(), fetchProducts()]); }
 
     socket.on('demand:new', refreshAll);
     socket.on('demand:urgent', refreshAll);
@@ -824,10 +1072,13 @@
     socket.on('demand:retrieved', refreshAll);
     socket.on('demand:cancelled', refreshAll);
     socket.on('demand:annulled', function() { fetchHistory(); fetchMetrics(); });
+    socket.on('demand:step-rollback', refreshAll);
+    socket.on('demand:stockout', function() { fetchHistory(); fetchMetrics(); });
     socket.on('menu:updated', function() { fetchProducts(); fetchCalendar(); });
     socket.on('product:updated', fetchProducts);
     socket.on('shift:updated', function(data) {
         if (data && data.shift) updateDinnerShiftButton(data.shift);
+        fetchHistory();
     });
     socket.on('connect', function() { socket.emit('identify', 'gerente'); refreshAll(); fetchCalendar(); fetchShiftStatus(); });
 
