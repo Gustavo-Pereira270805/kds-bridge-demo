@@ -7,6 +7,7 @@
     <script>document.documentElement.setAttribute('data-theme', 'dark');</script>
     <link rel="stylesheet" href="/styles/theme.css">
     <script src="/scripts/station-theme.js"></script>
+    <script src="/scripts/salao-sounds.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="/scripts/security.js"></script>
     <script src="/scripts/gerente-nav.js"></script>
@@ -1096,6 +1097,7 @@
         var idx = demands.findIndex(function(x) { return x.id === d.id; });
         if (idx !== -1) demands[idx] = d; else demands.push(d);
         renderDemands();
+        if (typeof playReadyAlert === 'function') playReadyAlert();
     });
     socket.on('demand:retrieved', function(d) { demands = demands.filter(function(x) { return x.id !== d.id; }); if (d && d.id) dismissCancelledNotice(d.id); else renderDemands(); });
     socket.on('demand:cancelled', function(d) {
