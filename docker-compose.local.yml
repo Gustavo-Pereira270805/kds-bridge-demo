@@ -1,0 +1,33 @@
+# KDS Bridge — ambiente 100% local (desenvolvimento isolado da nuvem)
+# Uso:
+#   npm run db:local:subir     # sobe o Postgres local (Docker)
+#   npm run db:local:esquema   # aplica supabase/schema.sql + migrations no banco local
+#   npm run db:local:clonar    # copia dados de referência da nuvem (sem demandas operacionais)
+#   npm run dev:local          # garante .env local e inicia o servidor
+#
+# O app continua lendo o .env (mesmo formato). A troca nuvem<->local é feita
+# por backup/restauração desse arquivo (.env.nuvem). Nada vai para a nuvem
+# enquanto DATABASE_URL apontar para localhost — o cliente desliga o SSL
+# automaticamente para IPs locais (src/db/client.ts).
+
+services:
+  db-local:
+    image: postgres:16
+    container_name: kds-db-local
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=kds
+      - POSTGRES_PASSWORD=kds_local_123
+      - POSTGRES_DB=kds
+    ports:
+      - "5432:5432"
+    volumes:
+      - kds_pgdata_local:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kds -d kds"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  kds_pgdata_local:

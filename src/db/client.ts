@@ -42,6 +42,12 @@ async function getPool(): Promise<Pool> {
       if (ipRegex.test(dbConfig.host)) {
         ip = dbConfig.host;
         console.log(`[db] Using direct IP: ${ip}`);
+      } else if (dbConfig.host === 'localhost') {
+        // dns.resolve4/resolve6 ignoram o arquivo hosts do Windows e falham
+        // para "localhost" (ENOTFOUND). O driver pg resolve via hosts, então
+        // usa o loopback direto e desliga o SSL (banco local).
+        ip = '127.0.0.1';
+        console.log(`[db] Host local detectado (localhost) -> ${ip}`);
       } else {
         ip = await dns
           .resolve4(dbConfig.host)

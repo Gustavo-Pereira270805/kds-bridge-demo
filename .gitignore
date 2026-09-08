@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .env
+.env.nuvem
+.env.local
 *.db
 *.db-shm
 *.db-wal

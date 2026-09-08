@@ -6,8 +6,17 @@
   "main": "index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "dev:local": "node scripts/usar-banco-local.mjs && ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc && npx copyfiles -f src/views/*.html dist/views && npx copyfiles -f src/views/styles/* dist/views/styles && npx copyfiles -f src/views/scripts/*.js dist/views/scripts",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "db:local:subir": "docker compose -f docker-compose.local.yml up -d",
+    "db:local:descer": "docker compose -f docker-compose.local.yml down",
+    "db:local:usar": "node scripts/usar-banco-local.mjs",
+    "db:nuvem:usar": "node scripts/usar-banco-nuvem.mjs",
+    "db:local:esquema": "node scripts/aplicar-esquema-local.mjs",
+    "db:local:clonar": "node scripts/clonar-referencia-nuvem-local.mjs",
+    "db:local:clonar:tudo": "node scripts/clonar-referencia-nuvem-local.mjs -- --com-operacionais",
+    "db:local:zerar": "docker compose -f docker-compose.local.yml down -v"
   },
   "keywords": [],
   "author": "",

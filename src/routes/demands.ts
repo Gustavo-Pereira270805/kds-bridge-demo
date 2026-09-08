@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { query } from '../db/client';
 import { Demand, CreateDemandBody, DemandEventType, DemandHistoryEvent, DemandHistoryRow } from '../types';
 import { ensureTodayMenu } from '../services/menu.service';
+import { getCurrentShift } from '../services/shift.service';
 import { recomputeStationQueue } from '../services/queue.service';
 import { evaluateCookingSla, evaluatePickupSla } from '../services/sla.service';
 import { logDemandEvent } from '../services/demand-events.service';
@@ -148,13 +149,46 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
 
       const dailyMenuId = await ensureTodayMenu();
 
+      // Turno jantar: a Cozinha Jantar assume o turno e a tela da cozinha
+      // quente entra em modo jantar, filtrando tudo que não for da estação
+      // jantar. Sem este roteamento, um pedido de produto do almoço (quente
+      // ou fria) criado no jantar ficava na estação de origem e sumia em um
+      // limbo (invisível na cozinha, pendente no salão). Espelha a
+      // transferência da ativação (POST /admin/shift/dinner, que leva TODAS
+      // as pendências para o jantar): assume o jantar e preserva a origem
+      // para a reversão no encerramento.
+      let stationIdToStore: string = product.kitchen_station_id;
+      let originStationIdToStore: string | null = null;
+      let routedToDinner = false;
+      try {
+        if ((await getCurrentShift()) === 'dinner') {
+          const [productStation] = await query<{ code: string }>(
+            'SELECT code FROM kitchen_stations WHERE id = $1',
+            [product.kitchen_station_id]
+          );
+          if (productStation && productStation.code !== 'jantar') {
+            const jantar = await query<{ id: string }>(
+              `SELECT id FROM kitchen_stations WHERE code = 'jantar'`
+            );
+            if (jantar.length > 0 && jantar[0].id !== product.kitchen_station_id) {
+              originStationIdToStore = product.kitchen_station_id;
+              stationIdToStore = jantar[0].id;
+              routedToDinner = true;
+            }
+          }
+        }
+      } catch (err) {
+        // Falha ao consultar o turno não pode bloquear o pedido: segue o fluxo normal.
+        request.log.error('[Demand] Falha ao verificar turno para roteamento jantar (segue sem rotear): ' + String(err));
+      }
+
       const [newDemand] = await query<Demand>(
         `INSERT INTO demands (
            daily_menu_id, product_id, product_name, quantity,
-           unit_id, unit_label, kitchen_station_id, sla_minutes,
+           unit_id, unit_label, kitchen_station_id, origin_station_id, sla_minutes,
            priority, notes, is_replacement, replaced_product_id
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           RETURNING *, (SELECT name FROM products WHERE id = replaced_product_id) AS replaced_name`,
         [
           dailyMenuId,
@@ -163,7 +197,8 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           quantity,
           unitIdToStore,
           unit_label,
-          product.kitchen_station_id,
+          stationIdToStore,
+          originStationIdToStore,
           slaMinutes,
           priority,
           notes,
@@ -173,10 +208,18 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
       );
 
       await logDemandEvent(newDemand.id, 'created', 'salao');
+      if (routedToDinner) {
+        await logDemandEvent(
+          newDemand.id,
+          'shift_transfer',
+          'sistema',
+          'Roteada para a Cozinha Jantar (pedido de outra estação criado no turno jantar)'
+        );
+      }
 
       const station = await query<{ code: string }>(
         'SELECT code FROM kitchen_stations WHERE id = $1',
-        [product.kitchen_station_id]
+        [stationIdToStore]
       );
       const room = station.length > 0 ? getStationRoom(station[0].code) : 'cozinha_quente';
 
@@ -187,7 +230,7 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
       fastify.io.to('cozinha').emit(eventName, newDemand);
       console.log('[Demand] Emitido ' + eventName + ' para salas: ' + room + ', salao, gerente, cozinha');
 
-      recomputeStationQueue(product.kitchen_station_id).then(() => {
+      recomputeStationQueue(stationIdToStore).then(() => {
         fastify.io.emit('demand:queue-updated');
       }).catch((err) => request.log.error(err));
 
