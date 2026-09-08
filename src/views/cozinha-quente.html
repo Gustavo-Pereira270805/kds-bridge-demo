@@ -346,27 +346,27 @@
     <div id="crossCancelToast"></div>
 
     <div id="cancelModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center;backdrop-filter:blur(4px);">
-        <div style="background:#1a1a1a;border-radius:16px;padding:28px;max-width:420px;width:90%;border:1px solid #333;">
-            <h3 style="color:#f1faee;margin:0 0 16px;font-size:18px;">Cancelar Demanda</h3>
-            <label style="color:#9ca3af;font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Motivo (obrigatório):</label>
-            <select id="cancelReasonSelect" style="width:100%;padding:12px;border:2px solid #444;border-radius:10px;font-size:14px;font-family:inherit;background:#2a2a2a;color:#f1faee;margin-bottom:12px;">
+        <div style="background:#1a1a1a;border-radius:24px;padding:52px;max-width:780px;width:92%;max-height:92vh;overflow-y:auto;border:1px solid #333;">
+            <h3 style="color:#f1faee;margin:0 0 28px;font-size:34px;">Cancelar Demanda</h3>
+            <label style="color:#9ca3af;font-size:19px;font-weight:600;display:block;margin-bottom:12px;">Motivo (obrigatório):</label>
+            <select id="cancelReasonSelect" style="width:100%;padding:26px;border:2px solid #444;border-radius:14px;font-size:23px;font-family:inherit;background:#2a2a2a;color:#f1faee;margin-bottom:20px;">
                 <option value="">Selecione o motivo...</option>
             </select>
-            <input type="text" id="cancelReasonFree" placeholder="Descreva o motivo (obrigatório se não selecionar acima)" style="width:100%;padding:12px;border:2px solid #444;border-radius:10px;font-size:14px;font-family:inherit;background:#2a2a2a;color:#f1faee;margin-bottom:16px;">
-            <div style="display:flex;gap:10px;">
-                <button id="confirmCancelBtn" style="flex:1;padding:14px;background:var(--c-danger);color:white;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;">Confirmar Cancelamento</button>
-                <button id="closeCancelBtn" style="flex:1;padding:14px;background:#333;color:#9ca3af;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;">Voltar</button>
+            <input type="text" id="cancelReasonFree" placeholder="Descreva o motivo (obrigatório se não selecionar acima)" style="width:100%;padding:26px;border:2px solid #444;border-radius:14px;font-size:23px;font-family:inherit;background:#2a2a2a;color:#f1faee;margin-bottom:24px;">
+            <div style="display:flex;gap:20px;">
+                <button id="confirmCancelBtn" style="flex:1;padding:30px;background:var(--c-danger);color:white;border:none;border-radius:14px;font-weight:700;font-size:24px;cursor:pointer;font-family:inherit;">Confirmar Cancelamento</button>
+                <button id="closeCancelBtn" style="flex:1;padding:30px;background:#333;color:#9ca3af;border:none;border-radius:14px;font-weight:700;font-size:24px;cursor:pointer;font-family:inherit;">Voltar</button>
             </div>
         </div>
     </div>
 
     <div id="confirmReadyModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center;backdrop-filter:blur(4px);">
-        <div style="background:#1a1a1a;border-radius:16px;padding:28px;max-width:420px;width:90%;border:1px solid #333;">
-            <h3 style="color:#f1faee;margin:0 0 16px;font-size:18px;">Confirmar Conclusão</h3>
-            <p id="confirmReadyText" style="color:#d1d5db;font-size:14px;margin:0 0 16px;">Marcar este item como pronto?</p>
-            <div style="display:flex;gap:10px;">
-                <button id="confirmReadyBtn" style="flex:1;padding:14px;background:var(--c-accent-warm);color:white;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;">Sim, Marcar como Pronto</button>
-                <button id="closeReadyBtn" style="flex:1;padding:14px;background:#333;color:#9ca3af;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;">Cancelar</button>
+        <div style="background:#1a1a1a;border-radius:20px;padding:44px;max-width:680px;width:92%;max-height:92vh;overflow-y:auto;border:1px solid #333;">
+            <h3 style="color:#f1faee;margin:0 0 24px;font-size:30px;">Confirmar Conclusão</h3>
+            <p id="confirmReadyText" style="color:#d1d5db;font-size:20px;margin:0 0 24px;">Marcar este item como pronto?</p>
+            <div style="display:flex;gap:18px;">
+                <button id="confirmReadyBtn" style="flex:1;padding:26px;background:var(--c-accent-warm);color:white;border:none;border-radius:12px;font-weight:700;font-size:22px;cursor:pointer;font-family:inherit;">Sim, Marcar como Pronto</button>
+                <button id="closeReadyBtn" style="flex:1;padding:26px;background:#333;color:#9ca3af;border:none;border-radius:12px;font-weight:700;font-size:22px;cursor:pointer;font-family:inherit;">Cancelar</button>
             </div>
         </div>
     </div>

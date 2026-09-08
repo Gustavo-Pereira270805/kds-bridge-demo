@@ -36,11 +36,13 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
 
   // Canceladas pela cozinha no dia (fuso BRT): o salão remonta os avisos após F5.
   // Dispensas (Esquecer/troca enviada) ficam no localStorage de cada tela.
+  // Dispensa global (cancel_notice_dismissed_at) esconde o aviso em TODAS as telas.
   fastify.get('/cancelled-cozinha', async (request, reply) => {
     try {
       const rows = await query<Demand>(
         `SELECT * FROM demands
          WHERE status = 'cancelled_cozinha'
+           AND cancel_notice_dismissed_at IS NULL
            AND (created_at AT TIME ZONE 'America/Sao_Paulo')::date =
                (now() AT TIME ZONE 'America/Sao_Paulo')::date
          ORDER BY cancelled_at DESC`
@@ -51,6 +53,41 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
       reply.code(500).send({ error: 'Erro ao buscar cancelamentos da cozinha' });
     }
   });
+
+  // Salão dispensa o aviso de cancelamento da cozinha (Esquecer ou troca concluída).
+  // Público (kiosk fixo) e idempotente: some para TODAS as telas via broadcast.
+  // Não muda o status: histórico, notas e métricas são preservados.
+  fastify.patch<{ Params: { id: string } }>(
+    '/:id/dismiss-cancel-notice',
+    async (request, reply) => {
+      try {
+        const { id } = request.params;
+
+        const [demand] = await query<{ status: string }>(
+          'SELECT status FROM demands WHERE id = $1',
+          [id]
+        );
+        if (!demand) {
+          return reply.code(404).send({ error: 'Demanda não encontrada' });
+        }
+        if (demand.status !== 'cancelled_cozinha') {
+          return { ok: true };
+        }
+
+        await query(
+          `UPDATE demands SET cancel_notice_dismissed_at = now()
+           WHERE id = $1 AND status = 'cancelled_cozinha'
+             AND cancel_notice_dismissed_at IS NULL`,
+          [id]
+        );
+        fastify.io.to('salao').emit('demand:cancel-notice-dismissed', { id });
+        return { ok: true };
+      } catch (error) {
+        request.log.error(error);
+        reply.code(500).send({ error: 'Erro ao dispensar aviso' });
+      }
+    }
+  );
 
   fastify.post<{ Body: CreateDemandBody }>('/', {
     schema: {

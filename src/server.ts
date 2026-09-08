@@ -218,6 +218,12 @@ async function seedDatabase() {
         `ALTER TABLE demands
          ADD COLUMN IF NOT EXISTS stockout_sla_factor numeric`
       );
+      // Dispensa global do aviso de cancelamento da cozinha no salão
+      // (migration 2026-09-08-dispensa-aviso-cancelamento).
+      await client.query(
+        `ALTER TABLE demands
+         ADD COLUMN IF NOT EXISTS cancel_notice_dismissed_at timestamptz NULL`
+      );
       // Tabela pi_events para auditoria de controle remoto dos Pis (sem migration prévia no Supabase)
       await client.query(
         `CREATE TABLE IF NOT EXISTS pi_events (

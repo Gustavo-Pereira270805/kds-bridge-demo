@@ -271,18 +271,18 @@
         }
         .modal-overlay.active { display: flex; }
         .modal {
-            background: var(--c-surface); padding: var(--sp-5); border-radius: var(--radius-xl);
-            max-width: 400px; width: 90%; border: 1px solid var(--c-border-light);
-            box-shadow: var(--shadow-elevated);
+            background: var(--c-surface); padding: 40px; border-radius: var(--radius-xl);
+            max-width: 640px; width: 94%; border: 1px solid var(--c-border-light);
+            box-shadow: var(--shadow-elevated); max-height: 92vh; overflow-y: auto;
         }
-        .modal h3 { font-size: 16px; margin-bottom: var(--sp-4); }
+        .modal h3 { font-size: 26px; margin-bottom: var(--sp-4); }
         .modal textarea {
-            width: 100%; padding: 12px; font-size: 14px;
+            width: 100%; padding: 18px; font-size: 18px;
             border-radius: var(--radius-md); border: 1px solid var(--c-border-light);
             margin-bottom: var(--sp-4); font-family: inherit; resize: vertical;
         }
         .modal textarea:focus { border-color: var(--c-text); outline: none; }
-        .modal button { width: 100%; margin-bottom: var(--sp-2); min-height: 52px; font-size: 14px; font-weight: 700; border-radius: 10px; }
+        .modal button { width: 100%; margin-bottom: var(--sp-2); min-height: 72px; font-size: 19px; font-weight: 700; border-radius: 12px; }
         .modal button:last-child { margin-bottom: 0; background: transparent; color: var(--c-text-muted); border: 1px solid var(--c-border-light); }
 
         label { display: flex; align-items: center; margin-bottom: var(--sp-4); font-size: 13px; font-weight: var(--fw-medium); cursor: pointer; }
@@ -357,7 +357,7 @@
     <div id="confirmModal" class="modal-overlay">
         <div class="modal">
             <h3>Confirmar Retirada</h3>
-            <p id="confirmModalText" style="font-size: 14px; margin-bottom: 16px;">Confirmar retirada?</p>
+            <p id="confirmModalText" style="font-size: 16px; margin-bottom: 20px;">Confirmar retirada?</p>
             <div style="display:flex; flex-direction: column; gap: 8px;">
                 <button id="confirmRetrieveBtn" style="background: var(--c-accent-warm); color: white;">Sim, Confirmar Retirada</button>
                 <button id="closeConfirmModal">Cancelar</button>
@@ -449,6 +449,15 @@
         renderDemands();
     }
 
+    // Dispensa global: some com o aviso nesta tela na hora e avisa o servidor
+    // para escondê-lo em TODAS as telas do salão (broadcast tempo real).
+    function dispensarAvisoGlobal(id) {
+        if (!id) return;
+        dismissCancelledNotice(id);
+        api('/api/v1/demands/' + id + '/dismiss-cancel-notice', { method: 'PATCH' })
+            .catch(function(err) { console.error(err); });
+    }
+
     // Avisos já resolvidos nesta tela (Esquecer ou troca enviada): ficam no
     // localStorage para não reaparecerem após F5. O servidor lista os
     // cancelamentos do dia e a tela filtra esses ids.
@@ -510,7 +519,7 @@
         var wrapper = document.getElementById('replacedSearchWrapper');
         if (wrapper) wrapper.style.display = '';
         var replSearch = document.getElementById('replacedSearch');
-        if (replSearch) { replSearch.value = notice.product_name || ''; replSearch.readOnly = true; }
+        if (replSearch) { replSearch.value = notice.product_name || ''; replSearch.readOnly = false; }
         replaceNoticeId = notice.id;
         // Não foca a busca (evita abrir o teclado): só abre a lista do
         // substituto para rolar até o item. Quem preferir digitar, toca na busca.
@@ -662,7 +671,7 @@
             prefillReplaceForm(notice);
         }
         if (btn.classList.contains('dismiss-btn')) {
-            dismissCancelledNotice(btn.dataset.id);
+            dispensarAvisoGlobal(btn.dataset.id);
         }
     });
 
@@ -993,6 +1002,31 @@
         loadUnitsForProduct(this.value);
     });
 
+    // Busca do item substituído (troca): filtra por nome igual à busca principal.
+    var replacedSearchEl = document.getElementById('replacedSearch');
+    if (replacedSearchEl) {
+        replacedSearchEl.addEventListener('input', function() {
+            var q = replacedSearchEl.value.trim();
+            var select = document.getElementById('replacedProduct');
+            if (select) {
+                var selectedOpt = select.selectedOptions && select.selectedOptions[0];
+                if (!q || !selectedOpt || !selectedOpt.value || selectedOpt.textContent !== replacedSearchEl.value) {
+                    select.value = '';
+                }
+            }
+            if (searchTimeout) clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(function() {
+                if (!q) {
+                    replacedDD.setItems(normalizeTodayProducts());
+                    return;
+                }
+                api('/api/v1/products/search?q=' + encodeURIComponent(q))
+                    .then(function(data) { replacedDD.setItems(data); })
+                    .catch(function(err) { console.error(err); replacedDD.setItems([]); });
+            }, 250);
+        });
+    }
+
     var isReplacementEl = document.getElementById('isReplacement');
     if (isReplacementEl) isReplacementEl.addEventListener('change', function() {
         var select = document.getElementById('replacedProduct');
@@ -1079,7 +1113,7 @@
             var replWrapperReset = document.getElementById('replacedSearchWrapper');
             if (replWrapperReset) replWrapperReset.style.display = 'none';
             replacedDD.close();
-            if (replaceNoticeId) dismissCancelledNotice(replaceNoticeId);
+            if (replaceNoticeId) dispensarAvisoGlobal(replaceNoticeId);
         }).catch(function(err) {
             console.error(err);
             showToast(err.message);
@@ -1108,6 +1142,11 @@
         } else {
             renderDemands();
         }
+    });
+    // Outra tela dispensou o aviso: remove aqui também, sem recarregar.
+    socket.on('demand:cancel-notice-dismissed', function(d) {
+        if (d && d.id) dismissCancelledNotice(d.id);
+        else renderDemands();
     });
     socket.on('demand:stockout', function(d) {
         var idx = demands.findIndex(function(x) { return x.id === d.id; });

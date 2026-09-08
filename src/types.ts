@@ -130,6 +130,7 @@ export interface Demand {
   retrieved_at: string | null;
   cancelled_at: string | null;
   cancel_reason: string | null;
+  cancel_notice_dismissed_at: string | null;
   stockout_reported: boolean;
   stockout_reported_at: string | null;
   stockout_sla_factor: number | null;
