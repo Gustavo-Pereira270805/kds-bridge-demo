@@ -365,7 +365,7 @@
     </div>
 
     <script>
-        if (!kdsGuard()) throw new Error('redirecionando para login');
+        // Salão é público (kiosk fixo, sem login): não exige token.
         const stationSocket = kdsSocket(io);
         stationSocket.emit('join', 'salao');
         KDSStationTheme.watch(stationSocket, 'salao');

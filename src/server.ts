@@ -63,7 +63,8 @@ const PUBLIC_PATHS = [
 
 // O hook onRequest global foi removido.
 // A autenticação é imposta por rota através do `preHandler: requireRole(...)`
-// Isso permite que as rotas e views da cozinha sejam públicas, enquanto salão e gerente são protegidos.
+// As rotas e views da cozinha e do salão são públicas (kiosks fixos, sem login);
+// gerente/admin seguem protegidos.
 
 function getView(filename: string): string {
   return fs.readFileSync(path.join(__dirname, 'views', filename), 'utf8');

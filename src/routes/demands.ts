@@ -6,10 +6,9 @@ import { recomputeStationQueue } from '../services/queue.service';
 import { evaluateCookingSla, evaluatePickupSla } from '../services/sla.service';
 import { logDemandEvent } from '../services/demand-events.service';
 import { computeDailyScores } from '../services/performance.service';
-import { requireRole } from '../middleware/auth';
 
-// Apenas ações do salão e gestão são obrigatoriamente protegidas
-const salaoOrGestao = requireRole('salao', 'gerente', 'admin');
+// Salão é público (kiosk fixo, sem login): nenhuma rota de demanda exige token,
+// igual às ações da cozinha. Gerente/admin continuam protegidos nas rotas deles.
 
 function getStationRoom(code: string): string {
   if (code === 'fria') return 'cozinha_fria';
@@ -53,7 +52,6 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post<{ Body: CreateDemandBody }>('/', {
-    preHandler: salaoOrGestao,
     schema: {
       body: {
         type: 'object',
@@ -272,10 +270,9 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
     }
   );
 
-  // Salão confirma retirada
+  // Salão confirma retirada (público, kiosk fixo)
   fastify.patch<{ Params: { id: string } }>(
     '/:id/retrieve',
-    { preHandler: salaoOrGestao },
     async (request, reply) => {
       try {
         const { id } = request.params;
@@ -315,11 +312,10 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
     }
   );
 
-  // Salão cancela (só se pending)
+  // Salão cancela (só se pending; público, kiosk fixo)
   fastify.patch<{ Params: { id: string }; Body: { reason?: string; cancel_reason_id?: string } }>(
     '/:id/cancel-salao',
     {
-      preHandler: salaoOrGestao,
       schema: {
         body: {
           type: 'object',
@@ -491,10 +487,9 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
     }
   );
 
-  // Salão reporta rotura (não muda status, mas escala prioridade)
+  // Salão reporta rotura (público, kiosk fixo; não muda status, mas escala prioridade)
   fastify.post<{ Params: { id: string } }>(
     '/:id/stockout',
-    { preHandler: salaoOrGestao },
     async (request, reply) => {
       try {
         const { id } = request.params;
