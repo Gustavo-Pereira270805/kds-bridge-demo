@@ -202,6 +202,9 @@
             <div class="form-group"><label>&nbsp;</label><button class="btn-success" onclick="addProduct()">Criar</button></div>
         </div>
         <div class="divider"></div>
+        <div class="row">
+            <div class="form-group"><label>Pesquisar</label><input type="text" id="productSearch" placeholder="Ex: arroz, salada..." oninput="applyProductFilter()" style="width:250px;"></div>
+        </div>
         <table id="productsTable">
             <thead><tr><th>Nome</th><th>Categoria</th><th>Cozinha</th><th>SLA N</th><th>SLA U</th><th>Ativo</th><th>Ações</th></tr></thead>
             <tbody>
@@ -229,6 +232,9 @@
             <div class="form-group"><label>Cardápio #</label><select id="menuSelect" onchange="loadMenuProducts()" style="width:150px;"></select></div>
             <div class="form-group"><label>&nbsp;</label><button class="btn-primary" onclick="setTodayMenu()">Usar Hoje</button></div>
         </div>
+        <div class="row">
+            <div class="form-group"><label>Pesquisar produtos</label><input type="text" id="menuProductSearch" placeholder="Ex: arroz, feijão..." oninput="applyMenuProductFilter()" style="width:250px;"></div>
+        </div>
         <div style="display:flex;gap:20px;flex-wrap:wrap;">
             <div style="flex:1;min-width:300px;">
                 <h3>No Cardápio</h3>
@@ -250,6 +256,9 @@
             <div class="form-group"><label>&nbsp;</label><button class="btn-success" onclick="addUnit()">Adicionar</button></div>
         </div>
         <div class="divider"></div>
+        <div class="row">
+            <div class="form-group"><label>Pesquisar</label><input type="text" id="unitSearch" placeholder="Ex: kg, travessa..." oninput="applyUnitFilter()" style="width:250px;"></div>
+        </div>
         <table>
             <thead><tr><th>Código</th><th>Nome</th><th style="width:50px;">Fav</th><th style="width:60px;">Ativo</th><th style="width:130px;">Ações</th></tr></thead>
             <tbody id="unitsTableBody"></tbody>
@@ -460,7 +469,7 @@ var allStations = [];
 function loadProducts() {
     api('/api/v1/products/all').then(function(prods) {
         var tbody = document.querySelector('#productsTable tbody');
-        tbody.innerHTML = prods.map(function(p) {
+        tbody.innerHTML = prods.slice().sort(function(a, b) { return (a.name || '').localeCompare(b.name || '', 'pt-BR'); }).map(function(p) {
             var stName = '';
             if (p.kitchen_station_id) {
                 var st = allStations.find(function(s) { return s.id === p.kitchen_station_id; });
@@ -482,7 +491,21 @@ function loadProducts() {
                 '</td>' +
             '</tr>';
         }).join('');
+        applyProductFilter();
     }).catch(function(err) { console.error(err); toast('Erro ao carregar produtos', false); });
+}
+
+// Normaliza para a pesquisa ignorar maiúsculas/minúsculas e acentos.
+function normSearch(s) {
+    return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function applyProductFilter() {
+    var input = document.getElementById('productSearch');
+    var q = normSearch(input && input.value.trim());
+    document.querySelectorAll('#productsTable tbody tr').forEach(function(tr) {
+        tr.style.display = (!q || normSearch(tr.textContent).indexOf(q) !== -1) ? '' : 'none';
+    });
 }
 
 function addProduct() {
@@ -533,7 +556,7 @@ function loadStations() {
         var salonRow = '<tr><td><strong>Salão</strong></td><td>salao</td><td>—</td>' +
                 '<td><select id="theme-salao" aria-label="Tema do Salão"><option value="dark"' + (salonTheme === 'dark' ? ' selected' : '') + '>Escuro</option><option value="light"' + (salonTheme === 'light' ? ' selected' : '') + '>Claro</option></select></td>' +
                 '<td><button class="btn-primary btn-sm" id="save-theme-salao" onclick="saveSalonTheme()">Salvar</button></td></tr>';
-        tbody.innerHTML = salonRow + stations.map(function(s) {
+        tbody.innerHTML = salonRow + stations.slice().sort(function(a, b) { return (a.name || '').localeCompare(b.name || '', 'pt-BR'); }).map(function(s) {
             var theme = s.theme === 'light' ? 'light' : 'dark';
             return '<tr><td><strong>' + esc(s.name) + '</strong></td><td>' + esc(s.code) + '</td>' +
                 '<td><input type="number" id="cap-' + s.id + '" value="' + s.capacity + '" min="1" max="32" style="width:70px;"></td>' +
@@ -593,18 +616,32 @@ function loadMenuProducts() {
         var allProds = data.all_products || [];
         document.getElementById('menuProductList').innerHTML = menuProds.length === 0
             ? '<p style="color:var(--c-text-secondary);">Nenhum produto neste cardápio</p>'
-            : menuProds.map(function(p) {
+            : menuProds.slice().sort(function(a, b) { return (a.name || '').localeCompare(b.name || '', 'pt-BR'); }).map(function(p) {
                 return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid var(--c-border-default);">' +
                     '<span>' + esc(p.name) + ' <small style="color:var(--c-text-secondary);">(' + esc(p.category) + ')</small></span>' +
                     '<button class="btn-sm btn-danger" onclick="removeFromMenu(\'' + menuId + '\',\'' + p.product_id + '\')">Remover</button></div>';
             }).join('');
 
         var menuProdIds = new Set(menuProds.map(function(p) { return p.product_id; }));
-        document.getElementById('availableProductList').innerHTML = allProds.filter(function(p) { return !menuProdIds.has(p.id); }).map(function(p) {
+        document.getElementById('availableProductList').innerHTML = allProds.filter(function(p) { return !menuProdIds.has(p.id); }).sort(function(a, b) { return (a.name || '').localeCompare(b.name || '', 'pt-BR'); }).map(function(p) {
             return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid var(--c-border-default);">' +
                 '<span>' + esc(p.name) + ' <small style="color:var(--c-text-secondary);">(' + esc(p.category) + ')</small></span>' +
                 '<button class="btn-sm btn-success" onclick="addToMenu(\'' + menuId + '\',\'' + p.id + '\')">Adicionar</button></div>';
         }).join('');
+        applyMenuProductFilter();
+    });
+}
+
+function applyMenuProductFilter() {
+    var input = document.getElementById('menuProductSearch');
+    var q = normSearch(input && input.value.trim());
+    ['menuProductList', 'availableProductList'].forEach(function(listId) {
+        var el = document.getElementById(listId);
+        if (!el) return;
+        Array.prototype.forEach.call(el.children, function(child) {
+            if (child.tagName === 'P') return;
+            child.style.display = (!q || normSearch(child.textContent).indexOf(q) !== -1) ? '' : 'none';
+        });
     });
 }
 
@@ -634,7 +671,7 @@ function loadUnitsPanel() {
     api('/api/v1/units?all=true').then(function(allUnits) {
         // Tabela de gestão
         var tbody = document.getElementById('unitsTableBody');
-        tbody.innerHTML = allUnits.map(function(u) {
+        tbody.innerHTML = allUnits.slice().sort(function(a, b) { return (a.code || '').localeCompare(b.code || '', 'pt-BR'); }).map(function(u) {
             var star = u.featured ? '\u2605' : '\u2606';
             var starColor = u.featured ? 'color:var(--c-warn);' : '';
             var rowStyle = u.active ? '' : 'opacity:0.5;';
@@ -651,6 +688,7 @@ function loadUnitsPanel() {
                 '</td>' +
             '</tr>';
         }).join('');
+        applyUnitFilter();
 
         // Checkboxes para vínculo com produto (só ativas)
         document.getElementById('unitCheckboxes').innerHTML = allUnits.filter(function(u) { return u.active; }).map(function(u) {
@@ -668,6 +706,18 @@ function loadUnitsPanel() {
                 document.querySelectorAll('.unit-cb').forEach(function(cb) { cb.checked = ids.has(cb.value); });
             });
         };
+    });
+}
+
+function applyUnitFilter() {
+    var input = document.getElementById('unitSearch');
+    var q = normSearch(input && input.value.trim());
+    document.querySelectorAll('#unitsTableBody tr').forEach(function(tr) {
+        // Código e nome estão em <input>: value não aparece no textContent,
+        // então concatena os valores antes de comparar.
+        var texto = tr.textContent;
+        tr.querySelectorAll('input').forEach(function(inp) { texto += ' ' + (inp.value || ''); });
+        tr.style.display = (!q || normSearch(texto).indexOf(q) !== -1) ? '' : 'none';
     });
 }
 
@@ -734,7 +784,7 @@ async function deleteUnit(id, label) {
 function loadReasons() {
     api('/api/v1/admin/cancel-reasons').then(function(reasons) {
         var tbody = document.getElementById('reasonsTableBody');
-        tbody.innerHTML = reasons.map(function(r) {
+        tbody.innerHTML = reasons.slice().sort(function(a, b) { return (a.label || '').localeCompare(b.label || '', 'pt-BR'); }).map(function(r) {
             var categoryBadge = r.category === 'salao'
                 ? '<span style="background:var(--c-accent-cold);color:var(--c-text-invert);padding:3px 10px;border-radius:20px;font-size:12px;">Salão</span>'
                 : '<span style="background:var(--c-warn);color:var(--c-primary);padding:3px 10px;border-radius:20px;font-size:12px;">Cozinha</span>';
