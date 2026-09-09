@@ -271,6 +271,7 @@
             <div class="form-group"><label>Produto</label><select id="unitProductSelect" style="width:250px;"></select></div>
             <div class="form-group"><label>Vincular Unidades</label><div id="unitCheckboxes" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;border:2px solid var(--c-border-default);border-radius:10px;min-height:36px;"></div></div>
             <div class="form-group"><label>&nbsp;</label><button class="btn-primary" onclick="saveProductUnits()">Salvar Vínculos</button></div>
+            <div class="form-group"><label>&nbsp;</label><button class="btn-primary" onclick="toggleAllUnits()">Selecionar tudo</button></div>
         </div>
     </div>
 
@@ -738,6 +739,13 @@ function addUnit() {
         loadUnitsPanel();
         toast('Unidade criada', true);
     }).catch(function(e) { toast(e.message, false); });
+}
+
+function toggleAllUnits() {
+    var boxes = Array.prototype.slice.call(document.querySelectorAll('.unit-cb'));
+    if (boxes.length === 0) return;
+    var marcar = boxes.some(function(cb) { return !cb.checked; });
+    boxes.forEach(function(cb) { cb.checked = marcar; });
 }
 
 function saveProductUnits() {
