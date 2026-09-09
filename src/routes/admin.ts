@@ -744,19 +744,23 @@ export default async function adminRoutes(fastify: FastifyInstance) {
         [['INHAME COZIDO', 'DEL\u00CDCIA DE PEIXE', 'DEL\u00CDCIA DE FRANGO'], jantarId]
       );
 
-      const { rows: transferred } = await client.query<{ id: string }>(
+      const { rows: transferred } = await client.query<{ id: string; kitchen_station_id: string }>(
         `UPDATE demands SET kitchen_station_id = origin_station_id, origin_station_id = NULL
          WHERE status = 'pending' AND created_at::date = $1 AND kitchen_station_id = $2
            AND origin_station_id IS NOT NULL
-         RETURNING id`,
+         RETURNING id, kitchen_station_id`,
         [today, jantarId]
       );
+      const { rows: stationNameRows } = await client.query<{ id: string; name: string }>(
+        `SELECT id, name FROM kitchen_stations`
+      );
+      const stationNames = new Map(stationNameRows.map((s) => [s.id, s.name]));
       for (const t of transferred) {
+        const nome = stationNames.get(t.kitchen_station_id) ?? 'a estação de origem';
         await client.query(
           `INSERT INTO demand_events (demand_id, event_type, actor, notes)
-           VALUES ($1, 'shift_transfer', 'sistema',
-             'Revertida para a estação de origem no encerramento do turno jantar')`,
-          [t.id]
+           VALUES ($1, 'shift_transfer', 'sistema', $2)`,
+          [t.id, `Revertida para ${nome} no encerramento do turno jantar`]
         );
       }
 
@@ -770,7 +774,16 @@ export default async function adminRoutes(fastify: FastifyInstance) {
       client.release();
 
       await recomputeStationQueue(jantarId);
-      await recomputeStationQueue(quenteAId);
+      // Recomputa cada estação de destino distinta revertida (espelha a ativação).
+      // quenteAId continua verificado acima; se quente_a estiver entre os destinos,
+      // já é coberta pelo conjunto — sem recompute hardcoded quando não recebeu nada.
+      for (const destino of new Set(
+        transferred
+          .map((t) => t.kitchen_station_id)
+          .filter((id) => id && id !== jantarId)
+      )) {
+        await recomputeStationQueue(destino);
+      }
       computeDailyScores(today).catch((e) => request.log.error(e));
 
       fastify.io.emit('menu:updated', { date: today, shift: 'lunch' });
