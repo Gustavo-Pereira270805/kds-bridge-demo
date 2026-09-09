@@ -158,6 +158,11 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           return reply.code(400).send({ error: 'Produto substituído não encontrado' });
         }
       }
+      if (replaced_product_id && replaced_product_id === product_id) {
+        return reply.code(400).send({
+          error: 'O item substituído deve ser diferente do item pedido',
+        });
+      }
 
       const slaMinutes =
         priority === 'urgent'
@@ -240,7 +245,7 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           priority,
           notes,
           isReplacement,
-          replaced_product_id || null,
+          isReplacement ? (replaced_product_id || null) : null,
         ]
       );
 
