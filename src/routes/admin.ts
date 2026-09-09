@@ -64,19 +64,32 @@ export default async function adminRoutes(fastify: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
+    const client = await pool.connect();
     try {
       const { name, category, kitchen_station_id, sla_minutes_normal, sla_minutes_urgente } = request.body;
-      const [p] = await query<Product>(
+      await client.query('BEGIN');
+      const { rows } = await client.query<Product>(
         `INSERT INTO products (name, category, kitchen_station_id, sla_minutes_normal, sla_minutes_urgente)
          VALUES ($1, $2, $3, $4, $5) RETURNING *`,
         [name, category || null, kitchen_station_id || null, sla_minutes_normal || 10, sla_minutes_urgente || 7]
       );
+      const p = rows[0];
+      await client.query(
+        `INSERT INTO product_units (product_id, unit_id)
+         SELECT $1, u.id FROM units u WHERE u.active = true
+         ON CONFLICT (product_id, unit_id) DO NOTHING`,
+        [p.id]
+      );
+      await client.query('COMMIT');
       reply.code(201);
       return p;
     } catch (error: any) {
+      await client.query('ROLLBACK').catch((e) => request.log.error(e));
       if (error.code === '23505') return reply.code(409).send({ error: 'Produto já existe' });
       request.log.error(error);
       reply.code(500).send({ error: 'Erro ao criar produto' });
+    } finally {
+      client.release();
     }
   });
 
