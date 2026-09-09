@@ -619,8 +619,9 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           sla_minutes: number | null;
           product_id: string | null;
           created_at: string;
+          stockout_reported: boolean;
         }>(
-          'SELECT status, priority, sla_minutes, product_id, created_at FROM demands WHERE id = $1',
+          'SELECT status, priority, sla_minutes, product_id, created_at, stockout_reported FROM demands WHERE id = $1',
           [id]
         );
 
@@ -632,6 +633,9 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
             error: 'Rotura só pode ser reportada em demandas pendentes',
           });
         }
+        if (demand.stockout_reported) {
+          return reply.code(409).send({ error: 'Rotura já registrada para esta demanda' });
+        }
 
         // Veredito Zeramento x SLA: compara o tempo decorrido com o SLA em vigor
         // ANTES da troca para urgente (o update abaixo sobrescreve sla_minutes).
@@ -641,12 +645,18 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           ? Math.round((elapsedMin / slaInForce) * 100) / 100
           : null;
 
-        await query(
+        const stockRows = await query<{ id: string }>(
           `UPDATE demands SET stockout_reported = true, stockout_reported_at = now(),
             stockout_sla_factor = $2
-           WHERE id = $1 AND status = 'pending'`,
+           WHERE id = $1 AND status = 'pending' AND stockout_reported = false
+           RETURNING id`,
           [id, stockoutFactor]
         );
+        if (stockRows.length === 0) {
+          return reply.code(409).send({
+            error: 'Rotura já registrada ou demanda saiu de pendente',
+          });
+        }
 
         // Ao promover de normal para urgente, ajusta o SLA para o SLA urgente do produto
         if (demand.status === 'pending' && demand.priority === 'normal' && demand.product_id) {
@@ -666,24 +676,24 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
               `UPDATE demands
                   SET priority = 'urgent', sla_minutes = $1,
                       expected_ready_at = cooking_started_at + ($3::int * INTERVAL '1 minute')
-                WHERE id = $2 AND cooking_started = true AND cooking_started_at IS NOT NULL`,
+                WHERE id = $2 AND status = 'pending' AND cooking_started = true AND cooking_started_at IS NOT NULL`,
               [novoSla, id, Number(novoSla)]
             );
             // Se não estava locked, update normal (sem mexer no expected_ready_at — recompute cuida)
             await query(
               `UPDATE demands SET priority = 'urgent', sla_minutes = $1
-                WHERE id = $2 AND (cooking_started = false OR cooking_started_at IS NULL)`,
+                WHERE id = $2 AND status = 'pending' AND (cooking_started = false OR cooking_started_at IS NULL)`,
               [novoSla, id]
             );
           } else {
             await query(
-              `UPDATE demands SET priority = 'urgent', sla_minutes = $1 WHERE id = $2`,
+              `UPDATE demands SET priority = 'urgent', sla_minutes = $1 WHERE id = $2 AND status = 'pending'`,
               [novoSla, id]
             );
           }
         } else if (demand.status === 'pending') {
           await query(
-            `UPDATE demands SET priority = 'urgent' WHERE id = $1`,
+            `UPDATE demands SET priority = 'urgent' WHERE id = $1 AND status = 'pending'`,
             [id]
           );
         }
