@@ -446,9 +446,17 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           });
         }
 
-        const reasonLabel = cancel_reason_id
-          ? ((await query<{ label: string }>('SELECT label FROM cancel_reasons WHERE id = $1', [cancel_reason_id]))[0]?.label || trimmedReason || null)
-          : trimmedReason || null;
+        let reasonLabel: string | null = trimmedReason || null;
+        if (cancel_reason_id) {
+          const [reasonRow] = await query<{ label: string }>(
+            'SELECT label FROM cancel_reasons WHERE id = $1',
+            [cancel_reason_id]
+          );
+          if (!reasonRow) {
+            return reply.code(400).send({ error: 'Motivo de cancelamento inválido' });
+          }
+          reasonLabel = reasonRow.label;
+        }
 
         await query(
           `UPDATE demands SET status = 'cancelled_salao', cancelled_at = now(), cancel_reason = $1, cancel_reason_id = $2
@@ -536,9 +544,17 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           });
         }
 
-        const reasonLabel = cancel_reason_id
-          ? ((await query<{ label: string }>('SELECT label FROM cancel_reasons WHERE id = $1', [cancel_reason_id]))[0]?.label || trimmedReason || null)
-          : trimmedReason || null;
+        let reasonLabel: string | null = trimmedReason || null;
+        if (cancel_reason_id) {
+          const [reasonRow] = await query<{ label: string }>(
+            'SELECT label FROM cancel_reasons WHERE id = $1',
+            [cancel_reason_id]
+          );
+          if (!reasonRow) {
+            return reply.code(400).send({ error: 'Motivo de cancelamento inválido' });
+          }
+          reasonLabel = reasonRow.label;
+        }
 
         await query(
           `UPDATE demands SET status = 'cancelled_cozinha', cancelled_at = now(), cancel_reason = $1, cancel_reason_id = $2
