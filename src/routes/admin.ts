@@ -755,7 +755,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
         await client.query(
           `INSERT INTO demand_events (demand_id, event_type, actor, notes)
            VALUES ($1, 'shift_transfer', 'sistema',
-             'Revertida para a Cozinha Quente A no encerramento do turno jantar')`,
+             'Revertida para a estação de origem no encerramento do turno jantar')`,
           [t.id]
         );
       }
