@@ -723,12 +723,16 @@
             confirmReadyBtn.disabled = true;
             confirmReadyBtn.textContent = '...';
             try {
-                await fetch(`/api/v1/demands/${id}/ready`, { method: 'PATCH' });
+                const res = await fetch(`/api/v1/demands/${id}/ready`, { method: 'PATCH' });
+                if (!res.ok) {
+                    if (res.status === 409) throw new Error('Demanda já atualizada em outra tela, lista sincronizada.');
+                    throw new Error('HTTP ' + res.status);
+                }
                 document.getElementById('confirmReadyModal').style.display = 'none';
                 readyTargetId = null;
             } catch (err) {
                 console.error('Erro ao marcar pronto:', err);
-                showToast('Erro ao marcar demanda como pronta. Tente novamente.', 'error');
+                showToast(err && err.message ? err.message : 'Erro ao marcar demanda como pronta. Tente novamente.', 'error');
             } finally {
                 confirmReadyBtn.disabled = false;
                 confirmReadyBtn.textContent = 'Sim, Marcar como Pronto';
@@ -780,11 +784,15 @@
             confirmBtn.textContent = '...';
 
             try {
-                await fetch(`/api/v1/demands/${id}/cancel-cozinha`, {
+                const res = await fetch(`/api/v1/demands/${id}/cancel-cozinha`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ cancel_reason_id: reasonId, reason: freeText })
                 });
+                if (!res.ok) {
+                    if (res.status === 409) throw new Error('Demanda já atualizada em outra tela, lista sincronizada.');
+                    throw new Error('HTTP ' + res.status);
+                }
                 modal.style.display = 'none';
                 document.getElementById('cancelReasonSelect').value = '';
                 document.getElementById('cancelReasonFree').value = '';
@@ -794,7 +802,7 @@
                 console.error('Erro ao cancelar:', err);
                 confirmBtn.disabled = false;
                 confirmBtn.textContent = 'Confirmar Cancelamento';
-                showToast('Erro ao cancelar demanda. Tente novamente.', 'error');
+                showToast(err && err.message ? err.message : 'Erro ao cancelar demanda. Tente novamente.', 'error');
             }
         });
 

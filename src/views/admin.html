@@ -888,7 +888,7 @@ function fetchPiStatus(){
     const q = data['kds-quente-1']; const f = data['kds-fria-1'];
     if(q){ _piLast.quente = q.lastAt ? new Date(q.lastAt).getTime() : 0; setPiBadge('quente', q.online, q.lastAt); }
     if(f){ _piLast.fria = f.lastAt ? new Date(f.lastAt).getTime() : 0; setPiBadge('fria', f.online, f.lastAt); }
-  }).catch(()=>{});
+  }).catch(function(err) { console.warn('[Pis] Falha ao atualizar status:', err); });
 }
 var socket = kdsSocket(io);
 socket.on('connect', function(){ socket.emit('join','kds-pis'); socket.emit('join','gerente'); fetchPiStatus(); });

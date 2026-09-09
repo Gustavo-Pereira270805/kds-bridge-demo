@@ -214,7 +214,18 @@ export default async function adminRoutes(fastify: FastifyInstance) {
 
   // Unidades: criar
   fastify.post<{ Body: { code: string; label: string } }>(
-    '/units', async (request, reply) => {
+    '/units', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['code', 'label'],
+        properties: {
+          code: { type: 'string', minLength: 1, maxLength: 30 },
+          label: { type: 'string', minLength: 1, maxLength: 30 },
+        },
+      },
+    },
+  }, async (request, reply) => {
     try {
       const { code, label } = request.body;
       const [u] = await query(
@@ -264,7 +275,18 @@ export default async function adminRoutes(fastify: FastifyInstance) {
 
   // Unidades: editar
   fastify.put<{ Params: { id: string }; Body: { code: string; label: string } }>(
-    '/units/:id', async (request, reply) => {
+    '/units/:id', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['code', 'label'],
+        properties: {
+          code: { type: 'string', minLength: 1, maxLength: 30 },
+          label: { type: 'string', minLength: 1, maxLength: 30 },
+        },
+      },
+    },
+  }, async (request, reply) => {
     try {
       const { code, label } = request.body;
       const [u] = await query(

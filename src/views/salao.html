@@ -317,7 +317,7 @@
                 <div class="product-dropdown" id="productDropdown"></div>
             </div>
             <div class="row">
-                <input type="number" id="quantity" class="mono" placeholder="Qtd" value="1" min="1" required style="max-width: 80px;">
+                <input type="number" id="quantity" class="mono" placeholder="Qtd" value="1" min="1" max="100" required style="max-width: 80px;">
                 <select id="unitSelect" disabled>
                     <option value="">Unidade</option>
                 </select>
@@ -720,7 +720,7 @@
         if (textEl) {
             if (d) {
                 var qty = (typeof d.quantity === 'number' ? d.quantity : parseFloat(d.quantity) || d.quantity);
-                textEl.innerHTML = 'Confirmar retirada de <strong>' + qty + 'x ' + d.product_name + '</strong>?';
+                textEl.innerHTML = 'Confirmar retirada de <strong>' + qty + 'x ' + esc(d.product_name) + '</strong>?';
             } else {
                 textEl.innerHTML = 'Confirmar retirada deste item?';
             }
