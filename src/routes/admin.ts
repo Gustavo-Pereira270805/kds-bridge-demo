@@ -745,10 +745,11 @@ export default async function adminRoutes(fastify: FastifyInstance) {
       );
 
       const { rows: transferred } = await client.query<{ id: string }>(
-        `UPDATE demands SET kitchen_station_id = COALESCE(origin_station_id, $1), origin_station_id = NULL
-         WHERE status = 'pending' AND created_at::date = $2 AND kitchen_station_id = $3
+        `UPDATE demands SET kitchen_station_id = origin_station_id, origin_station_id = NULL
+         WHERE status = 'pending' AND created_at::date = $1 AND kitchen_station_id = $2
+           AND origin_station_id IS NOT NULL
          RETURNING id`,
-        [quenteAId, today, jantarId]
+        [today, jantarId]
       );
       for (const t of transferred) {
         await client.query(
