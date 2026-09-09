@@ -307,10 +307,14 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           });
         }
 
-        await query(
-          `UPDATE demands SET status = 'ready', ready_at = now() WHERE id = $1`,
+        const readyRows = await query<{ id: string }>(
+          `UPDATE demands SET status = 'ready', ready_at = now()
+            WHERE id = $1 AND status = 'pending' RETURNING id`,
           [id]
         );
+        if (readyRows.length === 0) {
+          return reply.code(409).send({ error: 'Demanda não está mais pendente' });
+        }
 
         // Flag "pronto fora de sequência": há itens mais antigos ainda em preparo na estação?
         if (demand.kitchen_station_id && demand.cooking_started_at) {
@@ -376,10 +380,14 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           });
         }
 
-        await query(
-          `UPDATE demands SET status = 'retrieved', retrieved_at = now() WHERE id = $1`,
+        const retrievedRows = await query<{ id: string }>(
+          `UPDATE demands SET status = 'retrieved', retrieved_at = now()
+            WHERE id = $1 AND status = 'ready' RETURNING id`,
           [id]
         );
+        if (retrievedRows.length === 0) {
+          return reply.code(409).send({ error: 'Demanda não está mais pronta para retirada' });
+        }
         await logDemandEvent(id, 'retrieved', 'salao');
         await evaluatePickupSla(id);
 
