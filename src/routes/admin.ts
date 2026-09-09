@@ -220,7 +220,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
         type: 'object',
         required: ['code', 'label'],
         properties: {
-          code: { type: 'string', minLength: 1, maxLength: 30 },
+          code: { type: 'string', minLength: 1, maxLength: 20 },
           label: { type: 'string', minLength: 1, maxLength: 30 },
         },
       },
@@ -281,7 +281,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
         type: 'object',
         required: ['code', 'label'],
         properties: {
-          code: { type: 'string', minLength: 1, maxLength: 30 },
+          code: { type: 'string', minLength: 1, maxLength: 20 },
           label: { type: 'string', minLength: 1, maxLength: 30 },
         },
       },
