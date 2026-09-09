@@ -1,5 +1,6 @@
 import { Pool, PoolClient } from 'pg';
 import { promises as dns } from 'dns';
+import fs from 'fs';
 import 'dotenv/config';
 
 const DATABASE_URL = process.env.DATABASE_URL!;
@@ -57,6 +58,30 @@ async function getPool(): Promise<Pool> {
       }
       const isLocal = isLocalIp(ip);
       const rejectUnauthorized = process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false';
+      const customCaPath = process.env.DB_SSL_CA_FILE;
+      if (!isLocal && !rejectUnauthorized) {
+        console.warn(
+          '[db] ATENÇÃO: verificação TLS do banco DESLIGADA (DB_SSL_REJECT_UNAUTHORIZED=false). ' +
+          'Use DB_SSL_CA_FILE com o CA do proxy em vez disso.'
+        );
+      }
+      let ssl: false | { rejectUnauthorized: boolean; servername: string; ca?: string };
+      if (isLocal) {
+        ssl = false;
+      } else if (customCaPath) {
+        let ca: string;
+        try {
+          ca = fs.readFileSync(customCaPath, 'utf8');
+        } catch (erro) {
+          throw new Error(
+            `[db] Falha ao ler o CA próprio do banco em DB_SSL_CA_FILE (${customCaPath}): ${(erro as Error).message}`
+          );
+        }
+        console.log(`[db] Usando CA próprio do banco em ${customCaPath}`);
+        ssl = { rejectUnauthorized: true, servername: dbConfig.host, ca };
+      } else {
+        ssl = { rejectUnauthorized, servername: dbConfig.host };
+      }
       _pool = new Pool({
         host: ip,
         port: dbConfig.port,
@@ -66,7 +91,7 @@ async function getPool(): Promise<Pool> {
         max: 10,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 10000,
-        ssl: isLocal ? false : { rejectUnauthorized, servername: dbConfig.host },
+        ssl,
       });
       return _pool;
     })();
