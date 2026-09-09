@@ -10,14 +10,9 @@
         reverse_proxy app:3000
     }
     encode gzip
+    header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 }
 
 :80 {
-    handle /health {
-        reverse_proxy app:3000
-    }
-    handle {
-        reverse_proxy app:3000
-    }
-    encode gzip
+    redir https://{host}{uri} permanent
 }
