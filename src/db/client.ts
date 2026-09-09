@@ -59,7 +59,7 @@ async function getPool(): Promise<Pool> {
       const isLocal = isLocalIp(ip);
       const rejectUnauthorized = process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false';
       const customCaPath = process.env.DB_SSL_CA_FILE;
-      if (!isLocal && !rejectUnauthorized) {
+      if (!isLocal && !rejectUnauthorized && !customCaPath) {
         console.warn(
           '[db] ATENÇÃO: verificação TLS do banco DESLIGADA (DB_SSL_REJECT_UNAUTHORIZED=false). ' +
           'Use DB_SSL_CA_FILE com o CA do proxy em vez disso.'
