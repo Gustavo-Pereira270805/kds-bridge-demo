@@ -17,6 +17,10 @@ function getStationRoom(code: string): string {
   return 'cozinha_quente';
 }
 
+// Fail-fast para cancel_reason_id malformado: cancel_reasons.id é uuid e o
+// SELECT com texto não-uuid lança 22P02 (virava 500 no catch genérico).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default async function demandsRoutes(fastify: FastifyInstance) {
   fastify.get('/', async (request, reply) => {
     try {
@@ -448,6 +452,9 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
 
         let reasonLabel: string | null = trimmedReason || null;
         if (cancel_reason_id) {
+          if (!UUID_RE.test(cancel_reason_id)) {
+            return reply.code(400).send({ error: 'Motivo de cancelamento inválido' });
+          }
           const [reasonRow] = await query<{ label: string }>(
             'SELECT label FROM cancel_reasons WHERE id = $1',
             [cancel_reason_id]
@@ -546,6 +553,9 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
 
         let reasonLabel: string | null = trimmedReason || null;
         if (cancel_reason_id) {
+          if (!UUID_RE.test(cancel_reason_id)) {
+            return reply.code(400).send({ error: 'Motivo de cancelamento inválido' });
+          }
           const [reasonRow] = await query<{ label: string }>(
             'SELECT label FROM cancel_reasons WHERE id = $1',
             [cancel_reason_id]
