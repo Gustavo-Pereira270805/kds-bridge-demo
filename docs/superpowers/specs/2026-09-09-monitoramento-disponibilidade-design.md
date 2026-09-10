@@ -315,7 +315,7 @@ Rollback:
 
 ## 10. Perguntas abertas
 
-1. Qual destino de alerta devemos usar: apenas log local, e-mail, webhook ou monitor externo com notificação?
-2. Quem hospeda o heartbeat independente: tarefa do Windows, workflow externo, monitor de uptime ou outro serviço?
+1. ~~Qual destino de alerta devemos usar~~ **Decidido (2026-09-10): webhook no celular** (Telegram/Discord via `KDS_ALERT_WEBHOOK`; log local continua sempre).
+2. ~~Quem hospeda o heartbeat independente~~ **Decidido (2026-09-10): monitor externo** (UptimeRobot/Better Stack ou similar checando `/ready` 3–4x/dia; `oracle-server-health.ps1` segue como checagem manual/sobressalente).
 3. Devemos instalar `avahi` nos Pis para usar `cozinha-quente-kds.local` e `cozinha-fria-kds.local`, ou manter SSH por Tailnet/IP?
 4. Qual o horário oficial de fechamento para amarrar o futuro timer de desligamento dos quiosques?
