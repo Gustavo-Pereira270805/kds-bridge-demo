@@ -48,6 +48,7 @@ registerSocketHandlers(io);
 
 const PUBLIC_PATHS = [
   '/health',
+  '/ready',
   '/login',
   '/salao',
   '/cozinha',
@@ -117,6 +118,70 @@ fastify.get('/login', async (_request, reply) => {
 
 fastify.get('/health', async (_request, reply) => {
   return { status: 'ok', timestamp: new Date().toISOString() };
+});
+
+// Readiness (§4.1 do monitoramento): processo vivo + SELECT 1 no Postgres.
+// Público (monitores externos não têm sessão), sem escrita, sem segredos na resposta.
+const READY_DB_TIMEOUT_MS = 2500;
+
+type ReadyDbError = 'timeout' | 'connection' | 'dns' | 'auth' | 'unknown';
+
+function classifyReadyError(err: unknown): ReadyDbError {
+  const code = (err as { code?: unknown })?.code;
+  if (code === 'READY_TIMEOUT') return 'timeout';
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return 'dns';
+  if (code === '28P01' || code === '28000' || code === '28P00') return 'auth';
+  if (
+    code === 'ECONNREFUSED' ||
+    code === 'EHOSTUNREACH' ||
+    code === 'ENETUNREACH' ||
+    code === 'EPIPE' ||
+    code === 'ECONNRESET' ||
+    code === 'ETIMEDOUT'
+  ) {
+    return 'connection';
+  }
+  return 'unknown';
+}
+
+fastify.get('/ready', async (_request, reply) => {
+  const started = Date.now();
+  reply.header('Cache-Control', 'no-store');
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      pool.query('SELECT 1'),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          reject(Object.assign(new Error('ready timeout'), { code: 'READY_TIMEOUT' }));
+        }, READY_DB_TIMEOUT_MS);
+      }),
+    ]);
+    const latencyMs = Date.now() - started;
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      checks: {
+        app: { status: 'ok' },
+        database: { status: 'ok', latencyMs },
+      },
+    };
+  } catch (err) {
+    const latencyMs = Date.now() - started;
+    const error = classifyReadyError(err);
+    fastify.log.warn(`[ready] banco indisponível (${error}, ${latencyMs}ms)`);
+    reply.code(503);
+    return {
+      status: 'down',
+      timestamp: new Date().toISOString(),
+      checks: {
+        app: { status: 'ok' },
+        database: { status: 'down', latencyMs, error },
+      },
+    };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 });
 
 fastify.register(productRoutes, { prefix: '/api/v1/products' });
