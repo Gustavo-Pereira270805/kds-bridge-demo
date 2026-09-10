@@ -64,3 +64,39 @@ export function requireRole(...roles: UserRole[]) {
     }
   };
 }
+
+import { isKioskIp, clientIpFromHeaders } from './kiosk';
+
+function requestIp(request: FastifyRequest): string {
+  return clientIpFromHeaders(
+    request.headers['x-forwarded-for'],
+    request.ip ?? request.socket?.remoteAddress ?? ''
+  );
+}
+
+export async function isKitchenAllowed(request: FastifyRequest): Promise<boolean> {
+  if (isKioskIp(requestIp(request))) return true;
+  const token = extractToken(request);
+  if (!token) return false;
+  const user = await getUserByToken(token);
+  return !!user && (user.role === 'gerente' || user.role === 'admin');
+}
+
+export async function requireKitchen(request: FastifyRequest, reply: FastifyReply) {
+  if (isKioskIp(requestIp(request))) return;
+  const token = extractToken(request);
+  if (!token) {
+    reply.code(401).send({ error: 'Autenticação necessária para a cozinha' });
+    return;
+  }
+  const user = await getUserByToken(token);
+  if (!user) {
+    reply.code(401).send({ error: 'Token inválido ou expirado' });
+    return;
+  }
+  if (user.role !== 'gerente' && user.role !== 'admin') {
+    reply.code(403).send({ error: 'Acesso à cozinha restrito à gerência' });
+    return;
+  }
+  request.user = user;
+}

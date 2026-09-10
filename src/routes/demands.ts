@@ -7,6 +7,7 @@ import { recomputeStationQueue } from '../services/queue.service';
 import { evaluateCookingSla, evaluatePickupSla } from '../services/sla.service';
 import { logDemandEvent } from '../services/demand-events.service';
 import { computeDailyScores } from '../services/performance.service';
+import { requireKitchen } from '../middleware/auth';
 
 // Salão é público (kiosk fixo, sem login): nenhuma rota de demanda exige token,
 // igual às ações da cozinha. Gerente/admin continuam protegidos nas rotas deles.
@@ -290,6 +291,7 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
   // Cozinha marca pronto
   fastify.patch<{ Params: { id: string } }>(
     '/:id/ready',
+    { preHandler: requireKitchen },
     async (request, reply) => {
       try {
         const { id } = request.params;
@@ -514,6 +516,7 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
   fastify.patch<{ Params: { id: string }; Body: { reason?: string; cancel_reason_id?: string } }>(
     '/:id/cancel-cozinha',
     {
+      preHandler: requireKitchen,
       schema: {
         body: {
           type: 'object',
