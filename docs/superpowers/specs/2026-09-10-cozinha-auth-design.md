@@ -45,6 +45,8 @@ O `GET /demands` continua público porque o salão o usa sem login. Logo, o JSON
 ## 6. Configuração
 
 - `KDS_KIOSK_IPS` no `.env` de produção (Oracle) + documentado no `.env.example`. Mudança de IP de Pi = só env + restart, sem código.
+- **URL do quiosque OBRIGATORIAMENTE pela tailnet** (`http://100.81.149.114/...`, vhost no Caddyfile): pelo domínio público o Pi chega com o IP de saída da internet e cai no `/login`. HTTP puro é aceitável porque o transporte Tailscale já é criptografado.
+- **Premissa de infra:** `/etc/docker/daemon.json` na Oracle com `"userland-proxy": false` — com o proxy userland (padrão), o Caddy vê TODAS as conexões como `172.18.0.1` e o bypass por IP nunca dispara (fail closed, mas quiosques mortos).
 - Nenhum segredo novo: IPs do Tailscale não são credenciais, só identificadores de rede privada.
 
 ## 7. Erros e observabilidade
@@ -72,18 +74,19 @@ O `GET /demands` continua público porque o salão o usa sem login. Logo, o JSON
 
 > Escrito em 2026-09-10 ~01:50 BRT para retomar este trabalho após compactação. Uma sessão nova deve conseguir executar o plano só com este arquivo + `docs/superpowers/plans/2026-09-10-cozinha-auth.md`.
 
-### H.1. Onde estamos
+### H.1. Onde estamos (atualizado 2026-09-10 ~01:10 BRT)
 
-- Repo: `C:\Users\Milena\OneDrive\Documentos\programas\KDS_demo`, branch `main` em `207120d` (push feito). **Nada da spec foi implementado**; a branch `feature/cozinha-auth` **ainda não existe** — criá-la é o passo 0 do plano.
-- Produção (Oracle `163.176.208.86`, `/opt/kds`): roda o build do monitoramento (`6e46290`); os commits de docs posteriores (`9df1ae5`, `207120d`) ainda não tiveram `pull` lá (são só docs — entram no próximo deploy sem rebuild dedicado).
-- Ambiente local: `.env` → banco local (container `kds-db-local`, Postgres 16); dev `npm run dev` na porta 3000 (provável rodando — conferir, matar PID preso e reiniciar antes de testar).
-- Plano de implementação: `docs/superpowers/plans/2026-09-10-cozinha-auth.md` (6 tarefas, com código literal e comandos). Registro geral do projeto: `docs/DEPLOY_ENDURECIMENTO_KDS_2026-09-09.md`.
+- Plano 100% executado inline em `feature/cozinha-auth` (5 commits) + merge FF em `main` + deploy em produção (`main@d148fe3`, bridge healthy). Tasks 1–6 completas, E2E local (`outputs/webwright-cozinha-auth/final_runs/run_1/`) e nuvem (`run_2/`) PASS, resíduo zero.
+- Quiosques: `~/kds-kiosk.sh` nos Pis aponta para `http://100.81.149.114/cozinha-*` (tailnet, vhost no Caddyfile `cf58b8d`). Telas verificadas por screenshot pós-reboot: quadros abertos, sem login.
+- `/opt/kds/.env` com `KDS_KIOSK_IPS` (2 IPs, backup datado); `/etc/docker/daemon.json` com `"userland-proxy": false` (ver H.6).
+- Plano de implementação: `docs/superpowers/plans/2026-09-10-cozinha-auth.md`. Registro geral: `docs/DEPLOY_ENDURECIMENTO_KDS_2026-09-09.md` (§9).
 
 ### H.2. Decisões travadas (não reabrir sem motivo)
 
 1. Escopo = só as 3 cozinhas; salão intocado.
 2. Acesso humano = login **gerente/admin** existente (usuário de teste gerente documentado em `docs/HANDOFF_2026-09-05-lote2.md` §Ambiente + `outputs/verificacao-6-itens/final_runs/run_1/final_script.py:15-16`). Nenhum usuário novo — Supabase com criação por e-mail bloqueada (bounces).
-3. Bypass = **só os 2 IPs Tailscale**: `100.114.73.108` (kds-fria-1), `100.82.174.3` (kds-quente-1). Sem rede local.
+3. Bypass = **só os 2 IPs Tailscale**: `100.114.73.108` (kds-fria-1), `100.82.174.3` (kds-quente-1). Sem rede local. **E os quiosques acessam pela tailnet** (`http://100.81.149.114`, Oracle `100.81.149.114` kds-server) — pelo domínio público o Pi chega com o IP de saída da internet (visto: `187.33.225.76`) e cai no login.
+4. Cookie `kds_token` (espelho do login) vale **só no guarda das views** — sem ele o gerente cai em loop login→302→login (navegador não envia `Authorization`); a API nunca lê cookie (sem CSRF nova).
 4. `GET /demands` segue público (salão usa) — limitação consciente da §5.
 5. Alerta do monitoramento → webhook no celular (usuário configura `KDS_ALERT_WEBHOOK` depois); heartbeat → monitor externo (usuário cria depois). Itens 3–4 da §10 da spec de monitoramento seguem abertos (`avahi`, horário de fechamento).
 
@@ -112,3 +115,12 @@ curl.exe http://127.0.0.1:3000/health  # {"status":"ok",...}
 - Sem `pool.on('error')` o Node morria ao perder o banco — já corrigido em `main` (commit `7ca6b01`); `/ready` agora responde 503 em vez de matar o processo.
 - Nunca `docker compose up` local com DOMAIN real (dispara ACME de verdade); nunca `DELETE` em demandas (anular via API); anular só vale no mesmo dia; `cancel-salao` só em `pending`.
 - Evidências de teste em `outputs/<tarefa>/final_runs/run_N/` (gitignored); ler PNGs com a ferramenta Read para auto-verificação.
+- JSON via `curl.exe -d` inline no PowerShell sempre dá `FST_ERR_CTP_INVALID_JSON_BODY` — corpos JSON vão em arquivo (`-d @arq`); asserts com acento usam `-match` (encoding).
+- Reiniciar servidor: `Start-Process` desanexado + poll de `/health` (nunca `Start-Job` — morre com o shell; nunca `sleep` fixo longo).
+- Screenshot dos Pis sem viewer: `XAUTHORITY=... DISPLAY=:0 xwd -root -out /tmp/tela.xwd` + SFTP + parser próprio (cabeçalho XWD tem 25 words BE com `header_size` primeiro; Pillow não lê esse variant).
+
+### H.6. Incidente pós-deploy (quiosques no /login) — causa raiz dupla
+
+1. **URL errada:** quiosques apontavam para o domínio público → Caddy via o egress da internet. Correção: `SRC="http://100.81.149.114"` nos `~/kds-kiosk.sh` + vhost `http://100.81.149.114` no Caddyfile.
+2. **IP mascarado:** com o userland-proxy do Docker (padrão), o Caddy via TODAS as conexões como `172.18.0.1` (provado com log temporário, depois revertido) — o bypass nunca dispararia por URL alguma. Correção server-side: `/etc/docker/daemon.json` com `"userland-proxy": false` + `systemctl restart docker` (containers `unless-stopped` voltam sozinhos; healthy em ~1min).
+- Verificação final: curl do Pi → 200 na tailnet / 302 no público; reboot dos 2 Pis → Chromium quiosque na URL tailnet + screenshots dos quadros abertos.

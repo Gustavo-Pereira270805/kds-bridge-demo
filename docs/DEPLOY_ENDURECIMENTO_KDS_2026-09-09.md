@@ -112,3 +112,9 @@ curl.exe http://127.0.0.1:3000/health  # {"status":"ok",...}
 - Achado: guarda so-header travava o gerente em loop de login (navegador nao envia Authorization). Correcao: cookie kds_token espelhado pelo security.js, lido SOMENTE no guarda das views (API segue header+IP, sem CSRF nova). Plano+spec atualizados.
 - E2E local outputs/webwright-cozinha-auth/final_runs/run_1/ (fase A sem bypass + fase B com 127.0.0.1): redirect, login sem loop, pronto/retirar por clique, 401/200, salao intacto, residuo zero. Nuvem run_2/: redirect, login, fluxo criar->pronto->retirar+anular, tudo PASS.
 - CP6: simulacao XFF pelo Caddy e inconclusiva por desenho (Caddy anexa o IP real por ultimo); prova por cadeia: env no container ok + Caddyfile sem manipulacao de header (append padrao) + join-on-connect nas views + Pis online com heartbeat pos-deploy (kds-quente-1 e kds-fria-1). Confirmacao visual das telas fica para a abertura.
+
+## 10. Incidente quiosques no /login (2026-09-10 ~01:00 BRT, resolvido)
+
+- Sintoma: telas dos Pis na pagina de login apos o deploy (screenshot via xwd confirmou). Causa dupla: (1) kds-kiosk.sh apontava p/ dominio publico (Pi chega com IP de saida 187.33.225.76); (2) userland-proxy do Docker mascarava TODAS as origens como 172.18.0.1 (provado com log temporario em cozinhaGuard, revertido em d148fe3).
+- Correcao: Caddyfile com vhost http://100.81.149.114 (cf58b8d); SRC tailnet nos 2 kds-kiosk.sh; /etc/docker/daemon.json com userland-proxy=false + restart do daemon (containers unless-stopped voltaram sozinhos). Pi->tailnet 200, Pi->publico 302, internet->publico 302.
+- Reboot dos 2 Pis: autologin OK (99-autologin.conf ja existia — o greeter visto era transitório), Chromium quiosque nas URLs tailnet, screenshots dos quadros abertos sem login. Extra: --disable-translate --lang=pt-BR nos kiosk scripts (vale no proximo boot).
