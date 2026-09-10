@@ -67,12 +67,12 @@ cards das 3 cozinhas renderizam .obs-strip (esc + letreiro se transbordar)
 
 ### 3.3 Salão (`src/views/salao.html`)
 
-- No form, abaixo da linha Urgente/Troca: `<label><input type="checkbox"
-  id="hasObservation"> Observação</label>` + `<input id="observationInput"
-  maxlength="50" disabled placeholder="Ex.: sem cebola, ponto mal passado">`
-  + `<small id="obsCounter">0/50</small>` (discreto, pequeno, abaixo da caixa).
-- JS: checkbox alterna `disabled` (e foca a caixa ao marcar); `input` atualiza
-  o contador; submit inclui `observation` (trim, só se checkbox marcado e
+- No form, abaixo da linha Urgente/Troca/Observação: a caixa de texto
+  (`maxlength=50`, `placeholder` com exemplo) fica OCULTA até marcar o
+  checkbox `Observação` (ao lado de Urgente/Troca); desmarcar esconde e
+  limpa. `<small>` contador `0/50` (discreto, pequeno, abaixo da caixa).
+- JS: checkbox alterna `display` do wrapper (e foca a caixa ao marcar);
+  `input` atualiza o contador; submit inclui `observation` (trim, só se checkbox marcado e
   não-vazio); após sucesso desmarca/limpa/contador zera.
 - Lista "Demandas Ativas": se `d.observation`, mostra a mesma faixa
   `.obs-strip` (sem letreiro animado — espaço menor; `text-overflow: ellipsis`).
@@ -84,9 +84,11 @@ cards das 3 cozinhas renderizam .obs-strip (esc + letreiro se transbordar)
   `<div class="obs-strip"><span class="obs-tag">OBS</span><span
   class="obs-text">…esc…</span></div>`.
 - Posição fixa (sempre no mesmo lugar do card) para leitura por padrão visual.
-- Cores FIXAS (não via tokens de tema, para serem idênticas nos 3 visuais):
-  fundo `#f59e0b` (âmbar), texto `#1c1005`, tag `OBS` com fundo `#1c1005` e
-  texto `#fbbf24`, borda `1px solid #b45309`. Contraste ≈ 12:1 (AAA).
+- Cores via TOKENS do tema (consistência com os cards): fundo
+  `var(--alert-warn-bg-dark)` (adapta sozinho ao claro), borda
+  `rgba(245,158,11,.35)` + filete esquerdo `3px solid var(--c-warn)`,
+  rótulo `OBS` em `var(--c-warn)` no estilo das badges de status e texto em
+  `var(--c-text-body)` 15px/700 — mesma família visual de zerado/troca.
   Tamanho: 15px / peso 700 — maior que o meta do card, menor que o nome.
 - Letreiro: após render, JS mede `scrollWidth > clientWidth` do `.obs-text`;
   se transbordar, adiciona `.marquee` (animação `translateX` em loop, estilo
