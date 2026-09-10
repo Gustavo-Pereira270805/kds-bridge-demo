@@ -239,7 +239,10 @@ git commit -m "feat: requireKitchen na API (ready e cancel-cozinha)"
 
 **Interfaces:**
 - Consumes: `isKitchenAllowed` (Task 2).
-- Produces: nada novo (reuso).
+- Produces: `isKitchenCookieAllowed` + `extractCookieToken` (em `auth.ts`); cookie `kds_token` (em `security.js`).
+- **Adendo (achado da implementação):** a navegação do navegador não envia `Authorization`, então o guarda só-header travava o gerente num loop login→302→login. Correção: `security.js#setToken/clearToken` espelha o token no cookie `kds_token` (`path=/; SameSide=Lax`); o guarda das views aceita o cookie via `isKitchenCookieAllowed`. A API (`requireKitchen`/`requireAuth`) NUNCA lê cookie (evita CSRF). Teste cobrindo: login real pela UI e abertura da view sem loop.
+
+- [ ] **Step 0 (adendo): cookie espelho em `security.js` + `isKitchenCookieAllowed` em `auth.ts`** (código literal na Task 3 do plano original — ver diff do commit `fix: guarda das views aceita cookie`)
 
 - [ ] **Step 1: Importar e proteger as rotas**
 

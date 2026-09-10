@@ -32,6 +32,11 @@
         window.localStorage.setItem(TOKEN_KEY, token);
         window.sessionStorage.removeItem(TOKEN_SESSION_KEY);
       }
+      // Espelho em cookie: a navegação do navegador (GET da página) não
+      // carrega cabeçalho Authorization, então o servidor lê este cookie
+      // SÓ no guarda das views da cozinha. A API continua exigindo header
+      // (sem fallback de cookie — evita CSRF via navegador).
+      document.cookie = 'kds_token=' + encodeURIComponent(token) + '; path=/; SameSite=Lax';
     } catch (e) { /* armazenamento indisponível */ }
   }
 
@@ -39,6 +44,7 @@
     try {
       window.sessionStorage.removeItem(TOKEN_SESSION_KEY);
       window.localStorage.removeItem(TOKEN_KEY);
+      document.cookie = 'kds_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
     } catch (e) { /* armazenamento indisponível */ }
   }
 

@@ -36,6 +36,8 @@ podeCozinha(req) = isKioskIp(req) OU (JWT válido E role ∈ {gerente, admin})
 
 Intocado: salão inteiro (views + criar/retirar/cancelar-salão/zerou/dispensar), `GET /demands`, salas `salao`/`kds-pis`/`gerente`, RBAC e CORS atuais. Nenhum JS muda nos Pis.
 
+**Transporte do token nas views:** a navegação do navegador não envia `Authorization`, então o login espelha o token no cookie `kds_token` (`SameSite=Lax`) e o guarda das views o aceita como alternativa ao header. A API nunca lê cookie (só header + IP) — sem superfície nova de CSRF.
+
 ## 5. Limitação consciente
 
 O `GET /demands` continua público porque o salão o usa sem login. Logo, o JSON bruto segue legível para quem conhece a API; o que fecha são **as telas, a operação (pronto/cancelar-cozinha) e o tempo real**. Fechar o JSON exigiria login no salão — vetado neste escopo.

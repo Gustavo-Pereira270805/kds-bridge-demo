@@ -100,3 +100,33 @@ export async function requireKitchen(request: FastifyRequest, reply: FastifyRepl
   }
   request.user = user;
 }
+
+// Cookie `kds_token` (espelho do login, ver security.js): usado SOMENTE pelo
+// guarda das views da cozinha, pois a navegação do navegador não envia
+// Authorization. NUNCA usar na API — credencial por cookie em rota de
+// escrita abriria CSRF via navegador.
+export function extractCookieToken(request: FastifyRequest): string | null {
+  const raw = request.headers.cookie;
+  if (!raw) return null;
+  const partes = raw.split(';');
+  for (const parte of partes) {
+    const idx = parte.indexOf('=');
+    if (idx < 0) continue;
+    if (parte.slice(0, idx).trim() === 'kds_token') {
+      const valor = parte.slice(idx + 1).trim();
+      try {
+        return decodeURIComponent(valor);
+      } catch (e) {
+        return valor;
+      }
+    }
+  }
+  return null;
+}
+
+export async function isKitchenCookieAllowed(request: FastifyRequest): Promise<boolean> {
+  const token = extractCookieToken(request);
+  if (!token) return false;
+  const user = await getUserByToken(token);
+  return !!user && (user.role === 'gerente' || user.role === 'admin');
+}

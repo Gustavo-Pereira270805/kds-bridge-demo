@@ -20,7 +20,7 @@ import adminRoutes from './routes/admin';
 import { registerSocketHandlers } from './socket/handlers';
 import { runCleanup } from './services/cleanup.service';
 import { syncFlexibleProducts } from './services/shift.service';
-import { requireAuth, isKitchenAllowed } from './middleware/auth';
+import { requireAuth, isKitchenAllowed, isKitchenCookieAllowed } from './middleware/auth';
 
 const fastify = Fastify({ logger: true });
 
@@ -69,8 +69,11 @@ const PUBLIC_PATHS = [
 
 // Guarda das cozinhas: quiosque liberado ou gerente/admin passam;
 // qualquer outro visitante é redirecionado ao login (com volta via ?next=).
+// Aceita o cookie `kds_token` porque a navegação do navegador não envia
+// Authorization (sem ele, o gerente logado cairia num loop de login).
 async function cozinhaGuard(request: FastifyRequest, reply: FastifyReply) {
   if (await isKitchenAllowed(request)) return;
+  if (await isKitchenCookieAllowed(request)) return;
   const next = encodeURIComponent(request.url);
   reply.redirect(`/login?next=${next}`);
 }
