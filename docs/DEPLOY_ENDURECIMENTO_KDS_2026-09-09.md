@@ -104,3 +104,11 @@ docker start kds-db-local  # se ECONNREFUSED 5432 (Docker Desktop precisa estar 
 npx tsc --noEmit; npm run dev  # porta 3000, insurance: Start-Process ... -WindowStyle Minimized
 curl.exe http://127.0.0.1:3000/health  # {"status":"ok",...}
 ```
+
+## 9. Deploy auth das cozinhas (2026-09-10, main@444644c)
+
+- Branch feature/cozinha-auth (5 commits) com merge FF em main. Deploy: git pull + docker compose up -d --build, healthy em ~10s. /health e /ready 200, HSTS ok.
+- /opt/kds/.env recebeu KDS_KIOSK_IPS com os 2 IPs Tailscale (backup .env.bak-20260910 ja existia; novo backup datado feito antes). Container confirma 1 ocorrencia com os 2 IPs; 0 erros em 30m.
+- Achado: guarda so-header travava o gerente em loop de login (navegador nao envia Authorization). Correcao: cookie kds_token espelhado pelo security.js, lido SOMENTE no guarda das views (API segue header+IP, sem CSRF nova). Plano+spec atualizados.
+- E2E local outputs/webwright-cozinha-auth/final_runs/run_1/ (fase A sem bypass + fase B com 127.0.0.1): redirect, login sem loop, pronto/retirar por clique, 401/200, salao intacto, residuo zero. Nuvem run_2/: redirect, login, fluxo criar->pronto->retirar+anular, tudo PASS.
+- CP6: simulacao XFF pelo Caddy e inconclusiva por desenho (Caddy anexa o IP real por ultimo); prova por cadeia: env no container ok + Caddyfile sem manipulacao de header (append padrao) + join-on-connect nas views + Pis online com heartbeat pos-deploy (kds-quente-1 e kds-fria-1). Confirmacao visual das telas fica para a abertura.
