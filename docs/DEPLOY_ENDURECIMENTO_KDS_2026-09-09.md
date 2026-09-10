@@ -73,7 +73,16 @@ Sem migração de banco (nenhum `supabase/` tocado). E2E do fluxo principal: 12/
 - Validação de `/admin` no browser não foi clicada (exige login de gerente; sem credencial de teste na sessão) — coberta via HTML servido + lógica executada + API. Para o clique real, obter login de teste de gerente.
 - Revisão final: APROVADO, 0 bloqueadores; diferidos triados como não-bloqueantes (lista no ledger `.superpowers/sdd/.../progress.md`).
 
-## 6. Como retomar (comandos)
+## 6. Execução (2026-09-09/10 — sessão que consumiu este plano)
+
+- Merge: `main` em `e1d3521` (fast-forward de `endurecimento-kds` + commit de docs). Push para `origin/main` OK.
+- Oracle (`/opt/kds`): `git pull` (17 commits) + `docker compose up -d --build` — `kds-bridge` saudável no build novo. Caddy precisou de `restart` para recarregar o Caddyfile montado (volume não dispara reload): `:80→308`, HSTS e app novo confirmados via curl público.
+- Webwright local (`outputs/webwright-deploy-local/final_runs/run_3/`): 6/6 PASS. Lições: notas não renderizam nos cards; text-matching ambíguo atinge card vizinho — usar `data-id` (`button.ready-btn[data-id]`, `button.retrieve-btn[data-id]`).
+- Webwright nuvem (`outputs/webwright-deploy-nuvem/final_runs/run_1/`): 6/6 PASS contra `https://kds-framboa.duckdns.org` (Python local com SSL sem verificação — CA do notebook; Playwright com `ignore_https_errors`).
+- Pis (SSH via Tailscale, `framboa`): ambos com kiosk Chromium **já em `https://kds-framboa.duckdns.org/cozinha-*`** — nenhuma migração de URL foi necessária (Task 9 segura); VNC `active` só em localhost; ambos com `kiosk→prod:200`.
+- **Pendente (usuário, painel Supabase): rotação da senha** — item 3.5. Resíduos antigos no banco local (cards há 22–31h): `cancel-salao` recusa `ready` e `annul` recusa dia anterior — por desenho; limpos os possíveis.
+
+## 7. Como retomar (comandos)
 
 ```powershell
 git checkout endurecimento-kds; git log --oneline 17191e4..HEAD  # 16 commits acima
