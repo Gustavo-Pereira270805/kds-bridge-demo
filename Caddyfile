@@ -16,6 +16,14 @@
     header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 }
 
+# Quiosques via Tailscale: HTTP puro (o transporte já é criptografado pelo
+# WireGuard) para que o Caddy veja o IP 100.x do Pi no X-Forwarded-For e o
+# bypass de login funcione. NÃO apontar os Pis para o domínio público:
+# por ele o Pi chega com o IP de saída da internet e cai no /login.
+http://100.81.149.114 {
+    reverse_proxy app:3000
+}
+
 :80 {
     redir https://{host}{uri} permanent
 }
