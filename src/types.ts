@@ -126,6 +126,8 @@ export interface Demand {
   status: DemandStatus;
   priority: DemandPriority;
   notes: string | null;
+  // Runtime (nunca vem do banco — mesclado via observation.service).
+  observation?: string | null;
   ready_at: string | null;
   retrieved_at: string | null;
   cancelled_at: string | null;
@@ -210,6 +212,8 @@ export interface CreateDemandBody {
   unit_label?: string;
   priority?: DemandPriority;
   notes?: string;
+  // Observação do salão: somente runtime (não persiste no DB, máx. 50 chars).
+  observation?: string;
   is_replacement?: boolean;
   replaced_product_id?: string;
 }
