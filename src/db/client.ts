@@ -93,6 +93,11 @@ async function getPool(): Promise<Pool> {
         connectionTimeoutMillis: 10000,
         ssl,
       });
+      // Cliente ocioso que cai (ex.: banco reinicia) não pode derrubar o processo:
+      // sem este listener o 'error' do pool é unhandled e o Node encerra.
+      _pool.on('error', (err) => {
+        console.error('[db] Erro em cliente ocioso do pool (não fatal):', (err as Error).message);
+      });
       return _pool;
     })();
   }
