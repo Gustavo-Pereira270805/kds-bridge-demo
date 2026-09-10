@@ -82,7 +82,21 @@ Sem migração de banco (nenhum `supabase/` tocado). E2E do fluxo principal: 12/
 - Pis (SSH via Tailscale, `framboa`): ambos com kiosk Chromium **já em `https://kds-framboa.duckdns.org/cozinha-*`** — nenhuma migração de URL foi necessária (Task 9 segura); VNC `active` só em localhost; ambos com `kiosk→prod:200`.
 - **Pendente (usuário, painel Supabase): rotação da senha** — item 3.5. Resíduos antigos no banco local (cards há 22–31h): `cancel-salao` recusa `ready` e `annul` recusa dia anterior — por desenho; limpos os possíveis.
 
-## 7. Como retomar (comandos)
+## 7. Rotação da senha do Supabase (executada 2026-09-10 ~00:40–01:10)
+
+**Correção de premissa da auditoria.** O F9 dizia "Supabase tem LE válido" — vale para HTTPS/pooler, **não** para a conexão direta `db.<ref>.supabase.co:5432`, que usa CA **privada** do Supabase (`Supabase Intermediate/Root 2021 CA`, cadeia verificada com `openssl verify: OK`, folha com CN exato do nosso host, mesmo IP registrado desde 09-02). Por isso a flag `DB_SSL_REJECT_UNAUTHORIZED=false` existia: sem ela, nada conectava. Removê-la sem fixar o CA quebraria a produção — foi o que o `DB_SSL_CA_FILE` (Task 8) resolveu.
+
+**Solução aplicada (verificação LIGADA, sem bypass).**
+- `/opt/kds/certs/supabase-ca-2021.crt` (raiz extraída da cadeia servida; fingerprint SHA256 `80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA` — conferir contra o `prod-ca-2021.crt` do painel em Database → SSL Configuration quando conveniente).
+- `/opt/kds/docker-compose.override.yml` (**server-side, não versionado**): monta o crt em `/certs/supabase-ca.crt:ro` no app. `/opt/kds/.env`: `DB_SSL_CA_FILE=/certs/supabase-ca.crt`, sem `DB_SSL_REJECT_UNAUTHORIZED`.
+- Log prova: `[db] Usando CA próprio do banco em /certs/supabase-ca.crt` + `✓ Banco de dados conectado`, sem ATENÇÃO.
+
+**Incidente no caminho (lições).**
+- A 1ª senha aplicada não era a do painel → após o restart do Supabase, o loop de restart do app gerou falhas de auth repetidas → Supabase **baniu temporariamente o IPv6 da Oracle** (tela Security do painel). Ação: `docker compose stop app` na hora (evita renovar o ban), desban no painel, revalidação por TCP antes de retomar.
+- Regra nova: **senha nova sempre validada com UMA tentativa manual** (`docker run --rm --env-file ... node -e pg connect SELECT 1`) antes de subir o app — nunca deixar restart-loop tentar senha não confirmada.
+- `.env.bak-20260910` guardado no servidor. Webwright nuvem re-rodado pós-rotação: 6/6 PASS (`outputs/webwright-deploy-nuvem/final_runs/run_2/`), quiosques reconectados sozinhos (heartbeats no log).
+
+## 8. Como retomar (comandos)
 
 ```powershell
 git checkout endurecimento-kds; git log --oneline 17191e4..HEAD  # 16 commits acima
