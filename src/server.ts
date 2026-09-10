@@ -21,6 +21,7 @@ import { registerSocketHandlers } from './socket/handlers';
 import { runCleanup } from './services/cleanup.service';
 import { syncFlexibleProducts } from './services/shift.service';
 import { requireAuth, isKitchenAllowed, isKitchenCookieAllowed } from './middleware/auth';
+import { clientIpFromHeaders } from './middleware/kiosk';
 
 const fastify = Fastify({ logger: true });
 
@@ -74,6 +75,8 @@ const PUBLIC_PATHS = [
 async function cozinhaGuard(request: FastifyRequest, reply: FastifyReply) {
   if (await isKitchenAllowed(request)) return;
   if (await isKitchenCookieAllowed(request)) return;
+  // TEMP-DEBUG (reverter): revela o IP resolvido nas negadas
+  request.log.info(`[cozinhaGuard-negado] xff=${JSON.stringify(request.headers['x-forwarded-for'] ?? null)} ip=${request.ip}`);
   const next = encodeURIComponent(request.url);
   reply.redirect(`/login?next=${next}`);
 }
