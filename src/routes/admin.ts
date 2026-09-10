@@ -8,6 +8,7 @@ import { recomputeStationQueue } from '../services/queue.service';
 import { ensureTodayMenu } from '../services/menu.service';
 import { requireAuth } from '../middleware/auth';
 import { lastHeartbeat } from '../socket/handlers';
+import { clearObservation } from '../services/observation.service';
 
 const PI_ONLINE_MS = 45_000;
 const PI_HOSTS = {
@@ -460,6 +461,8 @@ export default async function adminRoutes(fastify: FastifyInstance) {
       }
       computeDailyScores(demandDate).catch(e => request.log.error(e));
 
+      // Anulada sai do quadro: a observação runtime morre com a demanda.
+      clearObservation(id);
       fastify.io.emit('demand:annulled', updated);
       return updated;
     } catch (error) {
@@ -512,6 +515,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
         client.release();
         if (demand.kitchen_station_id) { recomputeStationQueue(demand.kitchen_station_id).catch((e) => request.log.error(e)); }
         computeDailyScores(demandDate).catch((e) => request.log.error(e));
+        clearObservation(id);
         fastify.io.emit('demand:annulled', annulled);
         return annulled;
       }

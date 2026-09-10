@@ -8,6 +8,7 @@ import { evaluateCookingSla, evaluatePickupSla } from '../services/sla.service';
 import { logDemandEvent } from '../services/demand-events.service';
 import { computeDailyScores } from '../services/performance.service';
 import { requireKitchen } from '../middleware/auth';
+import { setObservation, getObservation, clearObservation } from '../services/observation.service';
 
 // Salão é público (kiosk fixo, sem login): nenhuma rota de demanda exige token,
 // igual às ações da cozinha. Gerente/admin continuam protegidos nas rotas deles.
@@ -32,6 +33,11 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
          WHERE d.status IN ('pending', 'ready')
          ORDER BY d.priority DESC, d.created_at ASC`
       );
+      // Observações vivem só em runtime: mescla o Map em memória nas linhas.
+      for (const d of demands) {
+        const obs = getObservation(d.id);
+        if (obs) d.observation = obs;
+      }
       return demands;
     } catch (error) {
       request.log.error(error);
@@ -52,6 +58,10 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
                (now() AT TIME ZONE 'America/Sao_Paulo')::date
          ORDER BY cancelled_at DESC`
       );
+      for (const d of rows) {
+        const obs = getObservation(d.id);
+        if (obs) d.observation = obs;
+      }
       return rows;
     } catch (error) {
       request.log.error(error);
@@ -106,6 +116,8 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           unit_label: { type: 'string', maxLength: 30 },
           priority: { type: 'string', enum: ['normal', 'urgent'] },
           notes: { type: 'string', maxLength: 500 },
+          // Observação do salão: validada aqui, guardada só em runtime (sem DB).
+          observation: { type: 'string', maxLength: 50 },
           is_replacement: { type: 'boolean' },
           replaced_product_id: { type: 'string' },
         },
@@ -120,9 +132,17 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
         unit_label,
         priority = 'normal',
         notes = null,
+        observation,
         is_replacement,
         replaced_product_id,
       } = request.body;
+
+      // Observação curta do salão: trim, vazio ignora, >50 rejeita em pt-BR.
+      // Nunca entra no INSERT — vive só no Map em memória (sem DB).
+      const observationText = typeof observation === 'string' ? observation.trim() : '';
+      if (observationText.length > 50) {
+        return reply.code(400).send({ error: 'Observação com no máximo 50 caracteres' });
+      }
 
       const products = await query<{
         name: string;
@@ -264,6 +284,13 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
         );
       }
 
+      // Guarda a observação em runtime e acopla ao objeto propagado
+      // (resposta + sockets). Sem ela, o objeto segue puro do banco.
+      if (observationText) setObservation(newDemand.id, observationText);
+      const created: Demand = observationText
+        ? { ...newDemand, observation: observationText }
+        : newDemand;
+
       const station = await query<{ code: string }>(
         'SELECT code FROM kitchen_stations WHERE id = $1',
         [stationIdToStore]
@@ -271,17 +298,17 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
       const room = station.length > 0 ? getStationRoom(station[0].code) : 'cozinha_quente';
 
       const eventName = priority === 'urgent' ? 'demand:urgent' : 'demand:new';
-      fastify.io.to(room).emit(eventName, newDemand);
-      fastify.io.to('salao').emit(eventName, newDemand);
-      fastify.io.to('gerente').emit(eventName, newDemand);
-      fastify.io.to('cozinha').emit(eventName, newDemand);
+      fastify.io.to(room).emit(eventName, created);
+      fastify.io.to('salao').emit(eventName, created);
+      fastify.io.to('gerente').emit(eventName, created);
+      fastify.io.to('cozinha').emit(eventName, created);
       console.log('[Demand] Emitido ' + eventName + ' para salas: ' + room + ', salao, gerente, cozinha');
 
       recomputeStationQueue(stationIdToStore).then(() => {
         fastify.io.emit('demand:queue-updated');
       }).catch((err) => request.log.error(err));
 
-      return reply.code(201).send(newDemand);
+      return reply.code(201).send(created);
     } catch (error) {
       request.log.error(error);
       reply.code(500).send({ error: 'Erro ao criar demanda' });
@@ -347,7 +374,9 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           [id]
         );
         computeDailyScores(new Date(updated.created_at).toISOString().slice(0, 10)).catch(err => request.log.error(err));
-        fastify.io.to('salao').emit('demand:ready', updated);
+        // A demanda continua no quadro: reacopla a observação runtime.
+        const readyOut = getObservation(id) ? { ...updated, observation: getObservation(id) } : updated;
+        fastify.io.to('salao').emit('demand:ready', readyOut);
 
         const station = await query<{ code: string }>(
           'SELECT code FROM kitchen_stations WHERE id = $1',
@@ -357,7 +386,7 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
         fastify.io.to(room).emit('demand:queue-updated');
         fastify.io.to('salao').emit('demand:queue-updated');
 
-        return updated;
+        return readyOut;
       } catch (error) {
         request.log.error(error);
         reply.code(500).send({ error: 'Erro ao marcar demanda como pronta' });
@@ -394,6 +423,8 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
         if (retrievedRows.length === 0) {
           return reply.code(409).send({ error: 'Demanda não está mais pronta para retirada' });
         }
+        // Saiu do quadro: a observação runtime morre com a demanda.
+        clearObservation(id);
         await logDemandEvent(id, 'retrieved', 'salao');
         await evaluatePickupSla(id);
 
@@ -479,6 +510,7 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
         if (!cancelled) {
           return reply.code(409).send({ error: 'Demanda não está mais pendente' });
         }
+        clearObservation(id);
         await logDemandEvent(id, 'cancelled_salao', 'salao', reasonLabel || undefined);
 
         if (demand.kitchen_station_id) {
@@ -581,6 +613,7 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
         if (!cancelled) {
           return reply.code(409).send({ error: 'Demanda não está mais em andamento' });
         }
+        clearObservation(id);
         await logDemandEvent(id, 'cancelled_cozinha', 'cozinha', reasonLabel || undefined);
 
         if (demand.kitchen_station_id) {
@@ -721,6 +754,9 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
 
         computeDailyScores(new Date(updated.created_at).toISOString().slice(0, 10)).catch(err => request.log.error(err));
 
+        // Continua pendente no quadro: reacopla a observação runtime.
+        // (Emitido APÓS o recompute, como exige o fluxo de zeramento.)
+        const stockoutOut = getObservation(id) ? { ...updated, observation: getObservation(id) } : updated;
         const station = updated.kitchen_station_id
           ? await query<{ code: string }>(
               'SELECT code FROM kitchen_stations WHERE id = $1',
@@ -729,12 +765,12 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           : [];
         const room =
           station.length > 0 ? getStationRoom(station[0].code) : 'cozinha_quente';
-        fastify.io.to(room).emit('demand:stockout', updated);
-        fastify.io.to('salao').emit('demand:stockout', updated);
-        fastify.io.to('gerente').emit('demand:stockout', updated);
+        fastify.io.to(room).emit('demand:stockout', stockoutOut);
+        fastify.io.to('salao').emit('demand:stockout', stockoutOut);
+        fastify.io.to('gerente').emit('demand:stockout', stockoutOut);
         fastify.io.emit('demand:queue-updated');
 
-        return updated;
+        return stockoutOut;
       } catch (error) {
         request.log.error(error);
         reply.code(500).send({ error: 'Erro ao reportar zerou' });
