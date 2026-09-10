@@ -201,6 +201,24 @@
         .badge.ready-badge { background: var(--c-accent-warm); color: var(--c-text-invert); }
         .badge.stockout-badge { background: var(--c-warn); color: var(--c-primary); }
         .badge.cancelled-badge { background: var(--c-warn); color: var(--c-primary); }
+        /* Faixa de observação: mesmas cores fixas das cozinhas (âmbar alto
+           contraste, idênticas em todos os temas). No salão o texto é
+           estático com reticências (sem letreiro). */
+        .obs-strip {
+            display: flex; align-items: center; gap: 8px;
+            background: #f59e0b; border: 1px solid #b45309; border-radius: 8px;
+            padding: 8px 10px; margin-top: 8px; overflow: hidden;
+        }
+        .obs-tag {
+            flex: none; background: #1c1005; color: #fbbf24;
+            font-size: 11px; font-weight: 800; letter-spacing: 0.6px;
+            padding: 2px 8px; border-radius: 999px;
+        }
+        .obs-text {
+            flex: 1; min-width: 0; color: #1c1005;
+            font-size: 15px; font-weight: 700; line-height: 1.35;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
         .demand-card.cancelled-notice {
             border: 2px solid var(--c-warn);
             background: var(--alert-warn-bg-dark);
@@ -325,6 +343,11 @@
             <div style="display:flex; gap: 20px; margin-bottom: var(--sp-4);">
                 <label><input type="checkbox" id="isUrgent"> Urgente</label>
                 <label><input type="checkbox" id="isReplacement"> Troca</label>
+            </div>
+            <div style="margin-bottom: var(--sp-4);">
+                <label style="margin-bottom: var(--sp-2);"><input type="checkbox" id="hasObservation"> Observação</label>
+                <input type="text" id="observationInput" maxlength="50" disabled placeholder="Ex.: sem cebola, ponto mal passado" style="margin-bottom: 4px;">
+                <small id="obsCounter" style="font-size: 11px; color: var(--c-text-muted);">0/50</small>
             </div>
             <select id="replacedProduct" style="display:none;"></select>
             <div class="product-search-wrapper" id="replacedSearchWrapper" style="display:none;">
@@ -608,9 +631,14 @@
                 actions = '<button class="retrieve-btn" data-id="' + d.id + '">Retirar</button>';
             }
 
+            var obsHtml = d.observation
+                ? '<div class="obs-strip"><span class="obs-tag">OBS</span><span class="obs-text">' + esc(d.observation) + '</span></div>'
+                : '';
+
             return '<div class="demand-card ' + cls + '">' +
                 '<div class="info">' +
                     '<div class="name">' + qtyText + ' ' + esc(d.product_name) + unitText + ' ' + badges + '</div>' +
+                    obsHtml +
                     '<div class="meta">' + timeAgo(d.created_at) + '</div>' +
                     (d.expected_ready_at ? '<div class="eta">ETA ' + etaDisplay(d.expected_ready_at) + '</div>' : '') +
                 '</div>' +
@@ -1028,8 +1056,7 @@
     }
 
     var isReplacementEl = document.getElementById('isReplacement');
-    if (isReplacementEl) isReplacementEl.addEventListener('change', function() {
-        var select = document.getElementById('replacedProduct');
+    if (isReplacementEl) isReplacementEl.addEventListener('change', function() {        var select = document.getElementById('replacedProduct');
         var wrapper = document.getElementById('replacedSearchWrapper');
         var search = document.getElementById('replacedSearch');
         if (!select || !wrapper) return;
@@ -1044,6 +1071,23 @@
             replaceNoticeId = null;
             replacedDD.close();
         }
+    });
+
+    // Observação: o checkbox libera a caixa de texto + contador 0/50.
+    var hasObsEl = document.getElementById('hasObservation');
+    var obsInputEl = document.getElementById('observationInput');
+    var obsCounterEl = document.getElementById('obsCounter');
+    if (hasObsEl && obsInputEl) hasObsEl.addEventListener('change', function() {
+        obsInputEl.disabled = !this.checked;
+        if (this.checked) {
+            obsInputEl.focus();
+        } else {
+            obsInputEl.value = '';
+            if (obsCounterEl) obsCounterEl.textContent = '0/50';
+        }
+    });
+    if (obsInputEl) obsInputEl.addEventListener('input', function() {
+        if (obsCounterEl) obsCounterEl.textContent = String(obsInputEl.value.length) + '/50';
     });
 
     var demandFormEl = document.getElementById('demandForm');
@@ -1073,6 +1117,12 @@
             var replSelect = document.getElementById('replacedProduct');
             payload.replaced_product_id = replSelect ? replSelect.value : '';
         }
+        var hasObs = document.getElementById('hasObservation');
+        var obsInput = document.getElementById('observationInput');
+        if (hasObs && hasObs.checked && obsInput) {
+            var obsText = obsInput.value ? obsInput.value.trim() : '';
+            if (obsText) payload.observation = obsText;
+        }
         if (btn) {
             btn.disabled = true;
             btn.textContent = 'Enviando...';
@@ -1092,6 +1142,12 @@
             }
             document.getElementById('quantity').value = 1;
             document.getElementById('isUrgent').checked = false;
+            var hasObsReset = document.getElementById('hasObservation');
+            if (hasObsReset) hasObsReset.checked = false;
+            var obsInputReset = document.getElementById('observationInput');
+            if (obsInputReset) { obsInputReset.value = ''; obsInputReset.disabled = true; }
+            var obsCounterReset = document.getElementById('obsCounter');
+            if (obsCounterReset) obsCounterReset.textContent = '0/50';
             var searchInput = document.getElementById('productSearch');
             if (searchInput) searchInput.value = '';
             var productSelectMain = document.getElementById('productSelect');
