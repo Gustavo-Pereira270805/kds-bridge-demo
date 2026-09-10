@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import Fastify from 'fastify';
+import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import { Server } from 'socket.io';
@@ -20,7 +20,7 @@ import adminRoutes from './routes/admin';
 import { registerSocketHandlers } from './socket/handlers';
 import { runCleanup } from './services/cleanup.service';
 import { syncFlexibleProducts } from './services/shift.service';
-import { requireAuth } from './middleware/auth';
+import { requireAuth, isKitchenAllowed } from './middleware/auth';
 
 const fastify = Fastify({ logger: true });
 
@@ -64,8 +64,16 @@ const PUBLIC_PATHS = [
 
 // O hook onRequest global foi removido.
 // A autenticação é imposta por rota através do `preHandler: requireRole(...)`
-// As rotas e views da cozinha e do salão são públicas (kiosks fixos, sem login);
-// gerente/admin seguem protegidos.
+// As views da cozinha exigem gerente/admin (ou IP de quiosque liberado);
+// o salão segue público (kiosk fixo, sem login); gerente/admin seguem protegidos.
+
+// Guarda das cozinhas: quiosque liberado ou gerente/admin passam;
+// qualquer outro visitante é redirecionado ao login (com volta via ?next=).
+async function cozinhaGuard(request: FastifyRequest, reply: FastifyReply) {
+  if (await isKitchenAllowed(request)) return;
+  const next = encodeURIComponent(request.url);
+  reply.redirect(`/login?next=${next}`);
+}
 
 function getView(filename: string): string {
   return fs.readFileSync(path.join(__dirname, 'views', filename), 'utf8');
@@ -88,15 +96,15 @@ fastify.get('/salao', async (_request, reply) => {
   return reply.type('text/html').send(getView('salao.html'));
 });
 
-fastify.get('/cozinha', async (_request, reply) => {
+fastify.get('/cozinha', { preHandler: cozinhaGuard }, async (_request, reply) => {
   return reply.type('text/html').send(getView('cozinha.html'));
 });
 
-fastify.get('/cozinha-quente', async (_request, reply) => {
+fastify.get('/cozinha-quente', { preHandler: cozinhaGuard }, async (_request, reply) => {
   return reply.type('text/html').send(getView('cozinha-quente.html'));
 });
 
-fastify.get('/cozinha-fria', async (_request, reply) => {
+fastify.get('/cozinha-fria', { preHandler: cozinhaGuard }, async (_request, reply) => {
   return reply.type('text/html').send(getView('cozinha-fria.html'));
 });
 
