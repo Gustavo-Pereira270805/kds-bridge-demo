@@ -63,3 +63,50 @@ O `GET /demands` continua público porque o salão o usa sem login. Logo, o JSON
 ## 9. Fora de escopo
 
 - Login no salão; fechar o `GET /demands`; tokens de quiosque; novos papéis; mudar RBAC/CORS/fila/SLA; `avahi`/`.local` nos Pis.
+
+---
+
+## Anexo H — Handoff para sessão limpa (vale como contexto completo)
+
+> Escrito em 2026-09-10 ~01:50 BRT para retomar este trabalho após compactação. Uma sessão nova deve conseguir executar o plano só com este arquivo + `docs/superpowers/plans/2026-09-10-cozinha-auth.md`.
+
+### H.1. Onde estamos
+
+- Repo: `C:\Users\Milena\OneDrive\Documentos\programas\KDS_demo`, branch `main` em `207120d` (push feito). **Nada da spec foi implementado**; a branch `feature/cozinha-auth` **ainda não existe** — criá-la é o passo 0 do plano.
+- Produção (Oracle `163.176.208.86`, `/opt/kds`): roda o build do monitoramento (`6e46290`); os commits de docs posteriores (`9df1ae5`, `207120d`) ainda não tiveram `pull` lá (são só docs — entram no próximo deploy sem rebuild dedicado).
+- Ambiente local: `.env` → banco local (container `kds-db-local`, Postgres 16); dev `npm run dev` na porta 3000 (provável rodando — conferir, matar PID preso e reiniciar antes de testar).
+- Plano de implementação: `docs/superpowers/plans/2026-09-10-cozinha-auth.md` (6 tarefas, com código literal e comandos). Registro geral do projeto: `docs/DEPLOY_ENDURECIMENTO_KDS_2026-09-09.md`.
+
+### H.2. Decisões travadas (não reabrir sem motivo)
+
+1. Escopo = só as 3 cozinhas; salão intocado.
+2. Acesso humano = login **gerente/admin** existente (usuário de teste gerente documentado em `docs/HANDOFF_2026-09-05-lote2.md` §Ambiente + `outputs/verificacao-6-itens/final_runs/run_1/final_script.py:15-16`). Nenhum usuário novo — Supabase com criação por e-mail bloqueada (bounces).
+3. Bypass = **só os 2 IPs Tailscale**: `100.114.73.108` (kds-fria-1), `100.82.174.3` (kds-quente-1). Sem rede local.
+4. `GET /demands` segue público (salão usa) — limitação consciente da §5.
+5. Alerta do monitoramento → webhook no celular (usuário configura `KDS_ALERT_WEBHOOK` depois); heartbeat → monitor externo (usuário cria depois). Itens 3–4 da §10 da spec de monitoramento seguem abertos (`avahi`, horário de fechamento).
+
+### H.3. Acessos e segredos (onde estão, nunca os valores)
+
+- SSH Oracle: `ssh -i C:\Users\Milena\.ssh\kds_oracle ubuntu@163.176.208.86` (nativo tem bug hostbound — preferir `scripts/ssh-kds.bat` ou paramiko como `scripts/restart-kds.bat`). Na VM: `sudo -n docker compose ...` (usuário fora do grupo docker de propósito).
+- Pis via Tailscale: `framboa@100.114.73.108` / `framboa@100.82.174.3`, senha no cofre do dono (sessão anterior usou e funcionou). VNC só via túnel (`docs/VNC_KDS.md`).
+- Produção server-side (fora do git, já aplicados): `/opt/kds/.env` com `DATABASE_URL` nova + `DB_SSL_CA_FILE=/certs/supabase-ca.crt` (sem bypass); `/opt/kds/certs/supabase-ca-2021.crt`; `/opt/kds/docker-compose.override.yml` (monta o crt). Backup: `/opt/kds/.env.bak-20260910`.
+- Conta gerente de teste: ver arquivos citados em H.2 (não colar senha em chat/log).
+
+### H.4. Como retomar (comandos)
+
+```powershell
+git checkout -b feature/cozinha-auth main
+docker start kds-db-local  # se ECONNREFUSED 5432 (abrir o Docker Desktop antes)
+npx tsc --noEmit; npm run dev  # porta 3000
+curl.exe http://127.0.0.1:3000/health  # {"status":"ok",...}
+```
+
+### H.5. Gotchas do ambiente (aprendidos na marra)
+
+- `npx ts-node --transpile-only` quebrado (TS5107/TS5109); harnesses em `curl.exe`/`.mjs`/`.py`, nunca `node -e`.
+- Playwright: SÓ `C:\Users\Milena\AppData\Local\Programs\Python\Python313\python.exe` + **Chromium** (viewport 1280x1800, nunca `full_page`).
+- Python local não reconhece o cert público (`certificate expired`, vale até 01/12/2026): API via `ssl._create_unverified_context()`, Playwright com `ignore_https_errors`.
+- `$pid` é reservado no PowerShell; porta 3000 costuma ficar presa (`taskkill /PID <pid> /F`).
+- Sem `pool.on('error')` o Node morria ao perder o banco — já corrigido em `main` (commit `7ca6b01`); `/ready` agora responde 503 em vez de matar o processo.
+- Nunca `docker compose up` local com DOMAIN real (dispara ACME de verdade); nunca `DELETE` em demandas (anular via API); anular só vale no mesmo dia; `cancel-salao` só em `pending`.
+- Evidências de teste em `outputs/<tarefa>/final_runs/run_N/` (gitignored); ler PNGs com a ferramenta Read para auto-verificação.
