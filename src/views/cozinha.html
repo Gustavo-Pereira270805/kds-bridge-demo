@@ -58,6 +58,34 @@
             color: var(--c-danger); margin-bottom: var(--sp-1);
         }
 
+        /* Faixa de observação do salão: cores FIXAS (âmbar alto contraste),
+           idênticas nos temas escuro/claro/jantar. Posição fixa no card:
+           sempre abaixo do nome do produto. */
+        .obs-strip {
+            display: flex; align-items: center; gap: 8px;
+            background: #f59e0b; border: 1px solid #b45309; border-radius: 8px;
+            padding: 8px 10px; margin: 8px 0; overflow: hidden;
+        }
+        .obs-tag {
+            flex: none; background: #1c1005; color: #fbbf24;
+            font-size: 11px; font-weight: 800; letter-spacing: 0.6px;
+            padding: 2px 8px; border-radius: 999px;
+            position: relative; z-index: 1;
+        }
+        .obs-text {
+            flex: 1; min-width: 0; color: #1c1005;
+            font-size: 15px; font-weight: 700; line-height: 1.35;
+            white-space: nowrap; overflow: hidden;
+        }
+        .obs-text.marquee { animation: obsMarquee 7s linear infinite; }
+        @keyframes obsMarquee {
+            0% { transform: translateX(0); }
+            12% { transform: translateX(0); }
+            88% { transform: translateX(calc(-100% + 120px)); }
+            100% { transform: translateX(calc(-100% + 120px)); }
+        }
+        @media (prefers-reduced-motion: reduce) { .obs-text.marquee { animation: none; } }
+
         .card .card-top { display: flex; align-items: flex-start; gap: var(--sp-3); }
 
         .card .qty {
@@ -387,6 +415,7 @@
                 const unitText = d.unit_label ? `<span class="unit-label">(${esc(d.unit_label)})</span>` : '';
                 const cookingBadge = d.cooking_started ? `<span class="cooking-badge">EM PREPARO</span>` : '';
                 const urgentLabel = d.priority === 'urgent' ? `<div class="urgent-label">URGENTE</div>` : '';
+                const obsHtml = d.observation ? `<div class="obs-strip"><span class="obs-tag">OBS</span><span class="obs-text">${esc(d.observation)}</span></div>` : '';
 
                 const pct = calcProgress(d.created_at, d.expected_ready_at);
                 let progressBar = '';
@@ -402,6 +431,7 @@
                         <div class="qty">${d.quantity}x</div>
                         <div class="product-info">
                             <div class="name">${esc(d.product_name)}${unitText}</div>
+                            ${obsHtml}
                             ${cookingBadge}
                         </div>
                     </div>
@@ -428,6 +458,11 @@
             } else {
                 readyStrip.innerHTML = '';
             }
+
+            // Letreiro: só anima a observação que transborda a faixa.
+            grid.querySelectorAll('.obs-text').forEach(function(el) {
+                if (el.scrollWidth > el.clientWidth + 2) el.classList.add('marquee');
+            });
 
             if (timeInterval) clearInterval(timeInterval);
             timeInterval = setInterval(() => {
