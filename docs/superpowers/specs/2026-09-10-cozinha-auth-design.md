@@ -124,3 +124,9 @@ curl.exe http://127.0.0.1:3000/health  # {"status":"ok",...}
 1. **URL errada:** quiosques apontavam para o domínio público → Caddy via o egress da internet. Correção: `SRC="http://100.81.149.114"` nos `~/kds-kiosk.sh` + vhost `http://100.81.149.114` no Caddyfile.
 2. **IP mascarado:** com o userland-proxy do Docker (padrão), o Caddy via TODAS as conexões como `172.18.0.1` (provado com log temporário, depois revertido) — o bypass nunca dispararia por URL alguma. Correção server-side: `/etc/docker/daemon.json` com `"userland-proxy": false` + `systemctl restart docker` (containers `unless-stopped` voltam sozinhos; healthy em ~1min).
 - Verificação final: curl do Pi → 200 na tailnet / 302 no público; reboot dos 2 Pis → Chromium quiosque na URL tailnet + screenshots dos quadros abertos.
+
+### H.7. Ponto de partida para a próxima feature (salão)
+
+- `main@49a3bfb`, produção com o mesmo build (bridge healthy, 0 erros). Salão 100% intocado por este trabalho: view `/salao` pública, `POST /demands`, `PATCH /:id/retrieve`, `cancel-salao`, `zerou/dispensar`, sala socket `salao`, `GET /demands` público.
+- Conta de teste gerente e padrões de E2E (CPs, `WW-` + anular, screenshots 1280x1800 sem `full_page`) em `outputs/webwright-cozinha-auth/final_runs/run_1/final_script.py` + `fase_b.py` e `run_2/` (nuvem) — reutilizar como molde.
+- Pendências externas em aberto (não bloquear a feature): `KDS_ALERT_WEBHOOK` + monitor externo do `/ready` (usuário configura); pergunta `avahi`/`.local`; horário de fechamento da cozinha.
