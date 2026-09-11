@@ -99,6 +99,21 @@ fastify.get('/salao', async (_request, reply) => {
   return reply.type('text/html').send(getView('salao.html'));
 });
 
+// Favicon (logo Framboá): lido do disco a cada request, como as views —
+// troca o arquivo em dev sem restart. O /favicon.ico cobre o pedido
+// automático dos navegadores; o /favicon.jpg é o alvo do <link rel="icon">.
+const FAVICON_PATH = path.join(__dirname, 'views', 'favicon.jpg');
+for (const rota of ['/favicon.ico', '/favicon.jpg']) {
+  fastify.get(rota, async (_request, reply) => {
+    try {
+      const buf = fs.readFileSync(FAVICON_PATH);
+      return reply.type('image/jpeg').header('Cache-Control', 'public, max-age=86400').send(buf);
+    } catch {
+      return reply.code(404).send({ error: 'Favicon não encontrado' });
+    }
+  });
+}
+
 fastify.get('/cozinha', { preHandler: cozinhaGuard }, async (_request, reply) => {
   return reply.type('text/html').send(getView('cozinha.html'));
 });
