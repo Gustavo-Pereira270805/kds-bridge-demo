@@ -2,6 +2,14 @@ import { FastifyInstance } from 'fastify';
 import { query, pool } from '../db/client';
 import { DailyMenu, Demand, Menu, PiAction, PiTarget, Product } from '../types';
 import { runCleanup, getRetentionDays } from '../services/cleanup.service';
+import {
+  activateDinnerShift,
+  getDinnerAutoConfig,
+  isValidDinnerAutoTime,
+  setDinnerAutoEnabled,
+  setDinnerAutoTime,
+  todaySP,
+} from '../services/shift.service';
 import { logDemandEvent } from '../services/demand-events.service';
 import { computeDailyScores, getWeights } from '../services/performance.service';
 import { recomputeStationQueue } from '../services/queue.service';
@@ -638,106 +646,21 @@ export default async function adminRoutes(fastify: FastifyInstance) {
   });
 
   // Turno jantar: ativação com transferência de pendências do almoço
+  // (lógica em activateDinnerShift — o agendador automático usa a mesma função)
   fastify.post('/shift/dinner', async (request, reply) => {
-    const client = await pool.connect();
     try {
-      const dailyMenuId = await ensureTodayMenu();
-
-      const { rows: stationRows } = await client.query<{ id: string }>(
-        `SELECT id FROM kitchen_stations WHERE code = 'jantar'`
+      const result = await activateDinnerShift(
+        'manual',
+        (event, payload) => fastify.io.emit(event, payload),
+        (e) => request.log.error(e),
       );
-      if (stationRows.length === 0) {
-        client.release();
-        return reply.code(500).send({ error: 'Estação jantar não encontrada' });
-      }
-      const jantarId = stationRows[0].id;
-
-      const today = (await client.query<{ today: string }>(`SELECT CURRENT_DATE::text AS today`)).rows[0].today;
-
-      await client.query('BEGIN');
-
-      // Produtos flexíveis: ficam no quente no almoço e migram para jantar no turno noturno
-      await client.query(
-        `UPDATE products SET kitchen_station_id = $1
-         WHERE name = ANY($2::text[]) AND kitchen_station_id <> $1`,
-        [jantarId, ['INHAME COZIDO', 'DEL\u00CDCIA DE PEIXE', 'DEL\u00CDCIA DE FRANGO']]
-      );
-
-      const { rows: addedRows } = await client.query(
-        `INSERT INTO daily_menu_overrides (daily_menu_id, product_id, action, reason)
-         SELECT $1, p.id, 'add', 'Turno jantar ativado'
-         FROM products p
-         WHERE p.active = true AND p.kitchen_station_id = $2
-         ON CONFLICT (daily_menu_id, product_id) DO NOTHING
-         RETURNING id`,
-        [dailyMenuId, jantarId]
-      );
-
-      const { rows: sourceRows } = await client.query<{ kitchen_station_id: string | null }>(
-        `SELECT DISTINCT kitchen_station_id FROM demands
-         WHERE status = 'pending' AND created_at::date = $1 AND kitchen_station_id <> $2`,
-        [today, jantarId]
-      );
-
-      const { rows: countRows } = await client.query<{ cnt: string }>(
-        `SELECT COUNT(*)::int AS cnt FROM demands
-         WHERE status = 'pending' AND created_at::date = $1 AND kitchen_station_id <> $2`,
-        [today, jantarId]
-      );
-      const pendingLunchDemands = parseInt(countRows[0].cnt, 10);
-
-      const { rows: transferred } = await client.query<{ id: string }>(
-        `UPDATE demands SET origin_station_id = COALESCE(origin_station_id, kitchen_station_id), kitchen_station_id = $1
-         WHERE status = 'pending' AND created_at::date = $2 AND kitchen_station_id <> $1
-         RETURNING id`,
-        [jantarId, today]
-      );
-
-      for (const t of transferred) {
-        await client.query(
-          `INSERT INTO demand_events (demand_id, event_type, actor, notes)
-           VALUES ($1, 'shift_transfer', 'sistema',
-             'Transferida para a Cozinha Jantar na ativação do turno jantar')`,
-          [t.id]
-        );
-      }
-
-      await client.query(
-        `INSERT INTO system_settings (key, value) VALUES ('shift_dinner_active_date', $1)
-         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-        [today]
-      );
-      await client.query(
-        `INSERT INTO system_settings (key, value) VALUES ('shift_dinner_started_at', now()::text)
-         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`
-      );
-
-      await client.query('COMMIT');
-      client.release();
-
-      await recomputeStationQueue(jantarId);
-      for (const s of sourceRows) {
-        if (s.kitchen_station_id && s.kitchen_station_id !== jantarId) {
-          await recomputeStationQueue(s.kitchen_station_id);
-        }
-      }
-      computeDailyScores(today).catch((e) => request.log.error(e));
-
-      fastify.io.emit('menu:updated', { date: today, shift: 'dinner' });
-      fastify.io.emit('shift:updated', { shift: 'dinner' });
-      fastify.io.emit('demand:queue-updated');
-
-      return {
-        shift: 'dinner' as const,
-        added_products: addedRows.length,
-        transferred_demands: transferred.length,
-        pending_lunch_demands: pendingLunchDemands,
-      };
+      return result;
     } catch (error) {
-      await client.query('ROLLBACK').catch((e) => request.log.error(e));
-      client.release();
       request.log.error(error);
-      reply.code(500).send({ error: 'Erro ao ativar turno jantar' });
+      const message = error instanceof Error && error.message
+        ? error.message
+        : 'Erro ao ativar turno jantar';
+      reply.code(500).send({ error: message });
     }
   });
 
@@ -760,7 +683,8 @@ export default async function adminRoutes(fastify: FastifyInstance) {
       const jantarId = jantarRows[0].id;
       const quenteAId = quenteARows[0].id;
 
-      const today = (await client.query<{ today: string }>(`SELECT CURRENT_DATE::text AS today`)).rows[0].today;
+      // Dia canônico em America/Sao_Paulo (mesmo da ativação — ver shift.service.ts).
+      const today = await todaySP();
 
       await client.query('BEGIN');
 
@@ -839,6 +763,46 @@ export default async function adminRoutes(fastify: FastifyInstance) {
       client.release();
       request.log.error(error);
       reply.code(500).send({ error: 'Erro ao encerrar turno jantar' });
+    }
+  });
+
+  // Jantar automático: leitura do estado (hora, ON/OFF do dia, disparo, turno).
+  fastify.get('/settings/dinner-auto', async (request, reply) => {
+    try {
+      return await getDinnerAutoConfig();
+    } catch (error) {
+      request.log.error(error);
+      reply.code(500).send({ error: 'Erro ao buscar jantar automático' });
+    }
+  });
+
+  // Jantar automático: atualiza horário e/ou ON/OFF do dia. Emite dinner:auto-updated.
+  fastify.put<{
+    Body: { time?: string; enabled?: boolean }
+  }>('/settings/dinner-auto', async (request, reply) => {
+    try {
+      const body = request.body || {};
+      if (body.time !== undefined) {
+        if (!isValidDinnerAutoTime(body.time)) {
+          return reply.code(400).send({ error: 'Horário inválido: use HH:MM entre 00:00 e 23:59' });
+        }
+        await setDinnerAutoTime(body.time);
+      }
+      if (body.enabled !== undefined) {
+        if (typeof body.enabled !== 'boolean') {
+          return reply.code(400).send({ error: 'enabled deve ser true ou false' });
+        }
+        await setDinnerAutoEnabled(body.enabled);
+      }
+      const cfg = await getDinnerAutoConfig();
+      fastify.io.emit('dinner:auto-updated', cfg);
+      return cfg;
+    } catch (error) {
+      request.log.error(error);
+      const message = error instanceof Error && error.message
+        ? error.message
+        : 'Erro ao salvar jantar automático';
+      reply.code(500).send({ error: message });
     }
   });
 

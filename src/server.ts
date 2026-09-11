@@ -19,7 +19,7 @@ import unitsRoutes from './routes/units';
 import adminRoutes from './routes/admin';
 import { registerSocketHandlers } from './socket/handlers';
 import { runCleanup } from './services/cleanup.service';
-import { syncFlexibleProducts } from './services/shift.service';
+import { syncFlexibleProducts, maybeAutoActivateDinner } from './services/shift.service';
 import { requireAuth, isKitchenAllowed, isKitchenCookieAllowed } from './middleware/auth';
 
 const fastify = Fastify({ logger: true });
@@ -230,6 +230,7 @@ const start = async () => {
     await syncFlexibleProducts().catch(err => fastify.log.error('[Shift] Erro ao sincronizar produtos flexíveis (não crítico): ' + String(err)));
     await fastify.listen({ port: PORT, host: '0.0.0.0' });
     scheduleDailyCleanup();
+    scheduleDinnerAuto();
     console.log('┌─────────────────────────────────────────┐');
     console.log('│         KDS Bridge — Servidor (v2.5)    │');
     console.log(`│  HTTP  →  http://0.0.0.0:${PORT}            │`);
@@ -283,6 +284,23 @@ async function seedDatabase() {
       await client.query(
         `INSERT INTO system_settings (key, value)
          VALUES ('shift_dinner_active_date', '')
+         ON CONFLICT (key) DO NOTHING`
+      );
+      // Espelho da migration dinner-auto: horário configurável + flags diárias
+      // (spec docs/superpowers/specs/2026-09-11-jantar-auto-design.md).
+      await client.query(
+        `INSERT INTO system_settings (key, value)
+         VALUES ('dinner_auto_time', '15:00')
+         ON CONFLICT (key) DO NOTHING`
+      );
+      await client.query(
+        `INSERT INTO system_settings (key, value)
+         VALUES ('dinner_auto_disabled_date', '')
+         ON CONFLICT (key) DO NOTHING`
+      );
+      await client.query(
+        `INSERT INTO system_settings (key, value)
+         VALUES ('dinner_auto_fired_date', '')
          ON CONFLICT (key) DO NOTHING`
       );
       // Rastreia a estação de origem nas transferências do turno jantar (reversão correta)
@@ -531,6 +549,24 @@ async function runCleanupJob() {
   } catch (err) {
     console.error('[Cleanup] Erro na limpeza automática (não crítico):', err);
   }
+}
+
+// Jantar automático: tick de 60s no fuso America/Sao_Paulo (lógica em shift.service.ts).
+// Idempotente no dia via dinner_auto_fired_date; o primeiro tick após o boot cobre
+// o catch-up quando o servidor volta depois do horário configurado.
+function scheduleDinnerAuto() {
+  const tick = () => {
+    maybeAutoActivateDinner(
+      (event, payload) => io.emit(event, payload),
+      (err) => fastify.log.error(err),
+    ).then(({ fired, result }) => {
+      if (fired && result) {
+        console.log(`[JantarAuto] Turno jantar ativado automaticamente (${result.transferred_demands} transferida(s)).`);
+      }
+    }).catch((err) => fastify.log.error('[JantarAuto] Erro no tick (não crítico): ' + String(err)));
+  };
+  setInterval(tick, 60 * 1000).unref();
+  setTimeout(tick, 15 * 1000).unref();
 }
 
 start();

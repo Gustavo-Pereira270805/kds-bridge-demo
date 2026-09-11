@@ -93,6 +93,23 @@ export interface StartDinnerResponse {
   pending_lunch_demands: number;
 }
 
+// Jantar automático (spec 2026-09-11-jantar-auto-design.md)
+export type DinnerTrigger = 'manual' | 'auto';
+
+export interface DinnerActivationResult extends StartDinnerResponse {
+  trigger: DinnerTrigger;
+}
+
+export interface DinnerAutoConfig {
+  time: string;
+  enabled: boolean;
+  fired: boolean;
+  shift: 'lunch' | 'dinner';
+  today: string;
+  now: string;
+  timeSource: string;
+}
+
 export interface DailyMenuEffective {
   date: string;
   daily_menu_id: string;

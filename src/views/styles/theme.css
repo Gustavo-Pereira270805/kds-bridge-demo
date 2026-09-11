@@ -433,6 +433,26 @@ body {
   font-weight: var(--fw-bold);
 }
 
+/* === Botão jantar automático (gerente) — pequeno, ao lado do manual === */
+.btn-dinner-auto {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 32px; padding: 4px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--c-accent-warm);
+  background: transparent;
+  color: var(--c-text-body);
+  font-size: 0.75rem; font-weight: var(--fw-semi);
+  cursor: pointer; font-family: inherit;
+  transition: all var(--t-fast) var(--ease-out);
+}
+.btn-dinner-auto:hover { background: rgba(16, 185, 129, 0.12); }
+.btn-dinner-auto .dinner-auto-dot {
+  width: 10px; height: 10px; flex: none; border-radius: 50%;
+  border: 2px solid var(--c-accent-warm);
+  background: transparent;
+}
+.btn-dinner-auto[aria-pressed="true"] .dinner-auto-dot { background: var(--c-accent-warm); }
+
 .badge-dinner {
   background: #d4a574;
   color: #141218;

@@ -190,6 +190,7 @@
         <button class="tab" onclick="switchTab('reasons')">Motivos Cancelamento</button>
         <button class="tab" onclick="switchTab('weights')">Critérios de Avaliação</button>
         <button class="tab" onclick="switchTab('pis')">Controle de Pis</button>
+        <button class="tab" onclick="switchTab('turno')">Turno Jantar</button>
     </div>
 
     <!-- Painel: Produtos -->
@@ -353,6 +354,27 @@
       </div>
     </div>
 
+    <!-- Painel: Turno Jantar Automático -->
+    <div id="panel-turno" class="panel">
+         <h2>Turno Jantar Automático</h2>
+         <p style="color:var(--c-text-secondary); font-size:14px; margin-bottom: 24px;">
+             Horário em que o turno jantar ativa sozinho (fuso America/Sao_Paulo). O botão do /gerente mostra este horário no rótulo.
+        </p>
+         <div style="max-width: 620px; display: flex; flex-direction: column; gap: 14px;">
+             <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                 <label for="dinnerAutoTime" style="flex:1; font-weight:600; color:var(--c-text-body);">Horário do Jantar Auto</label>
+                 <input type="time" id="dinnerAutoTime" class="sla-input" style="width:110px;" value="15:00">
+            </div>
+             <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                 <span style="flex:1; font-weight:600; color:var(--c-text-body);">Estado de hoje</span>
+                 <span id="dinnerAutoState" style="font-size:14px; color:var(--c-text-secondary);">Carregando...</span>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:8px;">
+                <button class="btn-success" onclick="saveDinnerAutoTime()">Salvar Horário</button>
+           </div>
+       </div>
+   </div>
+
 <script>
 if (!kdsGuard()) throw new Error('redirecionando para login');
 (function () {
@@ -439,6 +461,7 @@ function switchTab(name) {
     if (name === 'reasons') loadReasons();
     if (name === 'weights') loadWeights();
     if(name==='pis'){ /* nada a carregar, heartbeat cuida */ }
+    if (name === 'turno') loadDinnerAutoSettings();
 }
 
 // === PESOS DE PERFORMANCE ===
@@ -466,6 +489,40 @@ function saveWeights() {
         body: JSON.stringify(body)
     }).then(function(data) {
         toast('Pesos salvos! As notas de todas as datas serão recalculadas.', true);
+    }).catch(function(err) { toast(err.message, false); });
+}
+
+// === TURNO JANTAR AUTOMÁTICO ===
+function renderDinnerAutoState(data) {
+    var input = document.getElementById('dinnerAutoTime');
+    if (input && data && typeof data.time === 'string' && data.time) input.value = data.time;
+    var el = document.getElementById('dinnerAutoState');
+    if (!el) return;
+    if (!data) { el.textContent = 'Falha ao carregar.'; return; }
+    var parts = [];
+    parts.push(data.enabled ? 'Auto ON' : 'Auto OFF hoje');
+    parts.push(data.fired ? 'já disparou' : 'ainda não disparou');
+    parts.push('turno: ' + (data.shift === 'dinner' ? 'jantar' : 'almoço'));
+    el.textContent = parts.join(' · ');
+}
+
+function loadDinnerAutoSettings() {
+    api('/api/v1/admin/settings/dinner-auto').then(function(data) {
+        renderDinnerAutoState(data);
+    }).catch(function(err) { toast(err.message, false); });
+}
+
+function saveDinnerAutoTime() {
+    var input = document.getElementById('dinnerAutoTime');
+    var time = input ? input.value : '';
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) { toast('Horário inválido: use HH:MM entre 00:00 e 23:59.', false); return; }
+    api('/api/v1/admin/settings/dinner-auto', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ time: time })
+    }).then(function(data) {
+        renderDinnerAutoState(data);
+        toast('Horário do jantar automático salvo: ' + data.time + '.', true);
     }).catch(function(err) { toast(err.message, false); });
 }
 
@@ -907,6 +964,7 @@ socket.on('pi:heartbeat', (data)=>{
   _piLast[key] = new Date(data.at).getTime();
   setPiBadge(key, true, data.at);
 });
+socket.on('dinner:auto-updated', function(data) { renderDinnerAutoState(data); });
 setInterval(function(){
   const now = Date.now();
   // se sem heartbeat há 45s, marcar offline
