@@ -224,24 +224,39 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
       // transferência da ativação (POST /admin/shift/dinner, que leva TODAS
       // as pendências para o jantar): assume o jantar e preserva a origem
       // para a reversão no encerramento.
+      // Pré-jantar (espelho): produto do jantar pedido ainda no almoço cai
+      // na Cozinha Quente A — a coluna do jantar fica oculta no almoço e a
+      // demanda sumiria no mesmo limbo. Preserva a origem (jantar) para que
+      // a ativação do turno leve a pendência para o jantar junto com as demais.
       let stationIdToStore: string = product.kitchen_station_id;
       let originStationIdToStore: string | null = null;
-      let routedToDinner = false;
+      let transferNote: string | null = null;
       try {
-        if ((await getCurrentShift()) === 'dinner') {
-          const [productStation] = await query<{ code: string }>(
-            'SELECT code FROM kitchen_stations WHERE id = $1',
-            [product.kitchen_station_id]
-          );
-          if (productStation && productStation.code !== 'jantar') {
+        const shift = await getCurrentShift();
+        const [productStation] = await query<{ code: string }>(
+          'SELECT code FROM kitchen_stations WHERE id = $1',
+          [product.kitchen_station_id]
+        );
+        const productCode = productStation?.code;
+        if (shift === 'dinner') {
+          if (productCode && productCode !== 'jantar') {
             const jantar = await query<{ id: string }>(
               `SELECT id FROM kitchen_stations WHERE code = 'jantar'`
             );
             if (jantar.length > 0 && jantar[0].id !== product.kitchen_station_id) {
               originStationIdToStore = product.kitchen_station_id;
               stationIdToStore = jantar[0].id;
-              routedToDinner = true;
+              transferNote = 'Roteada para a Cozinha Jantar (pedido de outra estação criado no turno jantar)';
             }
+          }
+        } else if (productCode === 'jantar') {
+          const quenteA = await query<{ id: string }>(
+            `SELECT id FROM kitchen_stations WHERE code = 'quente_a'`
+          );
+          if (quenteA.length > 0 && quenteA[0].id !== product.kitchen_station_id) {
+            originStationIdToStore = product.kitchen_station_id;
+            stationIdToStore = quenteA[0].id;
+            transferNote = 'Roteada para a Cozinha Quente A (produto do jantar pedido antes do turno jantar)';
           }
         }
       } catch (err) {
@@ -275,12 +290,12 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
       );
 
       await logDemandEvent(newDemand.id, 'created', 'salao');
-      if (routedToDinner) {
+      if (transferNote) {
         await logDemandEvent(
           newDemand.id,
           'shift_transfer',
           'sistema',
-          'Roteada para a Cozinha Jantar (pedido de outra estação criado no turno jantar)'
+          transferNote
         );
       }
 
