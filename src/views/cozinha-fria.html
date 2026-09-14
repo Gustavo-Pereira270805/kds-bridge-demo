@@ -23,14 +23,14 @@
 
         .reconnect-banner {
             display: none; background: var(--c-warn); color: #111;
-            text-align: center; padding: 8px 16px; font-weight: 700; font-size: 14px;
+            text-align: center; padding: 10px 16px; font-weight: 700; font-size: 16px;
             position: fixed; top: 0; left: 0; right: 0; z-index: 999;
         }
 
         #globalTimer {
             position: fixed; top: 12px; right: 16px; z-index: 998;
-            font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums;
-            padding: 6px 16px; border-radius: 10px; background: rgba(0,0,0,0.55);
+            font-size: 40px; font-weight: 800; font-variant-numeric: tabular-nums;
+            padding: 12px 24px; border-radius: 12px; background: rgba(0,0,0,0.55);
             border: 2px solid var(--c-border-dark-cold); color: #5a6a8a; letter-spacing: 2px;
         }
         #globalTimer.t-green { color: var(--c-accent-warm); border-color: var(--c-accent-warm); }
@@ -38,8 +38,8 @@
         #globalTimer.t-red { color: var(--c-danger); border-color: var(--c-danger); }
         #globalTimer.t-urgent { animation: timerPulse 1s infinite; }
         .card-timer {
-            font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums;
-            color: #5a6a8a; margin-top: 6px; letter-spacing: 1px;
+            font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums;
+            color: #8fa3c7; margin-top: 8px; letter-spacing: 1px;
         }
         .card-timer.t-green { color: var(--c-accent-warm); }
         .card-timer.t-orange { color: var(--c-warn); }
@@ -48,26 +48,26 @@
 
         #crossCancelToast {
             display: none; position: fixed; top: 70px; left: 50%; transform: translateX(-50%);
-            z-index: 1200; background: var(--c-danger); color: #fff; font-size: 17px; font-weight: 800;
-            padding: 14px 24px; border-radius: 10px; border: 2px solid #ff8080;
+            z-index: 1200; background: var(--c-danger); color: #fff; font-size: 20px; font-weight: 800;
+            padding: 18px 28px; border-radius: 10px; border: 2px solid #ff8080;
             box-shadow: 0 8px 30px rgba(230,57,70,0.5); text-align: center; max-width: 90%;
         }
 
         h1 {
-            font-size: 18px; font-weight: 800; margin-bottom: 20px; text-align: center;
+            font-size: 28px; font-weight: 800; margin-bottom: 24px; text-align: center;
             text-transform: uppercase; letter-spacing: 2px;
-            background: var(--c-surface-dark-cold); color: var(--c-accent-cold); padding: 12px 16px;
+            background: var(--c-surface-dark-cold); color: var(--c-accent-cold); padding: 16px 20px;
             border-radius: 8px; border-bottom: 3px solid var(--c-accent-cold);
         }
 
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 12px;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 18px;
         }
 
         .card {
-            background: var(--c-surface-dark-cold); padding: 16px 18px; border-radius: 10px;
+            background: var(--c-surface-dark-cold); padding: 24px 26px; border-radius: 12px;
             border-left: 4px solid var(--c-border-dark-cold); position: relative;
             animation: fadeInUp 0.25s ease;
         }
@@ -83,21 +83,23 @@
         .card.critical.flash-in { animation: flashIn 0.5s ease-out 1, criticalPulse 1.6s infinite 0.5s; }
         .card.stockout.flash-in { animation: flashIn 0.5s ease-out 1, stockoutPulse 1.5s infinite 0.5s; }
         .card.cross-cancelled { border: 2px solid var(--c-danger-strong) !important; animation: shake 0.5s ease 3, crossCancelPulse 1.4s infinite !important; }
-        .card.replacement { border-left-color: var(--c-replacement); border-left-width: 6px; background: #1a1025; }
+        .card.replacement { border-left-color: var(--c-replacement); border-left-width: 10px; background: #221237; box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.45); }
         .card.replacement .replacement-badge {
             display: inline-block; background: var(--c-replacement); color: #fff;
-            font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 4px;
-            text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;
+            font-size: 22px; font-weight: 800; padding: 10px 20px; border-radius: 8px;
+            text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px;
+            border: 2px solid #c4b5fd;
+            align-self: flex-start; max-width: 100%;
         }
-        .card.replacement .replaced-name { font-size: 11px; color: var(--c-replacement); margin-top: 2px; font-style: italic; }
+        .card.replacement .replaced-name { font-size: 20px; font-weight: 700; color: #c4b5fd; margin-top: 4px; }
 
         .card .urgent-label {
-            font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px;
-            color: var(--c-danger); margin-bottom: 6px;
+            font-size: 16px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px;
+            color: var(--c-danger); margin-bottom: 8px;
         }
         .card .stockout-label {
-            font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px;
-            color: var(--c-warn); margin-bottom: 6px;
+            font-size: 16px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px;
+            color: var(--c-warn); margin-bottom: 8px;
         }
 
         /* Faixa de observação do salão: fala a língua dos cards — fundo
@@ -113,12 +115,12 @@
         }
         .obs-tag {
             flex: none; color: var(--c-warn);
-            font-size: 11px; font-weight: 800; letter-spacing: 1.5px;
+            font-size: 15px; font-weight: 800; letter-spacing: 1.5px;
             position: relative; z-index: 1;
         }
         .obs-text {
             flex: 1; min-width: 0; color: var(--c-text-body);
-            font-size: 15px; font-weight: 700; line-height: 1.35;
+            font-size: 19px; font-weight: 700; line-height: 1.35;
             white-space: nowrap; overflow: hidden;
         }
         .obs-text.marquee { animation: obsMarquee 7s linear infinite; }
@@ -133,30 +135,30 @@
         .card .card-top { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 6px; }
 
         .card .qty {
-            font-size: 26px; font-weight: 800; color: #5a6a8a; line-height: 1;
-            white-space: nowrap; min-width: 36px;
+            font-size: 40px; font-weight: 800; color: #93a7cc; line-height: 1;
+            white-space: nowrap; min-width: 56px;
         }
         .card.urgent .qty { color: #fff; }
 
         .card .product-info { flex: 1; min-width: 0; }
         .card .name {
-            font-size: 22px; font-weight: 700; color: #e0e8f0; line-height: 1.2;
+            font-size: 32px; font-weight: 800; color: #e0e8f0; line-height: 1.2;
             word-break: break-word;
         }
         .card.urgent .name { color: #fff; }
 
-        .card .unit-label { font-size: 13px; color: #4a6080; margin-top: 1px; display: inline; }
+        .card .unit-label { font-size: 17px; color: #7d92b8; margin-top: 2px; display: inline; }
         .card.urgent .unit-label { color: rgba(255,255,255,0.6); }
 
         .card .cooking-badge {
             display: inline-block; background: var(--c-accent-warm); color: #fff;
-            font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 3px;
-            text-transform: uppercase; letter-spacing: 1px; margin-top: 4px;
+            font-size: 14px; font-weight: 800; padding: 5px 12px; border-radius: 4px;
+            text-transform: uppercase; letter-spacing: 1px; margin-top: 6px;
         }
 
         .card .time-row {
-            display: flex; align-items: center; gap: 14px; margin-top: 8px;
-            font-size: 13px; font-weight: 600; flex-wrap: wrap;
+            display: flex; align-items: center; gap: 18px; margin-top: 12px;
+            font-size: 18px; font-weight: 600; flex-wrap: wrap;
         }
         .card .elapsed { color: #8899bb; }
         .card .elapsed span { color: var(--c-warn); font-weight: 700; }
@@ -168,28 +170,28 @@
         .card.urgent .eta { color: rgba(255,255,255,0.7); }
         .card.urgent .eta.overdue { color: #fff; }
 
-        .card .progress-wrap { margin-top: 8px; }
+        .card .progress-wrap { margin-top: 12px; }
         .card .progress-bar {
-            height: 4px; background: var(--c-border-dark-cold); border-radius: 2px; overflow: hidden;
+            height: 6px; background: var(--c-border-dark-cold); border-radius: 3px; overflow: hidden;
         }
         .card.urgent .progress-bar { background: rgba(255,255,255,0.15); }
         .card .progress-fill {
             height: 100%; border-radius: 2px; transition: width 30s linear;
         }
 
-        .card .actions { display: flex; gap: 10px; margin-top: 14px; }
+        .card .actions { display: flex; gap: 12px; margin-top: 18px; }
         .card .actions button {
-            flex: 1; padding: 12px 16px; border: none; border-radius: 8px;
-            font-size: 16px; font-weight: 700; cursor: pointer; min-height: 56px;
+            flex: 1; padding: 18px 20px; border: none; border-radius: 10px;
+            font-size: 22px; font-weight: 700; cursor: pointer; min-height: 84px;
             text-transform: uppercase; letter-spacing: 0.5px;
             transition: background 0.15s ease; font-family: inherit;
         }
         .card .actions .ready-btn { background: var(--c-accent-warm); color: var(--c-text-invert); box-shadow: var(--shadow-btn-3d-dark); }
         .card .actions .ready-btn:hover { background: #238b7d; }
         .card .actions .cancel-btn {
-            background: var(--c-border-dark-cold); color: var(--c-text-secondary); box-shadow: var(--shadow-btn-3d-dark);
-            min-width: 64px; min-height: 64px; font-size: 18px;
-            padding: 14px 20px; border-radius: 10px;
+            background: var(--c-border-dark-cold); color: #e8e2ea; box-shadow: var(--shadow-btn-3d-dark);
+            min-width: 84px; min-height: 84px; font-size: 20px;
+            padding: 18px 24px; border-radius: 10px;
         }
         .card .actions .cancel-btn:hover { background: var(--c-danger); color: #fff; }
         .card .actions button:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -199,21 +201,21 @@
             border-top: 1px solid var(--c-border-dark-cold);
         }
         .ready-strip-header {
-            font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
-            color: var(--c-accent-warm); margin-bottom: 8px;
+            font-size: 16px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
+            color: var(--c-accent-warm); margin-bottom: 10px;
         }
         .ready-strip .ready-pill {
-            display: inline-flex; align-items: center; gap: 6px;
-            background: #0a2a1a; border: 1px solid var(--c-accent-warm); border-radius: 6px;
-            padding: 5px 12px; margin: 0 6px 6px 0; font-size: 13px;
+            display: inline-flex; align-items: center; gap: 8px;
+            background: #0a2a1a; border: 1px solid var(--c-accent-warm); border-radius: 8px;
+            padding: 10px 18px; margin: 0 8px 8px 0; font-size: 18px;
             font-weight: 600; color: #8ab8a8; white-space: nowrap;
             animation: gentlePulse 2.5s infinite;
         }
         .ready-strip .ready-pill .pill-qty { color: #5a6a8a; font-weight: 700; }
         .ready-strip .ready-pill .pill-name { color: #c0d0e0; }
-        .ready-strip .ready-pill .pill-unit { color: #5a6a8a; font-size: 11px; }
+        .ready-strip .ready-pill .pill-unit { color: #5a6a8a; font-size: 14px; }
 
-        .empty-state { grid-column: 1 / -1; text-align: center; padding: 50px 20px; color: #2a3a5c; font-size: 16px; font-weight: 500; }
+        .empty-state { grid-column: 1 / -1; text-align: center; padding: 50px 20px; color: #2a3a5c; font-size: 20px; font-weight: 500; }
 
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -259,12 +261,16 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
+        @media (max-width: 1200px) {
+            .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
         @media (max-width: 768px) {
             body { padding: 12px; }
-            h1 { font-size: 16px; }
+            h1 { font-size: 24px; }
             .grid { grid-template-columns: 1fr; }
-            .card .name { font-size: 18px; }
-            .card { padding: 12px 14px; }
+            .card .name { font-size: 26px; }
+            .card { padding: 18px 20px; }
         }
 
         :root[data-theme="light"] body { background: var(--c-bg-page); color: var(--c-text-body); }
@@ -281,21 +287,24 @@
             border-left-color: var(--c-danger); border-left-width: 6px;
             animation: urgentPulse 2s infinite;
         }
-        :root[data-theme="light"] .card.urgent .name { font-size: 25px; font-weight: 800; color: var(--c-danger-strong); }
+        :root[data-theme="light"] .card.urgent .name { font-size: 32px; font-weight: 800; color: var(--c-danger-strong); }
         :root[data-theme="light"] .card.stockout {
             background: var(--alert-warn-bg-light);
             border: 2px solid var(--c-warn); border-left-width: 6px;
             animation: stockoutPulse 1.5s infinite;
         }
-        :root[data-theme="light"] .card.stockout .name { font-size: 25px; font-weight: 800; }
+        :root[data-theme="light"] .card.stockout .name { font-size: 32px; font-weight: 800; }
         :root[data-theme="light"] .card.urgent .elapsed,
         :root[data-theme="light"] .card.urgent .eta { color: var(--c-text-secondary); }
         :root[data-theme="light"] .card.urgent .elapsed span { color: var(--c-danger-strong); }
-        :root[data-theme="light"] .card.replacement { background: var(--alert-replacement-bg-light); }
+        :root[data-theme="light"] .card.replacement { background: var(--alert-replacement-bg-light); border-left-color: var(--c-replacement); border-left-width: 10px; box-shadow: inset 0 0 0 1px rgba(124, 58, 237, 0.35); }
+        :root[data-theme="light"] .card.replacement .replacement-badge { border-color: #5b21b6; }
+        :root[data-theme="light"] .card.replacement .replaced-name { color: #6d28d9; }
         :root[data-theme="light"] .empty-state { color: var(--c-text-secondary); }
         :root[data-theme="light"] #globalTimer, :root[data-theme="light"] .card-timer { background: var(--c-bg-page); color: var(--c-text-secondary); border-color: var(--c-border-default); }
         :root[data-theme="light"] .card .qty, :root[data-theme="light"] .card .name { color: var(--c-text-body); }
         :root[data-theme="light"] .card .unit-label, :root[data-theme="light"] .card .elapsed { color: var(--c-text-secondary); }
+        :root[data-theme="light"] .card .actions .cancel-btn { color: var(--c-text-body); }
         :root[data-theme="light"] .ready-strip { border-top-color: var(--c-border-default); }
         :root[data-theme="light"] .ready-strip .ready-pill { background: #d1fae5; border-color: #0e9f6e; color: var(--c-text-body); }
         :root[data-theme="light"] .ready-strip .ready-pill .pill-qty,
