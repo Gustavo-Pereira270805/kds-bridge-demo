@@ -250,8 +250,8 @@
             border: 1px solid var(--c-border-default);
             box-shadow: var(--shadow-card);
         }
-        .kpi-card-hero, .kpi-card-secondary, button.kpi-card-hero { color: var(--c-text-body); }
-        button.kpi-card-hero { background: var(--c-bg-panel); text-align: left; }
+        .kpi-card-hero, .kpi-card-secondary, div.kpi-card-hero { color: var(--c-text-body); }
+        div.kpi-card-hero { background: var(--c-bg-panel); text-align: left; cursor: pointer; }
         .kpi-label, .kpi-sub, .score-entity, .score-sub,
         .heatmap-label, .heatmap-hlabel, .funnel-pct, .week-day,
         .loading, .modal-label, .criteria-entities { color: var(--c-text-secondary); }
@@ -719,6 +719,23 @@ if (document.readyState === 'loading') {
             '</div>';
     }
 
+    // Formata YYYY-MM-DD como DD/MM/AAAA para os rótulos do período anterior.
+    function fmtBrDate(iso) {
+        var parts = String(iso || '').split('-');
+        return parts.length === 3 ? parts[2] + '/' + parts[1] + '/' + parts[0] : String(iso || '');
+    }
+
+    // Descreve a janela de comparação dos deltas dos KPIs (mesmo tamanho,
+    // imediatamente antes do período atual — calculada no servidor).
+    function comparisonLabel(cmpPeriod) {
+        if (!cmpPeriod || !cmpPeriod.from || !cmpPeriod.to) return 'o período anterior';
+        var days = Math.round((new Date(cmpPeriod.to + 'T00:00:00') - new Date(cmpPeriod.from + 'T00:00:00')) / 86400000) + 1;
+        var span = cmpPeriod.from === cmpPeriod.to
+            ? fmtBrDate(cmpPeriod.from)
+            : fmtBrDate(cmpPeriod.from) + ' a ' + fmtBrDate(cmpPeriod.to);
+        return span + ' (' + days + (days === 1 ? ' dia anterior)' : ' dias anteriores)');
+    }
+
     function renderKpis(data, trend) {
         var k = (data && data.kpis) || {};
         var totalPedidos = k.total_pedidos || 0;
@@ -752,20 +769,26 @@ if (document.readyState === 'loading') {
             { key: 'ocupacao', label: 'CAPACIDADE OCIOSA', value: occMedia.toFixed(1) + '%' },
         ];
 
+        var cmpTip = 'Comparado a ' + comparisonLabel((data && data.comparison_period) || null);
+
         var renderDelta = function(delta, unit, invert) {
             if (delta == null) return '';
             var up = delta >= 0;
             var arrow = up ? '\u2191' : '\u2193';
             var cls = invert ? (up ? 'down' : 'up') : (up ? 'up' : 'down');
-            return '<span class="kpi-delta ' + cls + '" title="Comparado ao per\u00edodo anterior">' + arrow + ' ' + Math.abs(delta).toFixed(1).replace('.', ',') + (unit || '%') + '</span>';
+            var sign = up ? '+' : '\u2212';
+            var num = sign + Math.abs(delta).toFixed(1).replace('.', ',') + (unit || '%');
+            var full = 'Variação de ' + num + ' em relação a ' + comparisonLabel((data && data.comparison_period) || null);
+            return '<span class="kpi-delta ' + cls + '" data-tip="' + escAttr(cmpTip) + '" aria-label="' + escAttr(full) + '" role="img">' + arrow + ' ' + Math.abs(delta).toFixed(1).replace('.', ',') + (unit || '%') + '</span>';
         };
 
         var heroHTML = heroCards.map(function(c) {
-            return '<button class="kpi-card-hero status-' + c.status + '" data-target="' + c.target + '" aria-label="' + c.eyebrow + ': ' + c.value + '">' +
+            var deltaTxt = c.delta == null ? '' : '. ' + 'Variação em relação a ' + comparisonLabel((data && data.comparison_period) || null);
+            return '<div class="kpi-card-hero status-' + c.status + '" data-target="' + c.target + '" role="button" tabindex="0" aria-label="' + escAttr(c.eyebrow + ': ' + c.value + deltaTxt) + '">' +
                 '<div class="kpi-eyebrow"><span>' + c.eyebrow + '</span>' + renderDelta(c.delta, c.unit, c.invert) + '</div>' +
                 '<div class="kpi-value">' + c.value + '</div>' +
                 '<div class="kpi-sparkline" data-sparkline-key="' + c.key + '"></div>' +
-            '</button>';
+            '</div>';
         }).join('');
 
         var secondaryHTML = secondaryCards.map(function(c) {
@@ -920,12 +943,12 @@ if (document.readyState === 'loading') {
     function drillRowHtml(opts) {
         var head = '<div class="drill-head"><span>' + opts.head + '</span>' +
             '<button type="button" class="drill-close ' + opts.prefix + '-drill-close" aria-label="Fechar detalhamento">&times;</button></div>';
-        return '<div class="drill-row ' + opts.rowClass + '" data-idx="' + opts.idx + '" data-drill-prefix="' + opts.prefix + '" role="button" tabindex="0" aria-expanded="false" aria-controls="' + opts.prefix + '-detail-' + opts.idx + '">' +
+        return '<div class="drill-row ' + opts.rowClass + '" data-idx="' + opts.idx + '" data-drill-prefix="' + opts.prefix + '" role="button" tabindex="0" aria-expanded="false" aria-controls="' + opts.prefix + '-detail-' + opts.idx + '"' + (opts.rowTitle ? ' title="' + escAttr(opts.rowTitle) + '"' : '') + '>' +
             '<div class="bar-row">' +
             '<div class="bar-label" title="' + escAttr(opts.fullLabel || opts.label) + '">' + esc(opts.label) + '</div>' +
             (opts.chipHtml || '') +
-            '<div class="bar-track"><div class="bar-fill" style="width:' + opts.pct + '%;background:' + opts.color + ';">' + (opts.pct > 20 ? '<span>' + opts.valueLabel + '</span>' : '') + '</div></div>' +
-            '<div class="bar-value">' + opts.value + '</div>' +
+            '<div class="bar-track"' + (opts.barTitle ? ' title="' + escAttr(opts.barTitle) + '"' : '') + '><div class="bar-fill" style="width:' + opts.pct + '%;background:' + opts.color + ';">' + (opts.pct > 20 ? '<span>' + opts.valueLabel + '</span>' : '') + '</div></div>' +
+            '<div class="bar-value"' + (opts.valueTitle ? ' title="' + escAttr(opts.valueTitle) + '"' : '') + '>' + opts.value + '</div>' +
             '<span class="drill-caret" aria-hidden="true">\u25B8</span>' +
             '</div>' +
             '<div class="drill-detail ' + opts.prefix + '-detail" id="' + opts.prefix + '-detail-' + opts.idx + '" data-idx="' + opts.idx + '" style="display:none;">' +
@@ -1241,6 +1264,9 @@ if (document.readyState === 'loading') {
             rows += drillRowHtml({
                 prefix: 'sla', rowClass: 'sla-product-row', idx: i,
                 label: d.product_name, value: d.pct_ok + '%', valueLabel: d.breached + ' estouros', pct: pct, color: color,
+                rowTitle: d.product_name + ': ' + d.breached + ' estouros de SLA · ' + d.pct_ok + '% dos pedidos dentro do SLA',
+                barTitle: 'Barra proporcional aos ' + d.breached + ' estouros (produto com mais estouros = barra cheia)',
+                valueTitle: d.pct_ok + '% dos pedidos deste produto ficaram dentro do SLA',
                 head: list.length + ' estouro' + (list.length === 1 ? '' : 's') + ' \u00b7 ' + d.pct_ok + '% dentro do SLA',
                 table: drillTableHtml(['Data/Hora', 'Pedido', 'Esta\u00e7\u00e3o', 'Tempo real', 'Excedeu'], detailRows)
             });
@@ -1370,7 +1396,7 @@ if (document.readyState === 'loading') {
 
         if (data.sla_by_product && data.sla_by_product.length) {
             slaGrid.innerHTML += '<article class="panel" data-cols="6">' +
-                '<header class="panel-header"><h3 class="panel-title">SLA por Produto (Pareto de Estouros)</h3><p class="panel-subtitle">Clique para detalhar</p></header>' +
+                '<header class="panel-header"><h3 class="panel-title">SLA por Produto</h3><p class="panel-subtitle">Ordenado por estouros · tamanho da barra = n° de estouros (vs o pior produto) · % = pedidos dentro do SLA · clique para detalhar</p></header>' +
                 '<div class="panel-body">' + renderSlaProductPanel(data) + '</div></article>';
         }
         wireDrillGrid(slaGrid, [{ selector: '.sla-product-row', prefix: 'sla' }]);
@@ -1998,17 +2024,43 @@ if (document.readyState === 'loading') {
                         }
                     });
                 });
-                // Wire drill-down for hero KPI buttons
+                // Wire drill-down for hero KPI buttons + tooltip dos deltas (toque)
+                var closeDeltaTips = function() {
+                    document.querySelectorAll('.kpi-delta.show-tip').forEach(function(el) { el.classList.remove('show-tip'); });
+                };
                 document.querySelectorAll('.kpi-card-hero').forEach(function(btn) {
-                    btn.addEventListener('click', function() {
+                    var goTarget = function() {
                         var target = btn.getAttribute('data-target');
                         if (!target) return;
                         var el = document.querySelector(target);
                         if (el) {
                             el.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         }
+                    };
+                    btn.addEventListener('click', function(e) {
+                        var delta = perfClosest(e.target, '.kpi-delta', btn);
+                        if (delta) {
+                            // Toque no indicador: mostra o período comparado em vez de rolar.
+                            e.stopPropagation();
+                            var wasOpen = delta.classList.contains('show-tip');
+                            closeDeltaTips();
+                            if (!wasOpen) delta.classList.add('show-tip');
+                            return;
+                        }
+                        closeDeltaTips();
+                        goTarget();
+                    });
+                    btn.addEventListener('keydown', function(e) {
+                        if (e.key !== 'Enter' && e.key !== ' ') return;
+                        if (perfClosest(e.target, '.kpi-delta', btn)) return;
+                        e.preventDefault();
+                        goTarget();
                     });
                 });
+                if (!document._kpiDeltaCloser) {
+                    document._kpiDeltaCloser = true;
+                    document.addEventListener('click', function() { closeDeltaTips(); });
+                }
             }
 
             // Step B: Build 5 sections (new Phase 6)

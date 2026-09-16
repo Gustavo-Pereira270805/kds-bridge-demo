@@ -465,7 +465,10 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         const prevFrom = shiftDay(dateFrom, -spanDays);
         const prevPeriod = resolveDashboardPeriod({ from: prevFrom, to: prevTo, station_id });
         let comparison: Record<string, { delta_pct: number | null }> = {};
+        // Janela anterior de mesmo tamanho, exposta ao frontend para o tooltip dos deltas dos KPIs.
+        let comparisonPeriod: { from: string; to: string } | null = null;
         if (!('error' in prevPeriod)) {
+          comparisonPeriod = { from: prevFrom, to: prevTo };
           const [prev] = await safeQuery<{
             total_pedidos: string; dentro_sla: string; atrasos_cozinha: string; atrasos_salao: string; terminadas: string;
           }>('1b.PrevKpis',
@@ -885,6 +888,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           heatmap,
           funnel,
           week_comparison: weekComparison,
+          comparison_period: comparisonPeriod,
           scatter_roturas: scatterRoturas,
           replacements,
           replacement_details: replacementDetails,

@@ -355,6 +355,45 @@ body {
   background: rgba(225, 29, 72, 0.1);
   color: #be123c;
 }
+/* Tooltip do período comparado: aparece no hover, no foco do card e no
+   toque (classe .show-tip alternada por JS). Não usa `title` nativo para
+   funcionar também em telas touch. */
+.kpi-delta {
+  position: relative;
+  cursor: help;
+}
+.kpi-delta::after {
+  content: attr(data-tip);
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: max-content;
+  max-width: 230px;
+  white-space: normal;
+  text-align: left;
+  font-size: 11px;
+  font-weight: var(--fw-medium);
+  font-family: var(--font-sans);
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-transform: none;
+  background: var(--c-bg-panel);
+  color: var(--c-text-body);
+  border: 1px solid var(--c-border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card-hover);
+  padding: 7px 10px;
+  z-index: 5;
+}
+.kpi-delta:hover::after,
+.kpi-card-hero:focus-within .kpi-delta::after,
+.kpi-delta.show-tip::after {
+  display: block;
+}
+@media (prefers-reduced-motion: reduce) {
+  .kpi-delta::after { transition: none; }
+}
 
 /* === KPI secondary card === */
 .kpi-card-secondary {
