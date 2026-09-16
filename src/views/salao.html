@@ -366,9 +366,13 @@
             </div>
             <div class="row">
                 <input type="number" id="quantity" class="mono" placeholder="Qtd" value="1" min="1" max="100" required style="max-width: 80px;">
-                <select id="unitSelect" disabled>
-                    <option value="">Unidade</option>
-                </select>
+                <div class="product-search-wrapper" id="unitSearchWrapper" style="flex:1;">
+                    <input type="search" id="unitSearch" placeholder="Unidade" autocomplete="off" disabled>
+                    <select id="unitSelect" style="display:none;" disabled>
+                        <option value="">Unidade</option>
+                    </select>
+                    <div class="product-dropdown" id="unitDropdown"></div>
+                </div>
             </div>
             <div style="display:flex; gap: 20px; margin-bottom: var(--sp-4);">
                 <label><input type="checkbox" id="isUrgent"> Urgente</label>
@@ -944,25 +948,58 @@
 
     function loadUnitsForProduct(productId) {
         var select = document.getElementById('unitSelect');
+        var input = document.getElementById('unitSearch');
         if (!select) return;
+        closeUnitDropdown();
+        unitSearchState.items = [];
+        if (input) input.value = '';
         if (!productId) {
             select.innerHTML = '<option value="">Unidade</option>';
             select.disabled = true;
+            if (input) { input.disabled = true; input.placeholder = 'Unidade'; }
             return;
         }
         select.disabled = false;
         select.innerHTML = '<option value="">Carregando...</option>';
+        if (input) { input.disabled = false; input.placeholder = 'Buscar unidade...'; }
         api('/api/v1/units/by-product/' + encodeURIComponent(productId)).then(function(data) {
             units = data;
+            unitSearchState.items = data || [];
             if (units.length === 0) {
                 select.innerHTML = '<option value="">Sem unidade</option>';
+                if (input) { input.value = ''; input.placeholder = 'Sem unidade'; input.disabled = true; }
             } else {
-                select.innerHTML = units.map(function(u) { return '<option value="' + u.id + '">' + esc(u.label) + '</option>'; }).join('');
+                select.innerHTML = '<option value="">Unidade</option>' + units.map(function(u) { return '<option value="' + u.id + '">' + esc(u.label) + '</option>'; }).join('');
             }
         }).catch(function(err) {
             console.error('Erro ao carregar unidades:', err);
             select.innerHTML = '<option value="">Erro</option>';
         });
+    }
+
+    // Busca digitável de unidades: o select segue como fonte da verdade para
+    // o submit; o input filtra a lista no cliente (mesmo padrão visual dos
+    // dropdowns de produto).
+    var unitSearchState = { items: [] };
+    function renderUnitDropdown(filter) {
+        var dropdown = document.getElementById('unitDropdown');
+        if (!dropdown) return;
+        var q = (filter || '').toLowerCase();
+        var items = unitSearchState.items.filter(function(u) {
+            return !q || (u.label || '').toLowerCase().indexOf(q) !== -1;
+        });
+        if (items.length === 0) {
+            dropdown.innerHTML = '<div class="product-empty">Nenhuma unidade encontrada</div>';
+        } else {
+            dropdown.innerHTML = items.map(function(u) {
+                return '<div class="product-option" data-id="' + u.id + '"><span><span class="opt-name">' + esc(u.label) + '</span></span></div>';
+            }).join('');
+        }
+        dropdown.classList.add('open');
+    }
+    function closeUnitDropdown() {
+        var dropdown = document.getElementById('unitDropdown');
+        if (dropdown) dropdown.classList.remove('open');
     }
 
     function loadCancelReasons() {
@@ -1131,6 +1168,45 @@
         loadUnitsForProduct(this.value);
     });
 
+    // Busca digitável de unidades: abre ao focar, filtra no cliente; limpar
+    // o input limpa a seleção (o select oculto segue como fonte do submit).
+    var unitSearchEl = document.getElementById('unitSearch');
+    if (unitSearchEl) {
+        unitSearchEl.addEventListener('focus', function() {
+            if (!unitSearchEl.disabled) renderUnitDropdown(unitSearchEl.value);
+        });
+        unitSearchEl.addEventListener('input', function() {
+            var select = document.getElementById('unitSelect');
+            if (select) {
+                var selectedOpt = select.selectedOptions && select.selectedOptions[0];
+                if (!unitSearchEl.value || !selectedOpt || !selectedOpt.value || selectedOpt.textContent !== unitSearchEl.value) {
+                    select.value = '';
+                }
+            }
+            if (!unitSearchEl.disabled) renderUnitDropdown(unitSearchEl.value);
+        });
+    }
+    var unitDropdownEl = document.getElementById('unitDropdown');
+    if (unitDropdownEl) unitDropdownEl.addEventListener('click', function(e) {
+        var t = e.target;
+        var optEl = (t && t.closest) ? t.closest('.product-option') : null;
+        if (!optEl || !optEl.dataset.id) return;
+        var select = document.getElementById('unitSelect');
+        var picked = null;
+        for (var i = 0; i < unitSearchState.items.length; i++) {
+            if (unitSearchState.items[i].id === optEl.dataset.id) { picked = unitSearchState.items[i]; break; }
+        }
+        if (picked && select) {
+            select.value = picked.id;
+            if (unitSearchEl) unitSearchEl.value = picked.label;
+        }
+        closeUnitDropdown();
+    });
+    document.addEventListener('click', function(e) {
+        var wrapper = document.getElementById('unitSearchWrapper');
+        if (wrapper && !wrapper.contains(e.target)) closeUnitDropdown();
+    });
+
     // Busca do item substituído (troca): filtra por nome igual à busca principal.
     var replacedSearchEl = document.getElementById('replacedSearch');
     if (replacedSearchEl) {
@@ -1261,6 +1337,8 @@
             }
             var unitSelectReset = document.getElementById('unitSelect');
             if (unitSelectReset) unitSelectReset.value = '';
+            var unitSearchReset = document.getElementById('unitSearch');
+            if (unitSearchReset) unitSearchReset.value = '';
             var repl2 = document.getElementById('isReplacement');
             if (repl2) repl2.checked = false;
             var replSelect2 = document.getElementById('replacedProduct');
