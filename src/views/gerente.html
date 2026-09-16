@@ -463,7 +463,7 @@
         }).catch(console.error);
     }
 
-    var EVENT_LABELS = { created: 'criada', marked_ready: 'pronta', retrieved: 'retirada pelo salão', cancelled_salao: 'cancelada (salão)', cancelled_cozinha: 'cancelada (cozinha)', stockout_reported: 'zerada', sla_breach_cozinha: 'SLA cozinha estourado', sla_breach_salao: 'SLA salão estourado', annulled: 'anulada', shift_transfer: 'transferência jantar', step_rollback: 'anulação de passo' };
+    var EVENT_LABELS = { created: 'criada', marked_ready: 'pronta', retrieved: 'retirada pelo salão', cancelled_salao: 'cancelada (salão)', cancelled_cozinha: 'cancelada (cozinha)', stockout_reported: 'zerada', sla_breach_cozinha: 'SLA cozinha estourado', sla_breach_salao: 'SLA salão estourado', annulled: 'anulada', shift_transfer: 'transferência jantar', step_rollback: 'anulação de passo', returned_to_kitchen: 'devolvida pelo salão' };
     var ACTOR_LABELS = { salao: 'salão', cozinha: 'cozinha', sistema: 'sistema' };
     function pad3(n) { return (n < 10 ? '00' : n < 100 ? '0' : '') + n; }
     function historyDay() {
@@ -1110,6 +1110,7 @@
     socket.on('demand:annulled', function() { fetchHistory(); fetchMetrics(); });
     socket.on('demand:step-rollback', refreshAll);
     socket.on('demand:stockout', function() { fetchHistory(); fetchMetrics(); });
+    socket.on('demand:returned', function() { fetchHistory(); fetchMetrics(); });
     socket.on('menu:updated', function() { fetchProducts(); fetchCalendar(); });
     socket.on('product:updated', fetchProducts);
     socket.on('shift:updated', function(data) {

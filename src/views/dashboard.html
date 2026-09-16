@@ -1744,7 +1744,8 @@ if (document.readyState === 'loading') {
                 '<tr><td>Cancelamento (cozinha)</td><td>&minus;' + formatPerfWeight(weights.cancellation_cozinha) + ' por ocorr&ecirc;ncia</td></tr>' +
                 '<tr><td>Cancelamento (sal&atilde;o)</td><td>&minus;' + formatPerfWeight(weights.cancellation_salao) + ' por ocorr&ecirc;ncia</td></tr>' +
                 '<tr><td>Zerado (sal&atilde;o)</td><td>&minus;' + formatPerfWeight(weights.stockout_salao) + ' por ocorr&ecirc;ncia</td></tr>' +
-                '<tr><td>Zerado (cozinha)</td><td>Informativo; n&atilde;o desconta</td></tr>';
+                '<tr><td>Zerado (cozinha)</td><td>Informativo; n&atilde;o desconta</td></tr>' +
+                '<tr><td>Devolvida pelo sal&atilde;o (cozinha)</td><td>&minus;' + formatPerfWeight(weights.returned) + ' por ocorr&ecirc;ncia</td></tr>';
         }
         if (example) {
             example.innerHTML = 'SLA de 20 min, preparo de 44 min: fator 2,2 &rarr; &minus;' + formatPerfWeight(samplePenalty) + '.<br>' +
@@ -2620,7 +2621,7 @@ if (document.readyState === 'loading') {
         }, 1000);
     }
 
-    ['demand:new', 'demand:urgent', 'demand:ready', 'demand:retrieved', 'demand:cancelled', 'demand:annulled', 'demand:stockout'].forEach(function(event) {
+    ['demand:new', 'demand:urgent', 'demand:ready', 'demand:retrieved', 'demand:cancelled', 'demand:annulled', 'demand:stockout', 'demand:returned'].forEach(function(event) {
         socket.on(event, function() {
             showLastUpdated();
             scheduleReload();

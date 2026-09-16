@@ -78,6 +78,7 @@
         .card.late { background: linear-gradient(135deg, var(--c-surface-dark-cold) 0%, var(--alert-urgent-bg-dark) 100%); border-left-color: var(--c-danger); }
         .card.critical { background: var(--alert-urgent-bg-dark); border-left-color: var(--c-danger-strong); animation: criticalPulse 1.6s infinite; }
         .card.stockout { background: var(--alert-warn-bg-dark); border: 2px solid var(--c-warn); border-left-width: 6px; animation: stockoutPulse 1.5s infinite; }
+        .card.returned { background: var(--alert-warn-bg-dark); border: 2px solid var(--c-warn); border-left-width: 6px; }
         .card.flash-in { animation: flashIn 0.5s ease-out 1, fadeInUp 0.25s ease; }
         .card.urgent.flash-in { animation: flashIn 0.5s ease-out 1, urgentPulse 2s infinite 0.5s; }
         .card.critical.flash-in { animation: flashIn 0.5s ease-out 1, criticalPulse 1.6s infinite 0.5s; }
@@ -101,6 +102,10 @@
             font-size: 16px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px;
             color: var(--c-warn); margin-bottom: 8px;
         }
+        .card .returned-label {
+            font-size: 16px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px;
+            color: var(--c-warn); margin-bottom: 8px;
+        }
 
         /* Faixa de observação do salão: fala a língua dos cards — fundo
            tingido de alerta + filete lateral âmbar + rótulo no estilo das
@@ -121,6 +126,24 @@
         .obs-text {
             flex: 1; min-width: 0; color: var(--c-text-body);
             font-size: 19px; font-weight: 700; line-height: 1.35;
+            white-space: nowrap; overflow: hidden;
+        }
+        /* Linha da devolução: mesmo padrão da .obs-strip, acima dela. */
+        .returned-detail {
+            display: flex; align-items: center; gap: 8px;
+            background: var(--alert-warn-bg-dark);
+            border: 1px solid rgba(245, 158, 11, 0.35);
+            border-left: 3px solid var(--c-warn);
+            border-radius: 8px;
+            padding: 8px 10px; margin: 8px 0; overflow: hidden;
+        }
+        .returned-tag {
+            flex: none; color: var(--c-warn);
+            font-size: 15px; font-weight: 800; letter-spacing: 1.5px;
+        }
+        .returned-text {
+            flex: 1; min-width: 0; color: var(--c-text-body);
+            font-size: 18px; font-weight: 700; line-height: 1.35;
             white-space: nowrap; overflow: hidden;
         }
         .obs-text.marquee { animation: obsMarquee 7s linear infinite; }
@@ -292,6 +315,10 @@
             background: var(--alert-warn-bg-light);
             border: 2px solid var(--c-warn); border-left-width: 6px;
             animation: stockoutPulse 1.5s infinite;
+        }
+        :root[data-theme="light"] .card.returned {
+            background: var(--alert-warn-bg-light);
+            border: 2px solid var(--c-warn); border-left-width: 6px;
         }
         :root[data-theme="light"] .card.stockout .name { font-size: 32px; font-weight: 800; }
         :root[data-theme="light"] .card.urgent .elapsed,
@@ -519,6 +546,7 @@
                 if (overdue && d.priority === 'urgent') classes.push('critical');
                 else if (overdue) classes.push('late');
                 if (d.stockout_reported) classes.push('stockout');
+                if ((d.returned_to_kitchen_count || 0) > 0) classes.push('returned');
                 if (d.cooking_started) classes.push('cooking');
                 if (d.sla_breached_cozinha || overdue) classes.push('breached');
                 if (flashIds.has(d.id)) classes.push('flash-in');
@@ -531,6 +559,12 @@
                 const urgentLabel = d.priority === 'urgent' ? '<div class="urgent-label">URGENTE</div>' : '';
                 const stockoutTime = d.stockout_reported_at ? fmtHourMin(d.stockout_reported_at) : '';
                 const stockoutLabel = d.stockout_reported ? `<div class="stockout-label">ZERADO${stockoutTime ? ' às ' + stockoutTime : ''}</div>` : '';
+                const returnedCount = d.returned_to_kitchen_count || 0;
+                const returnedLabel = returnedCount > 0 ? `<div class="returned-label">DEVOLVIDA PELO SALÃO${returnedCount > 1 ? ' (' + returnedCount + 'x)' : ''}</div>` : '';
+                const returnedParts = [];
+                if (d.returned_to_kitchen_reason) returnedParts.push('Motivo: ' + esc(d.returned_to_kitchen_reason));
+                if (d.returned_to_kitchen_observation) returnedParts.push('Obs.: ' + esc(d.returned_to_kitchen_observation));
+                const returnedHtml = returnedParts.length > 0 ? `<div class="returned-detail"><span class="returned-tag">DEVOLVIDA</span><span class="returned-text">${returnedParts.join(' · ')}</span></div>` : '';
                 const replacementBadge = d.is_replacement ? '<div class="replacement-badge">TROCA</div>' : '';
                 const replacedInfo = d.is_replacement && d.replaced_name ? `<div class="replaced-name">Substitui: ${esc(d.replaced_name)}</div>` : '';
                 const obsHtml = d.observation ? `<div class="obs-strip"><span class="obs-tag">OBS</span><span class="obs-text">${esc(d.observation)}</span></div>` : '';
@@ -544,12 +578,13 @@
 
                 return `
                 <div class="${classes.join(' ')}">
-                    ${urgentLabel}${stockoutLabel}${replacementBadge}
+                    ${urgentLabel}${stockoutLabel}${returnedLabel}${replacementBadge}
                     <div class="card-top">
                         <div class="qty">${d.quantity}x</div>
                         <div class="product-info">
                             <div class="name">${esc(d.product_name)}${unitText}</div>
                             ${replacedInfo}
+                            ${returnedHtml}
                             ${obsHtml}
                             ${cookingBadge}
                             <div class="card-timer" data-eta="${d.expected_ready_at || ''}" data-priority="${d.priority}">${etaDisplayCountdown(d.expected_ready_at)}</div>

@@ -53,10 +53,15 @@
         .card.late { background: #180a0a; border-color: rgba(225, 29, 72, 0.5); }
         .card.critical { background: #2d0a0a; border: 1px solid rgba(225, 29, 72, 0.8); }
         .card.stockout { background: #1a1306; border: 1px solid rgba(245, 158, 11, 0.6); }
+        .card.returned { background: #1a1306; border: 1px solid rgba(245, 158, 11, 0.6); border-left: 4px solid var(--c-warn); }
 
         .card .urgent-label {
             font-size: 14px; font-weight: var(--fw-bold); text-transform: uppercase; letter-spacing: 1px;
             color: var(--c-danger); margin-bottom: var(--sp-1);
+        }
+        .card .returned-label {
+            font-size: 14px; font-weight: var(--fw-bold); text-transform: uppercase; letter-spacing: 1px;
+            color: var(--c-warn); margin-bottom: var(--sp-1);
         }
 
         /* Faixa de observação do salão: fala a língua dos cards — fundo
@@ -78,6 +83,24 @@
         .obs-text {
             flex: 1; min-width: 0; color: var(--c-text-body);
             font-size: 18px; font-weight: 700; line-height: 1.35;
+            white-space: nowrap; overflow: hidden;
+        }
+        /* Linha da devolução: mesmo padrão da .obs-strip, acima dela. */
+        .returned-detail {
+            display: flex; align-items: center; gap: 8px;
+            background: var(--alert-warn-bg-dark);
+            border: 1px solid rgba(245, 158, 11, 0.35);
+            border-left: 3px solid var(--c-warn);
+            border-radius: 8px;
+            padding: 8px 10px; margin: 8px 0; overflow: hidden;
+        }
+        .returned-tag {
+            flex: none; color: var(--c-warn);
+            font-size: 13px; font-weight: 800; letter-spacing: 1.5px;
+        }
+        .returned-text {
+            flex: 1; min-width: 0; color: var(--c-text-body);
+            font-size: 17px; font-weight: 700; line-height: 1.35;
             white-space: nowrap; overflow: hidden;
         }
         .obs-text.marquee { animation: obsMarquee 7s linear infinite; }
@@ -410,6 +433,7 @@
                 if (overdue && d.priority === 'urgent') classes.push('critical');
                 else if (overdue) classes.push('late');
                 if (d.stockout_reported) classes.push('stockout');
+                if ((d.returned_to_kitchen_count || 0) > 0) classes.push('returned');
                 if (d.cooking_started) classes.push('cooking');
                 if (d.sla_breached_cozinha || overdue) classes.push('breached');
 
@@ -418,6 +442,12 @@
                 const unitText = d.unit_label ? `<span class="unit-label">(${esc(d.unit_label)})</span>` : '';
                 const cookingBadge = d.cooking_started ? `<span class="cooking-badge">EM PREPARO</span>` : '';
                 const urgentLabel = d.priority === 'urgent' ? `<div class="urgent-label">URGENTE</div>` : '';
+                const returnedCount = d.returned_to_kitchen_count || 0;
+                const returnedLabel = returnedCount > 0 ? `<div class="returned-label">DEVOLVIDA PELO SALÃO${returnedCount > 1 ? ' (' + returnedCount + 'x)' : ''}</div>` : '';
+                const returnedParts = [];
+                if (d.returned_to_kitchen_reason) returnedParts.push('Motivo: ' + esc(d.returned_to_kitchen_reason));
+                if (d.returned_to_kitchen_observation) returnedParts.push('Obs.: ' + esc(d.returned_to_kitchen_observation));
+                const returnedHtml = returnedParts.length > 0 ? `<div class="returned-detail"><span class="returned-tag">DEVOLVIDA</span><span class="returned-text">${returnedParts.join(' · ')}</span></div>` : '';
                 const obsHtml = d.observation ? `<div class="obs-strip"><span class="obs-tag">OBS</span><span class="obs-text">${esc(d.observation)}</span></div>` : '';
 
                 const pct = calcProgress(d.created_at, d.expected_ready_at);
@@ -429,11 +459,12 @@
 
                 return `
                 <div class="${classes.join(' ')}">
-                    ${urgentLabel}
+                    ${urgentLabel}${returnedLabel}
                     <div class="card-top">
                         <div class="qty">${d.quantity}x</div>
                         <div class="product-info">
                             <div class="name">${esc(d.product_name)}${unitText}</div>
+                            ${returnedHtml}
                             ${obsHtml}
                             ${cookingBadge}
                         </div>

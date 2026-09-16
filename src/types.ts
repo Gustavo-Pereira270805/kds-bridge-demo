@@ -168,6 +168,10 @@ export interface Demand {
   annulled_at: string | null;
   annulled_by: string | null;
   annul_reason: string | null;
+  returned_to_kitchen_count: number;
+  returned_to_kitchen_at: string | null;
+  returned_to_kitchen_reason: string | null;
+  returned_to_kitchen_observation: string | null;
   created_at: string;
 }
 
@@ -194,7 +198,8 @@ export type DemandEventType =
   | 'sla_breach_salao'
   | 'annulled'
   | 'shift_transfer'
-  | 'step_rollback';
+  | 'step_rollback'
+  | 'returned_to_kitchen';
 
 // Histórico real por evento (gerente): uma linha por demanda do dia com os passos aninhados
 export interface DemandHistoryEvent {
@@ -323,12 +328,6 @@ export interface WeekdayRow {
   total: number;
   avg: number;
 }
-export interface QtyVsTimeRow {
-  product_name: string;
-  qty: number;
-  actual_min: number;
-  sla_min: number;
-}
 export interface HeatmapRow {
   hora: number;
   dia_semana: number;
@@ -391,6 +390,7 @@ export interface PerformanceWeights {
   cancellation_cozinha: number;
   cancellation_salao: number;
   stockout_salao: number;
+  returned: number;
 }
 
 export interface PerformanceScoreRow {
@@ -406,6 +406,8 @@ export interface PerformanceScoreRow {
   cancellation_deduction: number;
   stockouts: number;
   stockout_deduction: number;
+  returned: number;
+  returned_deduction: number;
   slow_items: number;
   slow_item_deduction: number;
 }
@@ -427,6 +429,8 @@ export interface EntityScore {
   cancellation_deduction: number;
   stockouts: number;
   stockout_deduction: number;
+  returned: number;
+  returned_deduction: number;
   detractors: PerformanceDetractor[];
 }
 

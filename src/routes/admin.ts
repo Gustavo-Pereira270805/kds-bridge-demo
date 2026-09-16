@@ -823,6 +823,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
       cancellation_cozinha: number;
       cancellation_salao: number;
       stockout_salao: number;
+      returned: number;
       sla_min: number;
       sla_max: number;
     }>
@@ -833,6 +834,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
         body.cancellation_cozinha,
         body.cancellation_salao,
         body.stockout_salao,
+        body.returned,
         body.sla_min,
         body.sla_max,
       ];
@@ -849,6 +851,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
         { key: 'score_weight_cancellation_cozinha', val: round2(body.cancellation_cozinha as number) },
         { key: 'score_weight_cancellation_salao', val: round2(body.cancellation_salao as number) },
         { key: 'score_weight_stockout_salao', val: round2(body.stockout_salao as number) },
+        { key: 'score_weight_returned', val: round2(body.returned as number) },
         { key: 'score_weight_sla_min', val: round2(body.sla_min as number) },
         { key: 'score_weight_sla_max', val: round2(body.sla_max as number) },
       ];

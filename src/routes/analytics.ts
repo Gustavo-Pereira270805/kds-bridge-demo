@@ -963,6 +963,8 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
             cancellation_deduction: Number(row.cancellation_deduction),
             stockouts: Number(row.stockouts),
             stockout_deduction: Number(row.stockout_deduction),
+            returned: Number(row.returned),
+            returned_deduction: Number(row.returned_deduction),
             detractors: buildDetractors(row),
           };
         }
@@ -1027,17 +1029,20 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           const slaBreaches = rows.reduce((s, r) => s + Number(r.sla_breaches), 0);
           const cancellations = rows.reduce((s, r) => s + Number(r.cancellations), 0);
           const stockouts = rows.reduce((s, r) => s + Number(r.stockouts), 0);
-          let sumEffSla = 0, sumEffCancel = 0, sumEffStock = 0;
+          const returned = rows.reduce((s, r) => s + Number(r.returned), 0);
+          let sumEffSla = 0, sumEffCancel = 0, sumEffStock = 0, sumEffRet = 0;
           for (const r of rows) {
             const sla = Number(r.sla_breach_deduction) || 0;
             const canc = Number(r.cancellation_deduction) || 0;
             const stock = Number(r.stockout_deduction) || 0;
-            const totalRaw = sla + canc + stock;
+            const ret = Number(r.returned_deduction) || 0;
+            const totalRaw = sla + canc + stock + ret;
             const effective = Math.min(5, totalRaw);
             const scale = totalRaw > 0 ? effective / totalRaw : 0;
             sumEffSla += sla * scale;
             sumEffCancel += canc * scale;
             sumEffStock += stock * scale;
+            sumEffRet += ret * scale;
           }
           const average = {
             entity,
@@ -1049,6 +1054,8 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
             cancellation_deduction: Math.round((sumEffCancel / daysWithData) * 100) / 100,
             stockouts,
             stockout_deduction: Math.round((sumEffStock / daysWithData) * 100) / 100,
+            returned,
+            returned_deduction: Math.round((sumEffRet / daysWithData) * 100) / 100,
           };
           averages[entity] = Object.assign(average, { detractors: buildDetractors(average) });
         }

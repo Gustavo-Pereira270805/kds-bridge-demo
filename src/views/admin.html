@@ -331,6 +331,10 @@
                  <input type="number" step="0.01" min="0" max="5" id="weightStockoutSalao" class="sla-input" style="width:110px;">
             </div>
              <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                 <label style="flex:1; font-weight:600; color:var(--c-text-body);">Devolvida pelo salão (cozinha)</label>
+                 <input type="number" step="0.01" min="0" max="5" id="weightReturned" class="sla-input" style="width:110px;">
+            </div>
+             <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
                  <label style="flex:1; font-weight:600; color:var(--c-text-body);">SLA — penalidade mínima</label>
                  <input type="number" step="0.01" min="0" max="5" id="weightSlaMin" class="sla-input" style="width:110px;">
             </div>
@@ -470,6 +474,7 @@ function loadWeights() {
         document.getElementById('weightCancellationCozinha').value = data.cancellation_cozinha;
         document.getElementById('weightCancellationSalao').value = data.cancellation_salao;
         document.getElementById('weightStockoutSalao').value = data.stockout_salao;
+        document.getElementById('weightReturned').value = data.returned;
         document.getElementById('weightSlaMin').value = data.sla_min;
         document.getElementById('weightSlaMax').value = data.sla_max;
     }).catch(function(err) { toast(err.message, false); });
@@ -480,6 +485,7 @@ function saveWeights() {
         cancellation_cozinha: parseFloat(document.getElementById('weightCancellationCozinha').value),
         cancellation_salao: parseFloat(document.getElementById('weightCancellationSalao').value),
         stockout_salao: parseFloat(document.getElementById('weightStockoutSalao').value),
+        returned: parseFloat(document.getElementById('weightReturned').value),
         sla_min: parseFloat(document.getElementById('weightSlaMin').value),
         sla_max: parseFloat(document.getElementById('weightSlaMax').value)
     };

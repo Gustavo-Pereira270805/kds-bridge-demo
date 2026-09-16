@@ -164,7 +164,7 @@ CREATE INDEX IF NOT EXISTS idx_demands_status ON demands(status);
 CREATE TABLE IF NOT EXISTS demand_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   demand_id uuid NOT NULL REFERENCES demands(id) ON DELETE CASCADE,
-  event_type varchar(30) NOT NULL CHECK (event_type IN ('created', 'marked_ready', 'retrieved', 'cancelled_salao', 'cancelled_cozinha', 'stockout_reported', 'sla_breach_cozinha', 'sla_breach_salao', 'annulled', 'shift_transfer', 'step_rollback')),
+  event_type varchar(30) NOT NULL CHECK (event_type IN ('created', 'marked_ready', 'retrieved', 'cancelled_salao', 'cancelled_cozinha', 'stockout_reported', 'sla_breach_cozinha', 'sla_breach_salao', 'annulled', 'shift_transfer', 'step_rollback', 'returned_to_kitchen')),
   actor varchar(10) CHECK (actor IN ('salao', 'cozinha', 'sistema')),
   notes text,
   created_at timestamptz NOT NULL DEFAULT now(),

@@ -794,6 +794,94 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
     }
   );
 
+  // Salão devolve demanda pronta ao preparo (público, kiosk fixo)
+  fastify.post<{ Params: { id: string }; Body: { reason?: string; observation?: string } }>(
+    '/:id/return-to-kitchen',
+    async (request, reply) => {
+      const client = await pool.connect();
+      try {
+        const { id } = request.params;
+        const rawReason = request.body?.reason;
+        const rawObs = request.body?.observation;
+        const reason = typeof rawReason === 'string' ? rawReason.trim() : '';
+        const observation = typeof rawObs === 'string' ? rawObs.trim() : '';
+        if (reason.length > 50) { client.release(); return reply.code(400).send({ error: 'Motivo com no máximo 50 caracteres' }); }
+        if (observation.length > 80) { client.release(); return reply.code(400).send({ error: 'Observação com no máximo 80 caracteres' }); }
+        const reasonDb = reason || null;
+        const obsDb = observation || null;
+
+        const { rows: [demand] } = await client.query<Demand>('SELECT * FROM demands WHERE id = $1', [id]);
+        if (!demand) { client.release(); return reply.code(404).send({ error: 'Demanda não encontrada' }); }
+        if (demand.status !== 'ready') { client.release(); return reply.code(409).send({ error: 'Só é possível devolver demandas prontas aguardando retirada' }); }
+
+        // Guard de dia BRT (GET /demands lista ativas de qualquer dia)
+        const { rows: [dayRow] } = await client.query<{ is_today: boolean }>(
+          `SELECT ($1::timestamptz AT TIME ZONE 'America/Sao_Paulo')::date = (now() AT TIME ZONE 'America/Sao_Paulo')::date AS is_today`,
+          [demand.created_at]
+        );
+        if (!dayRow.is_today) { client.release(); return reply.code(403).send({ error: 'Só é possível devolver demandas do dia atual' }); }
+
+        await client.query('BEGIN');
+        const { rows: [updated] } = await client.query<Demand>(
+          `UPDATE demands SET status = 'pending', ready_at = NULL, ready_out_of_order = false,
+             sla_breached_cozinha = false, sla_breach_minutes_cozinha = NULL,
+             sla_minutes = COALESCE(NULLIF(sla_minutes, 0), 10) + 2,
+             expected_ready_at = now() + ((COALESCE(NULLIF(sla_minutes, 0), 10) + 2) * INTERVAL '1 minute'),
+             returned_to_kitchen_count = returned_to_kitchen_count + 1,
+             returned_to_kitchen_at = now(),
+             returned_to_kitchen_reason = $2, returned_to_kitchen_observation = $3
+           WHERE id = $1 AND status = 'ready' RETURNING *`,
+          [id, reasonDb, obsDb]
+        );
+        if (!updated) { await client.query('ROLLBACK'); client.release(); return reply.code(409).send({ error: 'Demanda mudou de estado, recarregue o quadro' }); }
+        await client.query(
+          `UPDATE demand_events SET annulled_at = now(), annulled_by = 'salao', annul_reason = $2
+           WHERE demand_id = $1 AND event_type IN ('marked_ready', 'sla_breach_cozinha') AND annulled_at IS NULL`,
+          [id, reasonDb]
+        );
+        const noteParts: string[] = [];
+        if (reason) noteParts.push(`Motivo: ${reason}`);
+        if (observation) noteParts.push(`Obs.: ${observation}`);
+        await client.query(
+          `INSERT INTO demand_events (demand_id, event_type, actor, notes) VALUES ($1, 'returned_to_kitchen', 'salao', $2)`,
+          [id, noteParts.length > 0 ? noteParts.join(' · ') : null]
+        );
+        await client.query('COMMIT');
+        client.release();
+
+        // Pós-commit: recompute ANTES dos emits (mesma ordem do stockout)
+        const demandDate = brDayFrom(updated.created_at);
+        if (updated.kitchen_station_id) { await recomputeStationQueue(updated.kitchen_station_id); }
+        const [withName] = await query<Demand>(
+          `SELECT d.*, rp.name AS replaced_name
+           FROM demands d LEFT JOIN products rp ON rp.id = d.replaced_product_id
+           WHERE d.id = $1`,
+          [id]
+        );
+        computeDailyScores(demandDate).catch(err => request.log.error(err));
+        // Segue ativa no quadro: reacopla a observação runtime (sem clearObservation)
+        const out = getObservation(id) ? { ...withName, observation: getObservation(id) } : withName;
+        const station = updated.kitchen_station_id
+          ? await query<{ code: string }>(
+              'SELECT code FROM kitchen_stations WHERE id = $1',
+              [updated.kitchen_station_id]
+            )
+          : [];
+        const room = station.length > 0 ? getStationRoom(station[0].code) : 'cozinha_quente';
+        fastify.io.to(room).emit('demand:returned', out);
+        fastify.io.to('salao').emit('demand:returned', out);
+        fastify.io.to('gerente').emit('demand:returned', out);
+        fastify.io.emit('demand:queue-updated');
+        return out;
+      } catch (error) {
+        await client.query('ROLLBACK').catch((e) => request.log.error(e));
+        client.release();
+        request.log.error(error);
+        reply.code(500).send({ error: 'Erro ao devolver demanda para a cozinha' });
+      }
+    }
+  );
+
   fastify.get('/history', async (request, reply) => {
     try {
       const q = request.query as { date?: string; q?: string; limit?: string; offset?: string };
