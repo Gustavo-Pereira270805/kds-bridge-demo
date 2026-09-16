@@ -334,12 +334,23 @@ body {
   letter-spacing: -0.03em;
 }
 .kpi-card-hero .kpi-sparkline {
-  flex: 1; min-height: 0; position: relative;
+  /* Mini-gráfico com moldura: filete superior ancora o gráfico no card,
+     altura fixa para os eixos terem onde respirar. */
+  flex: none;
+  height: 78px; min-height: 78px;
+  position: relative;
   margin-top: var(--sp-2);
+  padding-top: 6px;
+  border-top: 1px solid var(--c-border-default);
 }
 .kpi-card-hero .kpi-sparkline canvas {
+  /* Sem !important e sem min-height: o Chart.js dimensiona o canvas via
+     estilo inline a partir do pai (diagnosticado: o `height:100%!important`
+     + `canvas{min-height:220px}` esticavam o desenho 6x e o card cortava). */
   position: absolute; inset: 0;
-  width: 100% !important; height: 100% !important;
+  width: 100%; height: 100%;
+  min-height: 0;
+  max-width: 100%;
 }
 .kpi-delta {
   font-size: 10px; font-weight: var(--fw-semi);

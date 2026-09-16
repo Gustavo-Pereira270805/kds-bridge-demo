@@ -1994,35 +1994,87 @@ if (document.readyState === 'loading') {
             var kpiEl = document.getElementById('kpiStrip');
             if (kpiEl) {
                 kpiEl.innerHTML = renderKpis(data, data.trend);
-                // Render sparklines
+                // Render sparklines — mini-gráfico de área por KPI (cada card a
+                // SUA série diária), com eixo Y numerado, eixo X com
+                // primeira/última data, filete de moldura (CSS) e ponto final.
+                var SPARK_SERIES = {
+                    'pedidos': { unit: '', rgb: '69,123,157', beginAtZero: true,
+                        get: function(t) { return numOrNull(t.total); } },
+                    'sla': { unit: '%', rgb: '42,157,143', beginAtZero: false,
+                        get: function(t) {
+                            var term = numOrNull(t.terminadas);
+                            if (!(term > 0)) return null;
+                            return Math.round((numOrNull(t.dentro_sla) / term) * 1000) / 10;
+                        } },
+                    'atrasos-cozinha': { unit: '', rgb: '230,57,70', beginAtZero: true,
+                        get: function(t) { return numOrNull(t.atrasos_cozinha); } },
+                    'atrasos-salao': { unit: '', rgb: '244,162,97', beginAtZero: true,
+                        get: function(t) { return numOrNull(t.atrasos_salao); } }
+                };
+                function numOrNull(v) {
+                    var n = Number(v);
+                    return Number.isFinite(n) ? n : null;
+                }
+                function sparkDayTick(t) {
+                    var raw = (t && t.day instanceof Date) ? t.day.toISOString().split('T')[0] : String((t && t.day) || '');
+                    var m = raw.substring(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                    return m ? m[3] + '/' + m[2] : raw.substring(5, 10);
+                }
+                var SPARK_TICK_FONT = { size: 9, family: "'JetBrains Mono', monospace" };
                 document.querySelectorAll('.kpi-sparkline[data-sparkline-key]').forEach(function(el) {
                     if (el._chart) { el._chart.destroy(); el._chart = null; }
                     el.innerHTML = '';
-                    var trendData = (data.trend || []).slice(-14).map(function(t) { return t.total || 0; });
-                    if (trendData.length < 2) return;
-                    var labels = trendData.map(function(_, i) { return i; });
-                    var ma7 = trendData.map(function(_, i) {
-                        var start = Math.max(0, i - 6);
-                        var slice = trendData.slice(start, i + 1);
-                        return slice.reduce(function(a, b) { return a + b; }, 0) / slice.length;
-                    });
+                    el.removeAttribute('aria-label');
+                    el.removeAttribute('title');
+                    var spec = SPARK_SERIES[el.getAttribute('data-sparkline-key')] || SPARK_SERIES.pedidos;
+                    var days = (data.trend || []).slice(-14);
+                    var vals = days.map(spec.get);
+                    var present = vals.filter(function(v) { return v != null; });
+                    if (present.length < 2 || typeof Chart === 'undefined') return;
+                    var lastIdx = vals.length - 1;
+                    while (lastIdx >= 0 && vals[lastIdx] == null) lastIdx--;
                     var canvas = document.createElement('canvas');
                     el.appendChild(canvas);
-                    if (typeof Chart === 'undefined') return;
+                    var grad = canvas.getContext('2d').createLinearGradient(0, 0, 0, el.clientHeight || 78);
+                    grad.addColorStop(0, 'rgba(' + spec.rgb + ',.30)');
+                    grad.addColorStop(1, 'rgba(' + spec.rgb + ',0)');
                     el._chart = new Chart(canvas, {
-                        type: 'bar',
+                        type: 'line',
                         data: {
-                            labels: labels,
-                            datasets: [
-                                { type: 'bar', data: trendData, backgroundColor: 'rgba(69,123,157,.5)', borderWidth: 0 },
-                                { type: 'line', data: ma7, borderColor: PALETTE.primary, borderWidth: 2, pointRadius: 0, fill: false }
-                            ]
+                            labels: days.map(sparkDayTick),
+                            datasets: [{
+                                data: vals,
+                                borderColor: 'rgb(' + spec.rgb + ')',
+                                backgroundColor: grad,
+                                fill: true,
+                                tension: 0.35,
+                                borderWidth: 2,
+                                pointRadius: function(c) { return c.dataIndex === lastIdx ? 3 : 0; },
+                                pointHoverRadius: 0,
+                                pointBackgroundColor: 'rgb(' + spec.rgb + ')',
+                                spanGaps: false
+                            }]
                         },
                         options: {
+                            layout: { padding: { top: 3, right: 5, left: 0, bottom: 0 } },
                             plugins: { legend: { display: false }, tooltip: { enabled: false } },
-                            scales: { x: { display: false }, y: { display: false } }
+                            scales: {
+                                x: { display: true, grid: { display: false }, border: { display: false },
+                                    ticks: { maxTicksLimit: 2, maxRotation: 0, autoSkip: true,
+                                        color: PALETTE.textMuted, font: SPARK_TICK_FONT, padding: 0 } },
+                                y: { display: true, beginAtZero: spec.beginAtZero, grace: spec.beginAtZero ? 0 : '8%',
+                                    grid: { display: false }, border: { display: true, color: PALETTE.border },
+                                    ticks: { maxTicksLimit: 3, color: PALETTE.textMuted, padding: 3,
+                                        font: SPARK_TICK_FONT, precision: spec.unit ? 1 : 0,
+                                        callback: function(v) { return spec.unit ? v + spec.unit : v; } } }
+                            }
                         }
                     });
+                    var lo = Math.min.apply(null, present), hi = Math.max.apply(null, present);
+                    var desc = 'Tendência diária: de ' + lo + spec.unit + ' a ' + hi + spec.unit + ' nos últimos ' + vals.length + ' dias';
+                    canvas.setAttribute('role', 'img');
+                    canvas.setAttribute('aria-label', desc);
+                    el.setAttribute('title', desc);
                 });
                 // Wire drill-down for hero KPI buttons + tooltip dos deltas (toque)
                 var closeDeltaTips = function() {

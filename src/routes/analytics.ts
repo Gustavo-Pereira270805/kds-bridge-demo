@@ -503,15 +503,18 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         );
 
         // ── 3. Trend ──
+        // dentro_sla/terminadas por dia alimentam o sparkline do KPI "% dentro do SLA".
         const trend = dateFrom !== dateTo ? await safeQuery<{
-          day: string; total: string; entregues: string; cancelados: string; roturas: string; atrasos_cozinha: string; atrasos_salao: string;
+          day: string; total: string; entregues: string; cancelados: string; roturas: string; atrasos_cozinha: string; atrasos_salao: string; dentro_sla: string; terminadas: string;
         }>('3.Trend',
           `SELECT ${brDayOf('created_at')} AS day, COUNT(*)::int AS total,
             COUNT(*) FILTER (WHERE status = 'retrieved')::int AS entregues,
             COUNT(*) FILTER (WHERE status IN ('cancelled_salao','cancelled_cozinha'))::int AS cancelados,
             COUNT(*) FILTER (WHERE stockout_reported = true)::int AS roturas,
             COUNT(*) FILTER (WHERE sla_breached_cozinha = true)::int AS atrasos_cozinha,
-            COUNT(*) FILTER (WHERE sla_breached_salao = true)::int AS atrasos_salao
+            COUNT(*) FILTER (WHERE sla_breached_salao = true)::int AS atrasos_salao,
+            COUNT(*) FILTER (WHERE (ready_at IS NOT NULL AND status IN ('ready','retrieved')) AND sla_breached_cozinha = false)::int AS dentro_sla,
+            COUNT(*) FILTER (WHERE status IN ('retrieved','cancelled_salao','cancelled_cozinha'))::int AS terminadas
            FROM demands WHERE ${dateFilter} AND status != 'annulled' ${stationFilter} GROUP BY 1 ORDER BY day`,
           baseParams
         ) : [];
