@@ -319,15 +319,17 @@
         }
         .modal-overlay.active { display: flex; }
         .modal {
-            background: var(--c-surface); padding: 40px; border-radius: var(--radius-xl);
-            max-width: 640px; width: 94%; border: 1px solid var(--c-border-light);
+            background: var(--c-bg-panel); padding: 40px; border-radius: var(--radius-xl);
+            max-width: 640px; width: 94%; border: 1px solid var(--c-border-default);
             box-shadow: var(--shadow-elevated); max-height: 92vh; overflow-y: auto;
         }
-        .modal h3 { font-size: 26px; margin-bottom: var(--sp-4); }
+        .modal h3 { font-size: 26px; margin-bottom: var(--sp-4); color: var(--c-text-body); }
+        .modal p { color: var(--c-text-secondary); }
         .modal textarea {
             width: 100%; padding: 18px; font-size: 18px;
-            border-radius: var(--radius-md); border: 1px solid var(--c-border-light);
+            border-radius: var(--radius-md); border: 1px solid var(--c-border-default);
             margin-bottom: var(--sp-4); font-family: inherit; resize: vertical;
+            background: var(--c-bg-panel); color: var(--c-text-body);
         }
         .modal textarea:focus { border-color: var(--c-text); outline: none; }
         .modal button { width: 100%; margin-bottom: var(--sp-2); min-height: 72px; font-size: 19px; font-weight: 700; border-radius: 12px; }
@@ -416,7 +418,7 @@
             <h3>Confirmar Retirada</h3>
             <p id="confirmModalText" style="font-size: 16px; margin-bottom: 20px;">Confirmar retirada?</p>
             <div style="display:flex; flex-direction: column; gap: 8px;">
-                <button id="confirmRetrieveBtn" style="background: var(--c-accent-warm); color: white;">Sim, Confirmar Retirada</button>
+                <button id="confirmRetrieveBtn" style="background: var(--c-accent-warm); color: var(--c-on-accent);">Sim, Confirmar Retirada</button>
                 <button id="closeConfirmModal">Cancelar</button>
             </div>
         </div>

@@ -201,6 +201,17 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: var(--c-border-dark); border-radius: 2px; }
 
+        /* Tema claro (definido pelo gerente em Gerenciamento Avançado > Temas):
+           o fundo e os textos do modal usam variáveis e se adaptam sozinhos;
+           só os trechos com cor fixa escura precisam de override. */
+        :root[data-theme="light"] #cancelModal > div, :root[data-theme="light"] #confirmReadyModal > div { background: var(--c-bg-panel) !important; border-color: var(--c-border-default) !important; }
+        :root[data-theme="light"] #cancelModal h3, :root[data-theme="light"] #confirmReadyModal h3 { color: var(--c-text-body) !important; }
+        :root[data-theme="light"] #cancelModal p, :root[data-theme="light"] #confirmReadyModal p { color: var(--c-text-secondary) !important; }
+        :root[data-theme="light"] #cancelModal label { color: var(--c-text-secondary) !important; }
+        :root[data-theme="light"] #cancelModal select, :root[data-theme="light"] #cancelModal input { background: var(--c-bg-page) !important; color: var(--c-text-body) !important; border-color: var(--c-border-default) !important; }
+        :root[data-theme="light"] #closeCancelBtn, :root[data-theme="light"] #closeReadyBtn { background: var(--c-bg-page) !important; color: var(--c-text-secondary) !important; }
+        :root[data-theme="light"] #confirmReadyBtn { background: var(--c-accent-warm) !important; }
+
         @media (prefers-reduced-motion: reduce) {
             .card { animation: none !important; }
         }
@@ -238,7 +249,7 @@
             <h3 style="color:var(--c-text-invert);margin:0 0 24px;font-size:30px;">Confirmar Conclusão</h3>
             <p id="confirmReadyText" style="color:var(--c-text-invert-muted);font-size:20px;margin:0 0 24px;">Marcar este item como pronto?</p>
             <div style="display:flex;gap:18px;">
-                <button id="confirmReadyBtn" style="flex:1;padding:26px;background:linear-gradient(180deg, #10b981 0%, #059669 100%);color:white;border:none;border-radius:12px;font-weight:700;font-size:22px;cursor:pointer;font-family:inherit;">Sim, Marcar como Pronto</button>
+                <button id="confirmReadyBtn" style="flex:1;padding:26px;background:linear-gradient(180deg, #10b981 0%, #059669 100%);color:var(--c-on-accent);border:none;border-radius:12px;font-weight:700;font-size:22px;cursor:pointer;font-family:inherit;">Sim, Marcar como Pronto</button>
                 <button id="closeReadyBtn" style="flex:1;padding:26px;background:#2a2632;color:var(--c-text-invert-muted);border:none;border-radius:12px;font-weight:700;font-size:22px;cursor:pointer;font-family:inherit;">Cancelar</button>
             </div>
         </div>

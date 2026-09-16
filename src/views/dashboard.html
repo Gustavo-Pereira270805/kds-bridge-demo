@@ -166,15 +166,17 @@
         .modal-group { margin-bottom: 14px; }
         .modal-label { font-size: 11px; font-weight: 700; color: #457b9d; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
         .radio-row { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #374151; padding: 4px 0; cursor: pointer; }
-        .export-warn { display: block; font-size: 12px; font-weight: 600; color: #b45309; background: #fef3c7; border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; }
-        .export-progress { font-size: 13px; font-weight: 700; color: #457b9d; text-align: center; padding: 10px 0; }
+        .export-warn { display: block; font-size: 12px; font-weight: 600; color: #fcd34d; background: var(--alert-warn-bg-dark); border: 1px solid var(--c-warn); border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; }
+        :root[data-theme="light"] .export-warn { color: #b45309; background: #fef3c7; border-color: #f59e0b; }
+        .export-progress { font-size: 13px; font-weight: 700; color: var(--c-text-body); text-align: center; padding: 10px 0; }
+        kbd { background: var(--c-bg-page); border: 1px solid var(--c-border-default); border-bottom-width: 2px; border-radius: 6px; padding: 1px 7px; font-family: var(--font-mono); font-size: 12px; color: var(--c-text-body); white-space: nowrap; }
         .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
         .btn-modal-cancel {
             padding: 9px 16px; border: 1px solid #d1d5db; border-radius: 8px; background: white;
             color: #374151; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
         }
         .btn-modal-confirm {
-            padding: 9px 18px; border: none; border-radius: 8px; background: #e63946;
+            padding: 9px 18px; border: none; border-radius: 8px; background: #d62839;
             color: white; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
         }
         .btn-modal-confirm:disabled { opacity: 0.5; cursor: default; }
@@ -268,6 +270,7 @@
         .btn-apply:hover, .btn-criteria:hover { background: var(--c-accent-gold); color: var(--c-primary); }
         .modal-title, .radio-row, .criteria-table td, .repl-table td { color: var(--c-text-body); }
         .criteria-table th, .repl-table th { color: var(--c-accent-gold); border-bottom-color: var(--c-border-default); }
+        :root[data-theme="light"] .criteria-table th, :root[data-theme="light"] .repl-table th { color: #8a5a22; }
         .criteria-table td, .repl-table td { border-bottom-color: var(--c-border-default); }
         .criteria-example { background: var(--c-bg-page); border-color: var(--c-border-default); color: var(--c-text-body); }
         .kpi-card-hero.status-danger { background: var(--alert-urgent-bg-dark); }

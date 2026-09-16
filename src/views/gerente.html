@@ -190,9 +190,10 @@
         .modal-card select:focus, .modal-card textarea:focus { border-color: var(--c-accent-gold); outline: none; }
         .modal-card textarea { resize: vertical; min-height: 120px; }
         .modal-error {
-            background: var(--alert-urgent-bg-light); border: 1px solid var(--c-danger); color: var(--c-danger);
+            background: var(--alert-urgent-bg-dark); border: 1px solid var(--c-danger); color: #fda4af;
             font-size: 12px; font-weight: var(--fw-semi); padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-md); margin-bottom: var(--sp-4);
         }
+        :root[data-theme="light"] .modal-error { background: var(--alert-urgent-bg-light); color: var(--c-danger); }
         .modal-actions { display: flex; justify-content: flex-end; gap: var(--sp-2); }
         .btn-modal-cancel {
             padding: 20px 28px; border: 1px solid var(--c-border-default); border-radius: var(--radius-md);
@@ -204,7 +205,7 @@
             font-size: 18px; font-weight: var(--fw-bold); cursor: pointer;
         }
         .btn-modal-confirm { background: var(--c-primary); color: var(--c-on-primary); }
-        .btn-modal-danger { background: var(--c-danger); }
+        .btn-modal-danger { background: var(--c-danger); color: #fff; }
         .btn-modal-confirm:hover, .btn-modal-danger:hover { filter: brightness(1.1); }
         .btn-modal-confirm:disabled, .btn-modal-danger:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -217,7 +218,7 @@
         }
         .btn-annul:hover { background: var(--c-danger); color: var(--c-text-invert); }
         .step-annulled { text-decoration: line-through; opacity: 0.65; }
-        .btn-step-annul { margin-left: 8px; font-size: 11px; padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(239,68,68,.5); background: transparent; color: #f87171; cursor: pointer; }
+        .btn-step-annul { margin-left: 8px; font-size: 11px; padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(239,68,68,.5); background: transparent; color: var(--c-danger); cursor: pointer; }
         .badge-annulled {
             display: inline-block; background: transparent; color: var(--c-text-secondary); font-size: 10px;
             font-weight: var(--fw-bold); padding: 2px 8px; border: 1px solid var(--c-border-default);
