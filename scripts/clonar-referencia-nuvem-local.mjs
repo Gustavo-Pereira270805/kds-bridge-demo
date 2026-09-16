@@ -91,9 +91,9 @@ try {
   }
 
   console.log('[clonar] Limpando banco local (ordem reversa por FK)...');
-  const ordemLimpeza = [...TABELAS_OPERACIONAIS, 'menu_products', 'product_units', 'products', 'menus', 'units', 'kitchen_stations', 'cancel_reasons', 'performance_weight_versions'].filter(
-    (t) => t !== 'system_settings'
-  );
+  // Filhos antes dos pais: demand_events/demands referenciam daily_menus,
+  // menu_products/product_units referenciam products/menus/units.
+  const ordemLimpeza = ['demand_events', 'demands', 'daily_menu_overrides', 'daily_menus', 'performance_scores', 'pi_events', 'menu_products', 'product_units', 'products', 'menus', 'units', 'kitchen_stations', 'cancel_reasons', 'performance_weight_versions'];
   const cliente = await local.connect();
   try {
     await cliente.query('BEGIN');
