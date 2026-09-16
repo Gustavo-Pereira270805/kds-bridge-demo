@@ -135,11 +135,15 @@ body {
 }
 
 /* === Sticky header === */
+/* Cabeçalho em linha única sem scroll: o inner ocupa a largura total e os
+   rótulos são curtos; em telas estreitas o carimbo de atualização (só
+   informativo) é ocultado, e só abaixo de 1100px o scroll volta como
+   fallback para não cortar controles. */
 .header-controls {
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  flex: 1;
   flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: thin;
+  overflow-x: visible;
 }
 .header-controls > * { flex-shrink: 0; }
 .sticky-top {
@@ -151,11 +155,17 @@ body {
   border-bottom: 1px solid var(--c-border-default);
 }
 .header-inner {
-  max-width: var(--grid-max-width);
+  max-width: none;
   height: 100%;
   margin: 0 auto;
   padding: 0 var(--sp-6);
   display: flex; align-items: center; gap: var(--sp-4);
+}
+@media (max-width: 1450px) {
+  .dash-updated { display: none; }
+}
+@media (max-width: 1100px) {
+  .header-controls { justify-content: flex-start; overflow-x: auto; scrollbar-width: thin; }
 }
 .header-title {
   font-size: 15px; font-weight: var(--fw-bold);
@@ -177,7 +187,7 @@ body {
 .period-btn {
   background: transparent;
   border: 0;
-  padding: 5px 7px;
+  padding: 5px 6px;
   font-size: 12px;
   font-weight: var(--fw-medium);
   color: var(--c-text-secondary);

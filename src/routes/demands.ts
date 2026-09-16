@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { query } from '../db/client';
+import { query, pool } from '../db/client';
 import { Demand, CreateDemandBody, DemandEventType, DemandHistoryEvent, DemandHistoryRow } from '../types';
 import { ensureTodayMenu } from '../services/menu.service';
 import { getCurrentShift } from '../services/shift.service';
@@ -7,6 +7,7 @@ import { recomputeStationQueue } from '../services/queue.service';
 import { evaluateCookingSla, evaluatePickupSla } from '../services/sla.service';
 import { logDemandEvent } from '../services/demand-events.service';
 import { computeDailyScores } from '../services/performance.service';
+import { brDayFrom } from '../services/period.service';
 import { requireKitchen } from '../middleware/auth';
 import { setObservation, getObservation, clearObservation } from '../services/observation.service';
 
@@ -388,7 +389,7 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           'SELECT * FROM demands WHERE id = $1',
           [id]
         );
-        computeDailyScores(new Date(updated.created_at).toISOString().slice(0, 10)).catch(err => request.log.error(err));
+        computeDailyScores(brDayFrom(updated.created_at)).catch(err => request.log.error(err));
         // A demanda continua no quadro: reacopla a observação runtime.
         const readyOut = getObservation(id) ? { ...updated, observation: getObservation(id) } : updated;
         fastify.io.to('salao').emit('demand:ready', readyOut);
@@ -447,7 +448,7 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           'SELECT * FROM demands WHERE id = $1',
           [id]
         );
-        computeDailyScores(new Date(updated.created_at).toISOString().slice(0, 10)).catch(err => request.log.error(err));
+        computeDailyScores(brDayFrom(updated.created_at)).catch(err => request.log.error(err));
         fastify.io.emit('demand:retrieved', updated);
         return updated;
       } catch (error) {
@@ -536,7 +537,7 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           'SELECT * FROM demands WHERE id = $1',
           [id]
         );
-        computeDailyScores(new Date(updated.created_at).toISOString().slice(0, 10)).catch(err => request.log.error(err));
+        computeDailyScores(brDayFrom(updated.created_at)).catch(err => request.log.error(err));
         fastify.io.emit('demand:cancelled', updated);
         if (demand.cooking_started) {
           // Alerta de cancelamento cruzado é para a cozinha da estação da demanda (toca o som).
@@ -639,7 +640,7 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           'SELECT * FROM demands WHERE id = $1',
           [id]
         );
-        computeDailyScores(new Date(updated.created_at).toISOString().slice(0, 10)).catch(err => request.log.error(err));
+        computeDailyScores(brDayFrom(updated.created_at)).catch(err => request.log.error(err));
         fastify.io.emit('demand:cancelled', updated);
         if (demand.cooking_started) {
           // Cozinha cancelou: só o salão consome este evento (toast "cozinha cancelou").
@@ -767,7 +768,7 @@ export default async function demandsRoutes(fastify: FastifyInstance) {
           [id]
         );
 
-        computeDailyScores(new Date(updated.created_at).toISOString().slice(0, 10)).catch(err => request.log.error(err));
+        computeDailyScores(brDayFrom(updated.created_at)).catch(err => request.log.error(err));
 
         // Continua pendente no quadro: reacopla a observação runtime.
         // (Emitido APÓS o recompute, como exige o fluxo de zeramento.)

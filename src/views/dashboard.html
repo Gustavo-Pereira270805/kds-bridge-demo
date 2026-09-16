@@ -208,6 +208,28 @@
         .repl-pct { display: flex; align-items: center; gap: 6px; }
         .repl-pct-bar { height: 8px; border-radius: 4px; background: #f4a261; min-width: 2px; }
 
+        /* Drill-downs — linhas expansíveis genéricas (cancelamentos, zerados, SLA, trocas) */
+        .drill-row { border-radius: 6px; cursor: pointer; transition: background 0.15s; }
+        .drill-row:hover { background: var(--c-bg-page); }
+        .drill-row:focus-visible { outline: 2px solid var(--c-accent-gold); outline-offset: 1px; }
+        .drill-row .bar-row { margin-bottom: 0; }
+        .drill-caret { flex-shrink: 0; font-size: 10px; color: var(--c-text-muted); transition: transform 0.15s; }
+        .drill-row.expanded .drill-caret { transform: rotate(90deg); }
+        .drill-detail {
+            margin: 4px 0 8px; padding: 8px 10px 4px; overflow-x: auto;
+            background: var(--c-bg-page); border: 1px solid var(--c-border-default); border-radius: 8px;
+        }
+        .drill-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; color: var(--c-text-secondary); margin-bottom: 4px; }
+        .drill-close { background: none; border: none; cursor: pointer; color: var(--c-text-muted); font-size: 16px; line-height: 1; padding: 0 2px; font-family: inherit; }
+        .drill-close:hover { color: var(--c-danger); }
+        .drill-table { font-size: 11px; }
+        .drill-table th, .drill-table td { padding: 3px 4px; }
+        .cat-chip { display: inline-block; flex-shrink: 0; margin-left: 2px; padding: 0 5px; border-radius: 6px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; vertical-align: middle; }
+        .cat-chip-cozinha { background: color-mix(in srgb, var(--c-warn) 18%, transparent); color: var(--c-warn); border: 1px solid color-mix(in srgb, var(--c-warn) 45%, transparent); }
+        .cat-chip-salao { background: color-mix(in srgb, var(--c-accent-cold) 18%, transparent); color: var(--c-accent-cold); border: 1px solid color-mix(in srgb, var(--c-accent-cold) 45%, transparent); }
+        .heatmap-cell { cursor: pointer; }
+        .heatmap-cell.selected, .heatmap-cell:focus-visible { outline: 2px solid var(--c-accent-gold); outline-offset: 1px; }
+
         ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-track { background: #e5e7eb; border-radius: 3px; } ::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 3px; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
         @media (max-width: 768px) {
@@ -290,6 +312,9 @@
         .export-bar-row > div { height:8px; background:#292b2e; border-radius:5px; overflow:hidden; }
         .export-bar-row i { display:block; height:100%; background:#c66b5d; border-radius:5px; }
         .export-bar-row b { color:#e18b7a; text-align:right; font:700 10px var(--font-mono); }
+        .export-table { width:100%; border-collapse:collapse; font-size:10px; }
+        .export-table th { text-align:left; color:#9c8875; font-size:9px; text-transform:uppercase; letter-spacing:.6px; padding:4px 6px; border-bottom:1px solid #36383b; }
+        .export-table td { color:#d6cdc6; padding:4px 6px; border-bottom:1px solid #24262a; }
         .export-empty { color:#817873; padding:20px; }
         .export-donut-layout { display:flex; align-items:center; justify-content:center; gap:12px; min-height:150px; }
         .export-donut-layout svg { width:145px; height:145px; flex:0 0 145px; }
@@ -299,6 +324,9 @@
         .export-donut-layout li b { color:#f4efe8; font:700 10px var(--font-mono); }
         @media print { .export-report { background:#090a0c !important; } }
         .period-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .scope-badge { margin-left:8px; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; background:color-mix(in srgb, var(--c-accent-cold) 18%, transparent); color:var(--c-accent-cold); border:1px solid color-mix(in srgb, var(--c-accent-cold) 45%, transparent); }
+        .dash-updated { font-size:11px; color:var(--c-text-secondary); margin-right:4px; }
+        .stockout-sort-btn { background:none; border:none; padding:0; font:inherit; font-size:10px; font-weight:700; color:var(--c-accent-cold); cursor:pointer; text-decoration:underline; }
     </style>
 </head>
 <body>
@@ -307,14 +335,14 @@
         <h1 class="header-title">Dashboard</h1>
         <div class="header-controls">
             <div class="period-pill-group" id="turnSelector" role="group" aria-label="Turno">
-                <button class="period-btn active" data-turn="lunch" aria-pressed="true">Almoço (Geral)</button>
+                <button class="period-btn active" data-turn="lunch" aria-pressed="true" title="Almoço (turno geral)">Almoço</button>
                 <button class="period-btn" data-turn="dinner" aria-pressed="false" disabled title="Estação Jantar não encontrada">Jantar</button>
             </div>
             <div class="period-pill-group" id="periodSelector" role="group" aria-label="Período rápido">
                 <button class="period-btn active" data-range="today" aria-pressed="true">Hoje</button>
                 <button class="period-btn" data-range="yesterday" aria-pressed="false">Ontem</button>
-                <button class="period-btn" data-range="week" aria-pressed="false">Últimos 7 dias</button>
-                <button class="period-btn" data-range="month" aria-pressed="false">Últimos 30 dias</button>
+                <button class="period-btn" data-range="week" aria-pressed="false" title="Últimos 7 dias">7 dias</button>
+                <button class="period-btn" data-range="month" aria-pressed="false" title="Últimos 30 dias">30 dias</button>
             </div>
             <div class="date-controls">
                 <input type="date" id="dateFrom" placeholder="De" aria-label="Data inicial">
@@ -327,8 +355,10 @@
              <button type="button" id="themeToggle" class="btn-theme-toggle" aria-pressed="false" title="Alternar tema">
                  <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
                  <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-                 <span class="theme-toggle-label">Tema: Escuro</span>
+                  <span class="theme-toggle-label">Escuro</span>
              </button>
+             <span id="dashUpdated" class="dash-updated" aria-live="polite"></span>
+             <button id="btnRefresh" class="btn-dash-export" type="button" title="Atualizar agora">&#8635; Atualizar</button>
              <button id="btnExport" class="btn-dash-export" type="button" disabled title="Carregue os dados primeiro">Exportar</button>
             <a href="/gerente" class="btn-dash-back">Voltar</a>
         </div>
@@ -483,7 +513,7 @@
      var label = button && button.querySelector('.theme-toggle-label');
      function refreshThemeLabel() {
          var theme = window.KDSTheme ? KDSTheme.getCurrent() : 'dark';
-         if (label) label.textContent = theme === 'light' ? 'Tema: Claro' : 'Tema: Escuro';
+          if (label) label.textContent = theme === 'light' ? 'Claro' : 'Escuro';
          if (button) button.setAttribute('aria-pressed', String(theme === 'light'));
      }
      if (button) button.addEventListener('click', function () { KDSTheme.toggle(); });
@@ -591,7 +621,7 @@ if (document.readyState === 'loading') {
 }
 
 (function() {
-    var state = { filter: { range: 'today' }, stationId: '', lastData: null, exporting: false, turn: 'lunch', jantarStationId: null };
+    var state = { filter: { range: 'today' }, stationId: '', stations: [], lastData: null, exporting: false, turn: 'lunch', jantarStationId: null, stockoutSort: 'volume' };
     if (!kdsGuard()) throw new Error('redirecionando para login');
     var socket = kdsSocket(io);
     socket.emit('identify', 'gerente');
@@ -700,10 +730,10 @@ if (document.readyState === 'loading') {
         };
 
         var heroCards = [
-            { key: 'pedidos', eyebrow: 'TOTAL DE PEDIDOS', value: totalPedidos.toLocaleString('pt-BR'), delta: k.comparison ? k.comparison.pedidos ? k.comparison.pedidos.delta_pct : null : null, status: 'neutral', target: '#overview' },
-            { key: 'sla', eyebrow: '% DENTRO DO SLA', value: (k.pct_dentro_sla || 0).toFixed(1) + '%', delta: k.comparison ? k.comparison.sla ? k.comparison.sla.delta_pct : null : null, status: 'neutral', target: '#sla' },
-            { key: 'atrasos-cozinha', eyebrow: 'ATRASOS COZINHA', value: atrasosCozinha.toLocaleString('pt-BR'), delta: k.comparison ? k.comparison.atrasos_cozinha ? k.comparison.atrasos_cozinha.delta_pct : null : null, status: statusForAtrasos(atrasosCozinha), target: '#sla' },
-            { key: 'atrasos-salao', eyebrow: 'ATRASOS SAL\u00c3O', value: atrasosSalao.toLocaleString('pt-BR'), delta: k.comparison ? k.comparison.atrasos_salao ? k.comparison.atrasos_salao.delta_pct : null : null, status: statusForAtrasos(atrasosSalao), target: '#sla' },
+            { key: 'pedidos', eyebrow: 'TOTAL DE PEDIDOS', value: totalPedidos.toLocaleString('pt-BR'), delta: k.comparison ? k.comparison.pedidos ? k.comparison.pedidos.delta_pct : null : null, unit: '%', invert: false, status: 'neutral', target: '#overview' },
+            { key: 'sla', eyebrow: '% DENTRO DO SLA', value: (k.pct_dentro_sla || 0).toFixed(1) + '%', delta: k.comparison ? k.comparison.sla ? k.comparison.sla.delta_pct : null : null, unit: ' pts', invert: false, status: 'neutral', target: '#sla' },
+            { key: 'atrasos-cozinha', eyebrow: 'ATRASOS COZINHA', value: atrasosCozinha.toLocaleString('pt-BR'), delta: k.comparison ? k.comparison.atrasos_cozinha ? k.comparison.atrasos_cozinha.delta_pct : null : null, unit: '%', invert: true, status: statusForAtrasos(atrasosCozinha), target: '#sla' },
+            { key: 'atrasos-salao', eyebrow: 'ATRASOS SAL\u00c3O', value: atrasosSalao.toLocaleString('pt-BR'), delta: k.comparison ? k.comparison.atrasos_salao ? k.comparison.atrasos_salao.delta_pct : null : null, unit: '%', invert: true, status: statusForAtrasos(atrasosSalao), target: '#sla' },
         ];
 
         var occMedia = (data.occupancy_by_shift || []).length > 0
@@ -719,16 +749,17 @@ if (document.readyState === 'loading') {
             { key: 'ocupacao', label: 'CAPACIDADE OCIOSA', value: occMedia.toFixed(1) + '%' },
         ];
 
-        var renderDelta = function(delta) {
+        var renderDelta = function(delta, unit, invert) {
             if (delta == null) return '';
             var up = delta >= 0;
             var arrow = up ? '\u2191' : '\u2193';
-            return '<span class="kpi-delta ' + (up ? 'up' : 'down') + '">' + arrow + ' ' + Math.abs(delta).toFixed(1) + '%</span>';
+            var cls = invert ? (up ? 'down' : 'up') : (up ? 'up' : 'down');
+            return '<span class="kpi-delta ' + cls + '" title="Comparado ao per\u00edodo anterior">' + arrow + ' ' + Math.abs(delta).toFixed(1).replace('.', ',') + (unit || '%') + '</span>';
         };
 
         var heroHTML = heroCards.map(function(c) {
             return '<button class="kpi-card-hero status-' + c.status + '" data-target="' + c.target + '" aria-label="' + c.eyebrow + ': ' + c.value + '">' +
-                '<div class="kpi-eyebrow"><span>' + c.eyebrow + '</span>' + renderDelta(c.delta) + '</div>' +
+                '<div class="kpi-eyebrow"><span>' + c.eyebrow + '</span>' + renderDelta(c.delta, c.unit, c.invert) + '</div>' +
                 '<div class="kpi-value">' + c.value + '</div>' +
                 '<div class="kpi-sparkline" data-sparkline-key="' + c.key + '"></div>' +
             '</button>';
@@ -809,7 +840,9 @@ if (document.readyState === 'loading') {
             html += '<div class="heatmap-label">' + dias[d] + '</div>';
             for(var h = 0; h < 24; h++) {
                 var v = grid[d][h];
-                html += '<div class="heatmap-cell" title="' + dias[d] + ' ' + h + 'h: ' + v + '" style="background:' + heatColor(v, max) + ';">' + (v || '') + '</div>';
+                var attrs = ' data-dow="' + d + '" data-hora="' + h + '"';
+                if (v > 0) attrs += ' tabindex="0" role="button" aria-label="' + dias[d] + ' ' + h + 'h: ' + v + ' demandas. Clique para detalhar"';
+                html += '<div class="heatmap-cell" title="' + dias[d] + ' ' + h + 'h: ' + v + (v > 0 ? ' \u00b7 clique para detalhar' : '') + '"' + attrs + ' style="background:' + heatColor(v, max) + ';">' + (v || '') + '</div>';
             }
         }
         html += '</div>';
@@ -863,26 +896,371 @@ if (document.readyState === 'loading') {
         return '<div class="panel panel-full">' + titleRow + '<canvas id="cmpCanvas"></canvas></div>';
     }
 
-    function renderReplacements(rows) {
+    // ── Drill-downs genéricos (cancelamentos, zerados, SLA, trocas) ──
+    // Cada linha expansível leva data-idx (índice na lista) e prefixo; o detalhe
+    // correspondente vive em '<prefixo>-detail-<idx>' e é aberto em acordeão (1 por vez).
+    function drillTableHtml(headers, rows) {
+        if (!rows.length) {
+            return '<p style="color:var(--c-text-muted);padding:8px 0;font-size:11px;">Sem registros.</p>';
+        }
+        var h = '<table class="repl-table drill-table"><thead><tr>';
+        headers.forEach(function(x) { h += '<th>' + x + '</th>'; });
+        h += '</tr></thead><tbody>';
+        rows.forEach(function(cells) {
+            h += '<tr>';
+            cells.forEach(function(c) { h += '<td>' + c + '</td>'; });
+            h += '</tr>';
+        });
+        return h + '</tbody></table>';
+    }
+
+    function drillRowHtml(opts) {
+        var head = '<div class="drill-head"><span>' + opts.head + '</span>' +
+            '<button type="button" class="drill-close ' + opts.prefix + '-drill-close" aria-label="Fechar detalhamento">&times;</button></div>';
+        return '<div class="drill-row ' + opts.rowClass + '" data-idx="' + opts.idx + '" data-drill-prefix="' + opts.prefix + '" role="button" tabindex="0" aria-expanded="false" aria-controls="' + opts.prefix + '-detail-' + opts.idx + '">' +
+            '<div class="bar-row">' +
+            '<div class="bar-label" title="' + escAttr(opts.fullLabel || opts.label) + '">' + esc(opts.label) + '</div>' +
+            (opts.chipHtml || '') +
+            '<div class="bar-track"><div class="bar-fill" style="width:' + opts.pct + '%;background:' + opts.color + ';">' + (opts.pct > 20 ? '<span>' + opts.valueLabel + '</span>' : '') + '</div></div>' +
+            '<div class="bar-value">' + opts.value + '</div>' +
+            '<span class="drill-caret" aria-hidden="true">\u25B8</span>' +
+            '</div>' +
+            '<div class="drill-detail ' + opts.prefix + '-detail" id="' + opts.prefix + '-detail-' + opts.idx + '" data-idx="' + opts.idx + '" style="display:none;">' +
+            head + opts.table + '</div></div>';
+    }
+
+    function toggleDrillRow(grid, row, prefix, forceClosed) {
+        var wasExpanded = row.classList.contains('expanded');
+        var rows = grid.querySelectorAll('.drill-row');
+        for (var i = 0; i < rows.length; i++) {
+            var other = rows[i];
+            if (other.getAttribute('data-drill-prefix') !== prefix) continue;
+            other.classList.remove('expanded');
+            other.setAttribute('aria-expanded', 'false');
+            var det = document.getElementById(prefix + '-detail-' + other.getAttribute('data-idx'));
+            if (det) det.style.display = 'none';
+        }
+        if (wasExpanded || forceClosed) return;
+        row.classList.add('expanded');
+        row.setAttribute('aria-expanded', 'true');
+        var mine = document.getElementById(prefix + '-detail-' + row.getAttribute('data-idx'));
+        if (mine) mine.style.display = '';
+    }
+
+    function wireDrillGrid(grid, types) {
+        if (grid._drillTypes) return;
+        grid._drillTypes = types;
+        grid.addEventListener('click', function(e) {
+            var list = grid._drillTypes;
+            for (var i = 0; i < list.length; i++) {
+                var t = list[i];
+                var closeBtn = perfClosest(e.target, '.' + t.prefix + '-drill-close', grid);
+                if (closeBtn) {
+                    var closeRow = perfClosest(closeBtn, t.selector, grid);
+                    if (closeRow) toggleDrillRow(grid, closeRow, t.prefix, true);
+                    return;
+                }
+                var row = perfClosest(e.target, t.selector, grid);
+                if (row) {
+                    toggleDrillRow(grid, row, t.prefix, false);
+                    return;
+                }
+            }
+        });
+        grid.addEventListener('keydown', function(e) {
+            if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+            var list = grid._drillTypes;
+            for (var i = 0; i < list.length; i++) {
+                var row = perfClosest(e.target, list[i].selector, grid);
+                if (row) {
+                    e.preventDefault();
+                    toggleDrillRow(grid, row, list[i].prefix, false);
+                    return;
+                }
+            }
+        });
+    }
+
+    var STATUS_LABELS = { pending: 'Na fila', ready: 'Pronta', retrieved: 'Retirada', cancelled_salao: 'Cancelada (sal\u00e3o)', cancelled_cozinha: 'Cancelada (cozinha)', annulled: 'Anulada' };
+    function statusLabel(s) { return STATUS_LABELS[s] || s || ''; }
+
+    function fmtBrtDay(iso) {
+        var d = new Date(String(iso || ''));
+        if (isNaN(d.getTime())) return String(iso || '').substring(0, 10);
+        try {
+            var parts = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(d);
+            var g = {};
+            parts.forEach(function(x) { g[x.type] = x.value; });
+            return g.year + '-' + g.month + '-' + g.day;
+        } catch (e) {
+            return d.toISOString().split('T')[0];
+        }
+    }
+
+    function fmtRealMinutes(startIso, endIso) {
+        var a = new Date(String(startIso || '')).getTime();
+        var b = new Date(String(endIso || '')).getTime();
+        if (!isFinite(a) || !isFinite(b)) return '\u2014';
+        return String(Math.round(((b - a) / 60000) * 10) / 10);
+    }
+
+    function heatmapHeadHtml(dias, dow, hora, info) {
+        return '<div class="drill-head"><span>' + dias[dow] + ' \u00e0s ' + hora + 'h' + (info ? ' \u2014 ' + info : '') + '</span>' +
+            '<button type="button" class="drill-close heatmap-drill-close" aria-label="Fechar detalhamento">&times;</button></div>';
+    }
+
+    function loadHeatmapDetail(grid, cell) {
+        var box = document.getElementById('heatmap-detail');
+        if (!box) return;
+        var dias = ['Domingo', 'Segunda', 'Ter\u00e7a', 'Quarta', 'Quinta', 'Sexta', 'S\u00e1bado'];
+        var dow = parseInt(cell.getAttribute('data-dow'), 10);
+        var hora = cell.getAttribute('data-hora');
+        // Clicar na célula já selecionada fecha o painel.
+        if (cell.classList.contains('selected')) {
+            cell.classList.remove('selected');
+            box.style.display = 'none';
+            box.innerHTML = '';
+            return;
+        }
+        var selected = grid.querySelectorAll('.heatmap-cell.selected');
+        for (var i = 0; i < selected.length; i++) selected[i].classList.remove('selected');
+        cell.classList.add('selected');
+        box.style.display = '';
+        box.innerHTML = '<div class="drill-detail">' + heatmapHeadHtml(dias, dow, hora, 'carregando...') + '</div>';
+
+        var params = filterToParams();
+        var sid = effectiveStationId();
+        if (sid) params += '&station_id=' + encodeURIComponent(sid);
+        params += '&dow=' + dow + '&hora=' + encodeURIComponent(hora);
+        var seq = (grid._heatSeq || 0) + 1;
+        grid._heatSeq = seq;
+        api('/api/v1/analytics/heatmap-details?' + params).then(function(res) {
+            if (grid._heatSeq !== seq) return; // resposta de um clique antigo
+            var list = (res && res.rows) || [];
+            var tableRows = list.map(function(r) {
+                return [
+                    '<span style="font-family:var(--font-mono);white-space:nowrap;">' + exportEscape(fmtOccDate(r.created_at)) + '</span>',
+                    exportEscape(r.product_name || '-'),
+                    exportEscape(r.station || '\u2014'),
+                    exportEscape(statusLabel(r.status))
+                ];
+            });
+            box.innerHTML = '<div class="drill-detail">' +
+                heatmapHeadHtml(dias, dow, hora, list.length + ' demanda' + (list.length === 1 ? '' : 's')) +
+                drillTableHtml(['Data/Hora', 'Produto', 'Esta\u00e7\u00e3o', 'Status'], tableRows) + '</div>';
+        }).catch(function(err) {
+            if (grid._heatSeq !== seq) return;
+            box.innerHTML = '<div class="drill-detail">' + heatmapHeadHtml(dias, dow, hora, 'erro ao carregar') +
+                '<p style="color:var(--c-danger);font-size:11px;padding:8px 0;">' + exportEscape(err && err.message ? err.message : 'Tente novamente.') + '</p></div>';
+            showToast('Erro ao carregar detalhes do heatmap.', 'error');
+        });
+    }
+
+    function renderReplacements(rows, details) {
         var title = '<div class="section-title">Trocas de itens do cardápio</div>';
         if(!rows || !rows.length) {
             return '<div class="empty-state"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M10 24h28M14 14l-4 10 4 10M34 14l4 10-4 10"></path></svg><h4>Sem dados para o período selecionado</h4><p>Tente outro intervalo de datas.</p><button type="button" class="btn btn-ghost" onclick="var b=document.querySelector(\'#periodSelector .period-btn[data-range=today]\');if(b)b.click()">Voltar para hoje</button></div>';
         }
+        var byDay = {};
+        (details || []).forEach(function(d) {
+            var key = String(d.day || '');
+            if (!byDay[key]) byDay[key] = [];
+            byDay[key].push(d);
+        });
         var max = 0;
         rows.forEach(function(r) { var v = parseFloat(r.replacement_pct) || 0; if(v > max) max = v; });
         if(max <= 0) max = 1;
         var h = '<table class="repl-table"><thead><tr><th>Dia</th><th>Pedidos</th><th>Trocas</th><th>%</th></tr></thead><tbody>';
-        rows.forEach(function(r) {
+        rows.forEach(function(r, i) {
             var day = String(r.day || ''); if(day.indexOf('T') > -1) day = day.split('T')[0];
             var parts = day.split('-');
             var dl = parts.length === 3 ? parts[2] + '/' + parts[1] : day;
             var pct = parseFloat(r.replacement_pct) || 0;
             var w = Math.min(100, (pct / max) * 100);
-            h += '<tr><td>' + dl + '</td><td>' + r.total + '</td><td>' + r.replacements + '</td>' +
-                '<td><div class="repl-pct"><div class="repl-pct-bar" style="width:' + w + '%;"></div><span>' + pct + '%</span></div></td></tr>';
+            var list = (byDay[day] || []).slice();
+            list.sort(function(a, b) { return String(b.created_at).localeCompare(String(a.created_at)); });
+            var detailRows = list.map(function(occ) {
+                return [
+                    '<span style="font-family:var(--font-mono);white-space:nowrap;">' + exportEscape(fmtOccDate(occ.created_at)) + '</span>',
+                    exportEscape(occ.replaced_name || '\u2014'),
+                    exportEscape(occ.product_name || '-'),
+                    exportEscape(occ.station || '\u2014')
+                ];
+            });
+            var head = '<div class="drill-head"><span>' + list.length + ' troca' + (list.length === 1 ? '' : 's') + ' em ' + dl + '</span>' +
+                '<button type="button" class="drill-close repl-drill-close" aria-label="Fechar detalhamento">&times;</button></div>';
+            h += '<tr class="drill-row repl-row" data-idx="' + i + '" data-drill-prefix="repl" role="button" tabindex="0" aria-expanded="false" aria-controls="repl-detail-' + i + '">' +
+                '<td>' + dl + ' <span class="drill-caret" aria-hidden="true">\u25B8</span></td><td>' + r.total + '</td><td>' + r.replacements + '</td>' +
+                '<td><div class="repl-pct"><div class="repl-pct-bar" style="width:' + w + '%;"></div><span>' + pct + '%</span></div></td></tr>' +
+                '<tr class="repl-detail-row"><td colspan="4" style="padding:0;">' +
+                '<div class="drill-detail repl-detail" id="repl-detail-' + i + '" style="display:none;">' + head +
+                drillTableHtml(['Hora', 'Substituiu', 'Por', 'Esta\u00e7\u00e3o'], detailRows) + '</div></td></tr>';
         });
         h += '</tbody></table>';
         return '<div class="panel">' + title + '<div style="max-height:260px;overflow-y:auto;">' + h + '</div></div>';
+    }
+
+    // Chave que replica o GROUP BY do agregado (label + categoria + texto do motivo),
+    // garantindo que o detalhe de cada barra mostre exatamente as demandas contabilizadas nela.
+    function cancelReasonKey(label, category, reasonText) {
+        return String(label || '') + '\u0001' + String(category || '') + '\u0001' + String(reasonText || '');
+    }
+
+    function renderCancelReasonsPanel(data) {
+        var reasons = (data && data.cancel_reasons) || [];
+        if (!reasons.length) {
+            return '<p style="color:var(--c-text-muted);padding:20px 0;text-align:center;">Nenhum cancelamento no período</p>';
+        }
+        var details = (data && data.cancel_reason_details) || [];
+        var byKey = {};
+        details.forEach(function(row) {
+            var key = cancelReasonKey(row.label, row.category, row.reason_text);
+            if (!byKey[key]) byKey[key] = [];
+            byKey[key].push(row);
+        });
+        var top = reasons.slice(0, 10);
+        var total = top.reduce(function(s, d) { return s + (parseFloat(d.total) || 0); }, 0) || 1;
+        var max = 1;
+        top.forEach(function(d) { var v = parseFloat(d.total) || 0; if (v > max) max = v; });
+        var rows = '';
+        top.forEach(function(d, i) {
+            var v = parseFloat(d.total) || 0;
+            var pct = max > 0 ? (v / max) * 100 : 0;
+            var list = byKey[cancelReasonKey(d.label, d.category, d.reason_text)] || [];
+            var sector = d.category === 'cozinha' ? 'Cozinha' : d.category === 'salao' ? 'Sal\u00e3o' : '';
+            var chip = d.category === 'cozinha' ? '<span class="cat-chip cat-chip-cozinha">Cozinha</span>'
+                : d.category === 'salao' ? '<span class="cat-chip cat-chip-salao">Sal\u00e3o</span>' : '';
+            list.sort(function(a, b) { return String(b.cancelled_at).localeCompare(String(a.cancelled_at)); });
+            var detailRows = list.map(function(occ) {
+                var who = occ.status === 'cancelled_cozinha' ? (occ.station || 'Cozinha') : 'Sal\u00e3o';
+                return [
+                    '<span style="font-family:var(--font-mono);white-space:nowrap;">' + exportEscape(fmtOccDate(occ.cancelled_at)) + '</span>',
+                    occ.daily_seq ? '#' + occ.daily_seq : '\u2014',
+                    exportEscape(occ.product_name || '-'),
+                    exportEscape(occ.station || '\u2014'),
+                    exportEscape(who)
+                ];
+            });
+            rows += drillRowHtml({
+                prefix: 'cancel', rowClass: 'cancel-reason-row', idx: i,
+                label: d.label, chipHtml: chip, value: v, valueLabel: v, pct: pct, color: '#e63946',
+                head: list.length + ' ocorr\u00eancia' + (list.length === 1 ? '' : 's') + ' \u00b7 ' + (Math.round((v / total) * 1000) / 10) + '% dos cancelamentos' + (sector ? ' \u00b7 ' + sector : ''),
+                table: drillTableHtml(['Data/Hora', 'Pedido', 'Produto', 'Esta\u00e7\u00e3o', 'Cancelado por'], detailRows)
+            });
+        });
+        return '<div class="panel" style="box-shadow:none;"><div style="max-height:300px;overflow-y:auto;">' + rows + '</div></div>';
+    }
+
+    function renderStockoutPanel(data, sort) {
+        var products = (data && data.scatter_roturas) || [];
+        var withZero = products.filter(function(d) { return parseInt(d.total_roturas) > 0; });
+        if (sort === 'taxa') {
+            // Taxa = roturas / pedidos do produto (empate: absoluto desc).
+            withZero.sort(function(a, b) {
+                var da = parseFloat(a.total_demandas) || 0;
+                var db = parseFloat(b.total_demandas) || 0;
+                var ta = da > 0 ? parseInt(a.total_roturas) / da : 0;
+                var tb = db > 0 ? parseInt(b.total_roturas) / db : 0;
+                if (tb !== ta) return tb - ta;
+                return parseInt(b.total_roturas) - parseInt(a.total_roturas);
+            });
+        }
+        withZero = withZero.slice(0, 10);
+        if (!withZero.length) {
+            return '<p style="color:var(--c-text-muted);padding:20px 0;text-align:center;">Nenhum zerado no período</p>';
+        }
+        var details = (data && data.stockout_details) || [];
+        var byProduct = {};
+        details.forEach(function(row) {
+            if (!byProduct[row.product_name]) byProduct[row.product_name] = [];
+            byProduct[row.product_name].push(row);
+        });
+        var max = 1;
+        withZero.forEach(function(d) { var v = parseInt(d.total_roturas); if (v > max) max = v; });
+        var rows = '';
+        withZero.forEach(function(d, i) {
+            var v = parseInt(d.total_roturas);
+            var demandas = parseFloat(d.total_demandas) || 0;
+            var sharePct = demandas > 0 ? Math.round((v / demandas) * 1000) / 10 : 0;
+            var pct = max > 0 ? (v / max) * 100 : 0;
+            var list = (byProduct[d.product_name] || []).slice();
+            list.sort(function(a, b) { return String(b.stockout_reported_at || b.created_at).localeCompare(String(a.stockout_reported_at || a.created_at)); });
+            var detailRows = list.map(function(occ) {
+                var factor = occ.stockout_sla_factor != null ? Number(occ.stockout_sla_factor) : null;
+                var situacao = factor == null ? 'Sem SLA no momento'
+                    : (factor > 1 ? 'J\u00e1 estourado (' + factor.toFixed(2).replace('.', ',') + '\u00d7 SLA)'
+                                  : 'Dentro do SLA (' + factor.toFixed(2).replace('.', ',') + '\u00d7 SLA)');
+                return [
+                    '<span style="font-family:var(--font-mono);white-space:nowrap;">' + exportEscape(fmtOccDate(occ.stockout_reported_at || occ.created_at)) + '</span>',
+                    occ.daily_seq ? '#' + occ.daily_seq : '\u2014',
+                    exportEscape(occ.product_name || '-'),
+                    exportEscape(occ.station || '\u2014'),
+                    exportEscape(situacao)
+                ];
+            });
+            rows += drillRowHtml({
+                prefix: 'stockout', rowClass: 'stockout-row', idx: i,
+                label: d.product_name.substring(0, 14), fullLabel: d.product_name,
+                value: v + ' / ' + d.total_demandas, valueLabel: v + ' zerou', pct: pct, color: '#e63946',
+                head: list.length + ' ocorr\u00eancia' + (list.length === 1 ? '' : 's') + ' \u00b7 ' + sharePct + '% dos pedidos do produto',
+                table: drillTableHtml(['Data/Hora', 'Pedido', 'Produto', 'Esta\u00e7\u00e3o', 'Situa\u00e7\u00e3o'], detailRows)
+            });
+        });
+        return '<div class="panel" style="box-shadow:none;"><div style="max-height:220px;overflow-y:auto;">' + rows + '</div></div>';
+    }
+
+    function renderSlaProductPanel(data) {
+        var products = (data && data.sla_by_product) || [];
+        if (!products.length) return '';
+        var details = (data && data.sla_details) || [];
+        var byProduct = {};
+        details.forEach(function(row) {
+            if (!byProduct[row.product_name]) byProduct[row.product_name] = [];
+            byProduct[row.product_name].push(row);
+        });
+        var slaMax = 1;
+        products.forEach(function(d) { if (d.breached > slaMax) slaMax = d.breached; });
+        var rows = '';
+        products.slice(0, 10).forEach(function(d, i) {
+            var pct = slaMax > 0 ? (d.breached / slaMax) * 100 : 0;
+            var color = d.pct_ok >= 90 ? '#2a9d8f' : d.pct_ok >= 70 ? '#f4a261' : '#e63946';
+            var list = (byProduct[d.product_name] || []).slice();
+            list.sort(function(a, b) { return String(b.ready_at).localeCompare(String(a.ready_at)); });
+            var detailRows = list.map(function(occ) {
+                return [
+                    '<span style="font-family:var(--font-mono);white-space:nowrap;">' + exportEscape(fmtOccDate(occ.ready_at || occ.created_at)) + '</span>',
+                    occ.daily_seq ? '#' + occ.daily_seq : '\u2014',
+                    exportEscape(occ.station || '\u2014'),
+                    fmtRealMinutes(occ.created_at, occ.ready_at) + ' min',
+                    (occ.overage_min == null ? '\u2014' : (Math.round(Number(occ.overage_min) * 10) / 10) + ' min')
+                ];
+            });
+            rows += drillRowHtml({
+                prefix: 'sla', rowClass: 'sla-product-row', idx: i,
+                label: d.product_name, value: d.pct_ok + '%', valueLabel: d.breached + ' estouros', pct: pct, color: color,
+                head: list.length + ' estouro' + (list.length === 1 ? '' : 's') + ' \u00b7 ' + d.pct_ok + '% dentro do SLA',
+                table: drillTableHtml(['Data/Hora', 'Pedido', 'Esta\u00e7\u00e3o', 'Tempo real', 'Excedeu'], detailRows)
+            });
+        });
+        return '<div style="max-height:260px;overflow-y:auto;">' + rows + '</div>';
+    }
+
+    // Tempo médio de preparo por produto (agregado no servidor — sem o enviesamento
+    // do antigo `qty_vs_time` com ORDER BY quantity LIMIT 200).
+    function renderPrepHtml(data) {
+        var products = (data && data.prep_by_product) || [];
+        if (!products.length) return '<p style="color:var(--c-text-muted);padding:8px 0;font-size:11px;">Sem preparos concluídos no período.</p>';
+        var max = 1;
+        products.forEach(function(d) { var v = parseFloat(d.avg_min) || 0; if (v > max) max = v; });
+        var bars = '';
+        products.slice(0, 12).forEach(function(d) {
+            var v = Math.round(parseFloat(d.avg_min) || 0);
+            var sla = d.sla_min == null ? null : Number(d.sla_min);
+            var pct = max > 0 ? (v / max) * 100 : 0;
+            var color = (sla === null || v <= sla) ? '#2a9d8f' : v <= sla * 1.5 ? '#f4a261' : '#e63946';
+            bars += '<div class="bar-row"><div class="bar-label" style="width:130px;" title="' + escAttr(d.product_name) + '">' + esc(String(d.product_name || '').substring(0, 16)) + '</div><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:' + color + ';">' + (pct > 20 ? '<span>' + v + ' min</span>' : '') + '</div></div><div class="bar-value" style="width:100px;">' + v + 'm / SLA ' + (sla === null ? '\u2014' : sla) + '</div></div>';
+        });
+        return '<div style="max-height:300px;overflow-y:auto;">' + bars + '</div>';
     }
 
     function buildContent(data) {
@@ -932,8 +1310,32 @@ if (document.readyState === 'loading') {
         demandGrid.innerHTML = '';
 
         demandGrid.innerHTML += '<article class="panel panel-tall" data-cols="12">' +
-            '<header class="panel-header"><h3 class="panel-title">Heatmap Hora x Dia da Semana</h3><p class="panel-subtitle">Passe o mouse para ver o volume</p></header>' +
-            '<div class="panel-body">' + renderHeatmap(data.heatmap) + '</div></article>';
+            '<header class="panel-header"><h3 class="panel-title">Heatmap Hora x Dia da Semana</h3><p class="panel-subtitle">Passe o mouse para ver o volume \u00b7 clique em uma c\u00e9lula para listar as demandas</p></header>' +
+            '<div class="panel-body">' + renderHeatmap(data.heatmap) + '<div id="heatmap-detail" style="display:none;margin-top:10px;"></div></div></article>';
+
+        if (!demandGrid._heatClickSet) {
+            demandGrid._heatClickSet = true;
+            demandGrid.addEventListener('click', function(e) {
+                var closeBtn = perfClosest(e.target, '.heatmap-drill-close', demandGrid);
+                if (closeBtn) {
+                    var boxEl = document.getElementById('heatmap-detail');
+                    if (boxEl) { boxEl.style.display = 'none'; boxEl.innerHTML = ''; }
+                    var sel = demandGrid.querySelectorAll('.heatmap-cell.selected');
+                    for (var i = 0; i < sel.length; i++) sel[i].classList.remove('selected');
+                    return;
+                }
+                var cell = perfClosest(e.target, '.heatmap-cell[data-dow]', demandGrid);
+                if (!cell) return;
+                loadHeatmapDetail(demandGrid, cell);
+            });
+            demandGrid.addEventListener('keydown', function(e) {
+                if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+                var cell = perfClosest(e.target, '.heatmap-cell[data-dow]', demandGrid);
+                if (!cell) return;
+                e.preventDefault();
+                loadHeatmapDetail(demandGrid, cell);
+            });
+        }
 
         if (data.volume_ma && data.volume_ma.length > 1) {
             demandGrid.innerHTML += '<article class="panel panel-chart" data-cols="7">' +
@@ -964,45 +1366,16 @@ if (document.readyState === 'loading') {
             '<div class="panel-body chart-container" id="chart-retirada"></div></article>';
 
         if (data.sla_by_product && data.sla_by_product.length) {
-            var slaBar = '';
-            var slaMax = 1;
-            data.sla_by_product.forEach(function(d) { if(d.breached > slaMax) slaMax = d.breached; });
-            data.sla_by_product.slice(0, 10).forEach(function(d) {
-                var pct = slaMax > 0 ? (d.breached / slaMax) * 100 : 0;
-                var color = d.pct_ok >= 90 ? '#2a9d8f' : d.pct_ok >= 70 ? '#f4a261' : '#e63946';
-                slaBar += '<div class="bar-row"><div class="bar-label" title="' + escAttr(d.product_name) + '">' + esc(d.product_name) + '</div><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:' + color + ';">' + (pct > 20 ? '<span>' + d.breached + ' estouros</span>' : '') + '</div></div><div class="bar-value">' + d.pct_ok + '%</div></div>';
-            });
             slaGrid.innerHTML += '<article class="panel" data-cols="6">' +
-                '<header class="panel-header"><h3 class="panel-title">SLA por Produto (Pareto de Estouros)</h3></header>' +
-                '<div class="panel-body"><div style="max-height:260px;overflow-y:auto;">' + slaBar + '</div></div></article>';
+                '<header class="panel-header"><h3 class="panel-title">SLA por Produto (Pareto de Estouros)</h3><p class="panel-subtitle">Clique para detalhar</p></header>' +
+                '<div class="panel-body">' + renderSlaProductPanel(data) + '</div></article>';
         }
+        wireDrillGrid(slaGrid, [{ selector: '.sla-product-row', prefix: 'sla' }]);
 
-        if (data.qty_vs_time && data.qty_vs_time.length > 2) {
-            var productMap = {};
-            data.qty_vs_time.forEach(function(d) {
-                var p = d.product_name;
-                if (!productMap[p]) productMap[p] = { name: p, totalMin: 0, count: 0, totalQty: 0, sla: parseFloat(d.sla_min) };
-                productMap[p].totalMin += parseFloat(d.actual_min);
-                productMap[p].totalQty += parseFloat(d.qty);
-                productMap[p].count++;
-            });
-            var aggregated = Object.values(productMap).map(function(d) {
-                return { product_name: d.name, avg_min: d.totalMin / d.count, sla_min: d.sla, total_qty: d.totalQty, pedidos: d.count };
-            });
-            aggregated.sort(function(a,b) { return b.avg_min - a.avg_min; });
-            var qtyBars = '';
-            var qtyMax = 1;
-            aggregated.forEach(function(d) { if(d.avg_min > qtyMax) qtyMax = d.avg_min; });
-            aggregated.slice(0, 12).forEach(function(d) {
-                var v = Math.round(d.avg_min);
-                var sla = d.sla_min;
-                var pct = qtyMax > 0 ? (v / qtyMax) * 100 : 0;
-                var color = v <= sla ? '#2a9d8f' : v <= sla * 1.5 ? '#f4a261' : '#e63946';
-                qtyBars += '<div class="bar-row"><div class="bar-label" style="width:130px;" title="' + escAttr(d.product_name) + '">' + esc(d.product_name.substring(0,16)) + '</div><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:' + color + ';">' + (pct > 20 ? '<span>' + v + ' min</span>' : '') + '</div></div><div class="bar-value" style="width:100px;">' + v + 'm / SLA ' + sla + '</div></div>';
-            });
+        if (data.prep_by_product && data.prep_by_product.length) {
             slaGrid.innerHTML += '<article class="panel" data-cols="6">' +
-                '<header class="panel-header"><h3 class="panel-title">Tempo Médio de Preparo por Produto</h3><p class="panel-subtitle">vs SLA esperado</p></header>' +
-                '<div class="panel-body"><div style="max-height:300px;overflow-y:auto;">' + qtyBars + '</div><div style="margin-top:4px;font-size:10px;color:var(--c-text-muted);">Verde = dentro do SLA | Laranja = até 50% acima | Vermelho = estouro grave</div></div></article>';
+                '<header class="panel-header"><h3 class="panel-title">Tempo M\u00e9dio de Preparo por Produto</h3><p class="panel-subtitle">vs SLA esperado</p></header>' +
+                '<div class="panel-body">' + renderPrepHtml(data) + '<div style="margin-top:4px;font-size:10px;color:var(--c-text-muted);">Verde = dentro do SLA | Laranja = at\u00e9 50% acima | Vermelho = estouro grave</div></div></article>';
         }
 
         if (data.queue_time_by_station && data.queue_time_by_station.length) {
@@ -1014,9 +1387,13 @@ if (document.readyState === 'loading') {
             });
             data.queue_time_by_station.forEach(function(d) {
                 var w = parseFloat(d.avg_wait_min), c = parseFloat(d.avg_cooking_min);
+                if (!isFinite(w)) w = 0;
+                if (!isFinite(c)) c = 0;
+                var wLabel = w > 0 ? w + 'm' : '\u2014';
+                var cLabel = c > 0 ? c + 'm' : '\u2014';
                 var wp = qmax > 0 ? (w / qmax) * 100 : 0;
                 var cp = qmax > 0 ? (c / qmax) * 100 : 0;
-                qhtml += '<div class="bar-row"><div class="bar-label">' + esc(d.estacao) + '</div><div class="bar-track" style="display:flex;"><div class="bar-fill" style="width:' + cp + '%;background:#2a9d8f;height:100%;"><span>' + c + 'm</span></div><div class="bar-fill" style="width:' + wp + '%;background:#f4a261;height:100%;"><span>' + w + 'm</span></div></div><div class="bar-value">' + d.count + '</div></div>';
+                qhtml += '<div class="bar-row"><div class="bar-label">' + esc(d.estacao) + '</div><div class="bar-track" style="display:flex;"><div class="bar-fill" style="width:' + cp + '%;background:#2a9d8f;height:100%;"><span>' + cLabel + '</span></div><div class="bar-fill" style="width:' + wp + '%;background:#f4a261;height:100%;"><span>' + wLabel + '</span></div></div><div class="bar-value">' + d.count + '</div></div>';
             });
             qhtml += '<div style="margin-top:6px;font-size:10px;color:var(--c-text-muted);">Verde = preparo | Laranja = espera fila</div>';
             slaGrid.innerHTML += '<article class="panel" data-cols="6">' +
@@ -1048,29 +1425,34 @@ if (document.readyState === 'loading') {
         diagnosisGrid.innerHTML = '';
 
         diagnosisGrid.innerHTML += '<article class="panel" data-cols="6">' +
-            '<header class="panel-header"><h3 class="panel-title">Motivos de Cancelamento</h3><p class="panel-subtitle">Top 10</p></header>' +
-            '<div class="panel-body">' + renderBars('', (data.cancel_reasons || []).slice(0, 10), 'label', 'total', '#e63946') + '</div></article>';
+            '<header class="panel-header"><h3 class="panel-title">Motivos de Cancelamento</h3><p class="panel-subtitle">Top 10 \u00b7 clique para detalhar</p></header>' +
+            '<div class="panel-body">' + renderCancelReasonsPanel(data) + '</div></article>';
 
-        {
-            var rotBars = '';
-            if (data.scatter_roturas && data.scatter_roturas.length > 0) {
-                var rotMax = 1;
-                data.scatter_roturas.forEach(function(d) { var v = parseInt(d.total_roturas); if(v > rotMax) rotMax = v; });
-                data.scatter_roturas.filter(function(d) { return parseInt(d.total_roturas) > 0; }).slice(0, 10).forEach(function(d) {
-                    var v = parseInt(d.total_roturas);
-                    var pct = rotMax > 0 ? (v / rotMax) * 100 : 0;
-                    rotBars += '<div class="bar-row"><div class="bar-label" title="' + escAttr(d.product_name) + '">' + esc(d.product_name.substring(0,14)) + '</div><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:#e63946;">' + (pct > 20 ? '<span>' + v + ' zerou</span>' : '') + '</div></div><div class="bar-value">' + v + ' / ' + d.total_demandas + ' ped.</div></div>';
-                });
-            }
-            if (!rotBars) rotBars = '<p style="color:var(--c-text-muted);padding:20px 0;text-align:center;">Nenhum zerado no período</p>';
-            diagnosisGrid.innerHTML += '<article class="panel" data-cols="6">' +
-                '<header class="panel-header"><h3 class="panel-title">Zerados por Produto</h3><p class="panel-subtitle">Top 10</p></header>' +
-                '<div class="panel-body"><div class="panel" style="box-shadow:none;"><div style="max-height:220px;overflow-y:auto;">' + rotBars + '</div></div></div></article>';
-        }
+        diagnosisGrid.innerHTML += '<article class="panel" data-cols="6">' +
+            '<header class="panel-header"><h3 class="panel-title">Zerados por Produto</h3><p class="panel-subtitle">Top 10 \u00b7 clique para detalhar \u00b7 <button id="stockoutSortBtn" class="stockout-sort-btn" type="button" title="Ordenar por volume ou taxa">Ordenar: ' + state.stockoutSort + '</button></p></header>' +
+            '<div class="panel-body" id="stockout-panel-body">' + renderStockoutPanel(data, state.stockoutSort) + '</div></article>';
 
         diagnosisGrid.innerHTML += '<article class="panel" data-cols="12">' +
-            '<header class="panel-header"><h3 class="panel-title">Trocas de Itens do Cardápio</h3></header>' +
-            '<div class="panel-body">' + renderReplacements(data.replacements) + '</div></article>';
+            '<header class="panel-header"><h3 class="panel-title">Trocas de Itens do Cardápio</h3><p class="panel-subtitle">Clique em um dia para detalhar</p></header>' +
+            '<div class="panel-body">' + renderReplacements(data.replacements, data.replacement_details) + '</div></article>';
+
+        wireDrillGrid(diagnosisGrid, [
+            { selector: '.cancel-reason-row', prefix: 'cancel' },
+            { selector: '.stockout-row', prefix: 'stockout' },
+            { selector: '.repl-row', prefix: 'repl' },
+        ]);
+
+        // Toggle volume | taxa do painel de zerados (re-renderiza só o corpo do painel
+        // para não destruir os gráficos Chart.js do restante do dashboard).
+        var stockoutSortBtn = document.getElementById('stockoutSortBtn');
+        if (stockoutSortBtn) {
+            stockoutSortBtn.addEventListener('click', function() {
+                state.stockoutSort = state.stockoutSort === 'volume' ? 'taxa' : 'volume';
+                stockoutSortBtn.textContent = 'Ordenar: ' + state.stockoutSort;
+                var stockoutBody = document.getElementById('stockout-panel-body');
+                if (stockoutBody) stockoutBody.innerHTML = renderStockoutPanel(state.lastData, state.stockoutSort);
+            });
+        }
 
         // Section 5: Performance (#performance)
         var perfGrid = document.querySelector('#performance .bento-grid');
@@ -1222,8 +1604,21 @@ if (document.readyState === 'loading') {
     }
 
     var PERF_LABELS = { operacao: 'Operação', cozinha_geral: 'Cozinha Geral', cozinha_quente_a: 'Quente A', cozinha_quente_b: 'Quente B', cozinha_fria: 'Fria', salao: 'Salão', cozinha_jantar: 'Cozinha Jantar', salao_jantar: 'Salão Jantar' };
+    var STATION_ENTITY = { quente_a: 'cozinha_quente_a', quente_b: 'cozinha_quente_b', fria: 'cozinha_fria', jantar: 'cozinha_jantar' };
+
+    // Entidade de nota correspondente à estação filtrada (null = sem filtro ativo).
+    function stationEntity() {
+        var sid = effectiveStationId();
+        if (!sid) return null;
+        var st = (state.stations || []).filter(function(s) { return s.id === sid; })[0];
+        return st ? (STATION_ENTITY[st.code] || null) : null;
+    }
 
     function perfEntities() {
+        if (state.turn !== 'dinner') {
+            var scoped = stationEntity();
+            if (scoped) return [scoped];
+        }
         return state.turn === 'dinner'
             ? ['operacao', 'cozinha_jantar', 'salao_jantar']
             : ['operacao', 'cozinha_geral', 'cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'salao'];
@@ -1253,6 +1648,27 @@ if (document.readyState === 'loading') {
     function numScore(v) {
         var n = Number(v);
         return Number.isFinite(n) ? n : 5;
+    }
+
+    // Dia operacional BRT — o toISOString() do browser vira o dia às 21h BRT.
+    function brToday(offsetDays) {
+        var ms = Date.now() + (offsetDays || 0) * 86400000;
+        var parts = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(ms));
+        var g = {};
+        parts.forEach(function(x) { g[x.type] = x.value; });
+        return g.year + '-' + g.month + '-' + g.day;
+    }
+
+    // Iterador de dias por string (nunca Date→toISOString, que desloca o dia).
+    function listDays(from, to) {
+        var days = [];
+        var cur = new Date(from + 'T12:00:00Z');
+        var end = new Date(to + 'T12:00:00Z');
+        while (cur <= end) {
+            days.push(cur.toISOString().split('T')[0]);
+            cur.setUTCDate(cur.getUTCDate() + 1);
+        }
+        return days.length ? days : [from];
     }
 
     // Ocorrências vêm em UTC (ISO); exibe no horário de Brasília.
@@ -1361,7 +1777,7 @@ if (document.readyState === 'loading') {
     function renderPerfDetractors(perf, detractorDates) {
         var source = perf && perf.averages && Object.keys(perf.averages).length ? perf.averages : (perf && perf.current);
         if(!source) return '';
-        var order = state.turn === 'dinner' ? ['operacao', 'cozinha_jantar', 'salao_jantar'] : ['operacao','cozinha_geral','salao','cozinha_quente_a','cozinha_quente_b','cozinha_fria'];
+        var order = perfEntities();
         var labels = PERF_LABELS;
         var h = '<div class="panels" style="grid-column:1 / -1;width:100%;grid-template-columns:minmax(0, 1fr);">';
         for(var i=0; i<order.length; i++) {
@@ -1416,8 +1832,10 @@ if (document.readyState === 'loading') {
                 var perfGrid = document.querySelector('#performance .bento-grid');
                 if(!perfGrid) return;
 
+                var scopeEntity = stationEntity();
+                var scopeBadge = scopeEntity ? '<span class="scope-badge">Filtro: ' + esc(PERF_LABELS[scopeEntity] || '') + '</span>' : '';
                 var html = '<article class="panel" data-cols="12">' +
-                    '<header class="panel-header"><div style="display:flex;justify-content:space-between;align-items:center;width:100%;"><h3 class="panel-title">Desempenho da Equipe</h3>' +
+                    '<header class="panel-header"><div style="display:flex;justify-content:space-between;align-items:center;width:100%;"><h3 class="panel-title">Desempenho da Equipe</h3>' + scopeBadge +
                     '<button id="btnCriteria" class="btn-criteria" type="button">Como são calculadas as notas?</button></div></header>' +
                     '<div class="panel-body">' + renderScoreCards(perf) + '</div></article>';
                 window._perfWeights = perf.weights || null;
@@ -1515,11 +1933,10 @@ if (document.readyState === 'loading') {
 
     function getExportDates() {
         var f = state.filter;
-        var now = new Date();
-        if (f.range === 'yesterday') now.setDate(now.getDate() - 1);
-        if (f.range === 'today' || f.range === 'yesterday') { var s = now.toISOString().split('T')[0]; return { from: s, to: s }; }
-        if (f.range === 'week') { var to = now.toISOString().split('T')[0]; now.setDate(now.getDate() - 6); return { from: now.toISOString().split('T')[0], to: to }; }
-        if (f.range === 'month') { var to = now.toISOString().split('T')[0]; now.setDate(now.getDate() - 29); return { from: now.toISOString().split('T')[0], to: to }; }
+        if (f.range === 'today') return { from: brToday(0), to: brToday(0) };
+        if (f.range === 'yesterday') return { from: brToday(-1), to: brToday(-1) };
+        if (f.range === 'week') return { from: brToday(-6), to: brToday(0) };
+        if (f.range === 'month') return { from: brToday(-29), to: brToday(0) };
         return { from: f.from, to: f.to || f.from };
     }
 
@@ -1539,6 +1956,10 @@ if (document.readyState === 'loading') {
         api('/api/v1/analytics/dashboard?' + params).then(function(data) {
             state.lastData = data;
             window._dashboardData = data;
+            var updEl = document.getElementById('dashUpdated');
+            if (updEl) {
+                updEl.textContent = 'Atualizado \u00e0s ' + new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
+            }
             // Step A: KPI strip (from Task 5.3)
             var kpiEl = document.getElementById('kpiStrip');
             if (kpiEl) {
@@ -1677,8 +2098,7 @@ if (document.readyState === 'loading') {
             document.getElementById('dateFrom').value = '';
             document.getElementById('dateTo').value = '';
             if (range === 'yesterday') {
-                var y = new Date(); y.setDate(y.getDate() - 1);
-                loadDashboard({ from: y.toISOString().split('T')[0], to: y.toISOString().split('T')[0] });
+                loadDashboard({ from: brToday(-1), to: brToday(-1) });
             } else {
                 loadDashboard({ range: range });
             }
@@ -1705,6 +2125,7 @@ if (document.readyState === 'loading') {
     // Station filter
     function loadStations() {
         api('/api/v1/kitchen-stations').then(function(stations) {
+            state.stations = stations || [];
             state.jantarStationId = null;
             for (var i = 0; i < stations.length; i++) {
                 if (stations[i].code === 'jantar') { state.jantarStationId = stations[i].id; break; }
@@ -1731,6 +2152,12 @@ if (document.readyState === 'loading') {
             state.stationId = stationSelect.value;
             loadDashboard(state.filter);
         });
+    }
+
+    // Botão Atualizar: recarrega o período atual (mesmo filtro).
+    var btnRefresh = document.getElementById('btnRefresh');
+    if (btnRefresh) {
+        btnRefresh.addEventListener('click', function() { loadDashboard(state.filter); });
     }
 
     // Turno (Almoço / Jantar)
@@ -1873,6 +2300,27 @@ if (document.readyState === 'loading') {
         return '<div class="export-panel"><h3>Notas de performance</h3><div class="export-score-grid">' + cards + '</div></div><div class="export-panel"><h3>Principais detratores</h3><div class="export-details">' + details + '</div></div>' + trend;
     }
 
+    function exportExamplesHtml(data) {
+        function table(title, headers, rows) {
+            if (!rows.length) return '<div class="export-panel"><h3>' + title + '</h3><p class="export-muted">Sem registros no período.</p></div>';
+            return '<div class="export-panel"><h3>' + title + '</h3><table class="export-table"><thead><tr>' +
+                headers.map(function(h) { return '<th>' + exportEscape(h) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+                rows.map(function(cells) { return '<tr>' + cells.map(function(c) { return '<td>' + exportEscape(c) + '</td>'; }).join('') + '</tr>'; }).join('') +
+                '</tbody></table></div>';
+        }
+        var cancRows = (data.cancel_reason_details || []).slice(0, 8).map(function(r) {
+            return [fmtOccDate(r.cancelled_at), r.product_name || '-', r.label || '-', r.station || '\u2014'];
+        });
+        var zeroRows = (data.stockout_details || []).slice(0, 5).map(function(r) {
+            var factor = r.stockout_sla_factor == null ? '\u2014' : Number(r.stockout_sla_factor).toFixed(2).replace('.', ',') + '\u00d7 SLA';
+            return [fmtOccDate(r.stockout_reported_at || r.created_at), r.product_name || '-', r.station || '\u2014', factor];
+        });
+        return '<div class="export-two">' +
+            table('Cancelamentos \u2014 exemplos recentes', ['Data/Hora', 'Produto', 'Motivo', 'Esta\u00e7\u00e3o'], cancRows) +
+            table('Zerados \u2014 exemplos recentes', ['Data/Hora', 'Produto', 'Esta\u00e7\u00e3o', 'Fator SLA'], zeroRows) +
+            '</div>';
+    }
+
     function exportReportHtml(data, perf, title, index, includeVolume) {
         var k = data.kpis || {};
         var donutHtml = '<div class="export-two">' + exportDonut('Status das demandas', [{label:'Pendentes',value:Number(data.funnel && data.funnel.pending_now || 0)},{label:'Prontas',value:Math.max(0,Number(data.funnel && data.funnel.ready || 0)-Number(data.funnel && data.funnel.retrieved || 0))},{label:'Retiradas',value:Number(data.funnel && data.funnel.retrieved || 0)},{label:'Canceladas',value:Number(k.total_cancelados||0)}], ['#d4a574','#6b9080','#2a9d8f','#e63946']) + exportDonut('Origem das urgências', [{label:'Urgentes puros',value:Number(k.urgentes_puros||0)},{label:'Por zerou',value:Number(k.urgentes_rotura||0)}], ['#e63946','#f4a261']) + '</div>';
@@ -1880,7 +2328,7 @@ if (document.readyState === 'loading') {
             exportKpisHtml(k) + '<div class="export-two"><div class="export-panel"><h3>Funil de demandas</h3>' + exportBars([{label:'Criadas',value:Number(data.funnel && data.funnel.created || 0)},{label:'Iniciaram preparo',value:Number(data.funnel && data.funnel.ready || 0)},{label:'Prontas',value:Number(data.funnel && data.funnel.ready || 0)},{label:'Retiradas',value:Number(data.funnel && data.funnel.retrieved || 0)}], 'label', 'value', '#d4a574') + '</div>' + donutHtml + '</div>' +
             '<div class="export-two"><div class="export-panel"><h3>Produtos mais demandados</h3>' + exportBars((data.produtos||[]).slice(0,10), 'product_name', function(r){return Number(r.total_qty||r.total_demandas||0);}, '#d4a574') + '</div><div class="export-panel"><h3>Sazonalidade</h3>' + exportBars(data.weekday_seasonality||[], 'dia', 'total', '#6b9080') + '</div></div>' +
             '<div class="export-panel"><h3>Heatmap hora x dia da semana</h3>' + renderHeatmap(data.heatmap) + '</div><div class="export-two">' + (includeVolume ? '<div class="export-panel"><h3>Volume diário</h3><canvas id="exportVolume' + index + '" width="400" height="230"></canvas></div>' : '') + '<div class="export-panel"><h3>Fila por hora</h3><canvas id="exportQueue' + index + '" width="400" height="230"></canvas></div><div class="export-panel"><h3>Velocidade da cozinha</h3><canvas id="exportSpeed' + index + '" width="400" height="230"></canvas></div><div class="export-panel"><h3>Tempo de retirada</h3><canvas id="exportPickup' + index + '" width="400" height="230"></canvas></div></div>' +
-            '<div class="export-two"><div class="export-panel"><h3>SLA por produto</h3>' + exportBars(data.sla_by_product||[], 'product_name', function(r){return Number(r.breached||0);}, '#e76f51') + '</div><div class="export-panel"><h3>Cancelamentos</h3>' + exportBars(data.cancel_reasons||[], 'label', 'total', '#e63946') + '</div></div>' + exportPerformanceHtml(perf) + '</div>';
+            '<div class="export-two"><div class="export-panel"><h3>SLA por produto</h3>' + exportBars(data.sla_by_product||[], 'product_name', function(r){return Number(r.breached||0);}, '#e76f51') + '</div><div class="export-panel"><h3>Cancelamentos</h3>' + exportBars(data.cancel_reasons||[], 'label', 'total', '#e63946') + '</div></div>' + exportExamplesHtml(data) + exportPerformanceHtml(perf) + '</div>';
     }
 
     function exportChartData(data, date) {
@@ -1925,6 +2373,40 @@ if (document.readyState === 'loading') {
         if (detractors.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detractors), (prefix + 'Detratores').substring(0, 31));
     }
 
+    // Abas de detalhe (uma linha por demanda) — mesmos dados dos drill-downs do painel.
+    function appendDetailSheets(wb, data, prefix) {
+        if (!data) return;
+        function addSheet(name, rows) {
+            if (rows && rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), (prefix + name).substring(0, 31));
+        }
+        addSheet('Cancel. Detalhe', (data.cancel_reason_details || []).map(function(r) {
+            return {
+                'Data/Hora': fmtOccDate(r.cancelled_at), Pedido: r.daily_seq || '', Produto: r.product_name, 'Estação': r.station || '',
+                'Cancelado por': r.status === 'cancelled_cozinha' ? (r.station || 'Cozinha') : 'Salão',
+                Motivo: r.label, Categoria: r.category || ''
+            };
+        }));
+        addSheet('Zerados Detalhe', (data.stockout_details || []).map(function(r) {
+            var factor = r.stockout_sla_factor == null ? '' : Number(r.stockout_sla_factor);
+            return {
+                'Data/Hora': fmtOccDate(r.stockout_reported_at || r.created_at), Pedido: r.daily_seq || '', Produto: r.product_name, 'Estação': r.station || '',
+                'Fator SLA no zeramento': factor, 'SLA (min)': r.sla_minutes || '', Situação: r.status || ''
+            };
+        }));
+        addSheet('SLA Detalhe', (data.sla_details || []).map(function(r) {
+            return {
+                'Data/Hora': fmtOccDate(r.ready_at || r.created_at), Pedido: r.daily_seq || '', Produto: r.product_name, 'Estação': r.station || '',
+                'Tempo real (min)': fmtRealMinutes(r.created_at, r.ready_at) === '\u2014' ? '' : Number(fmtRealMinutes(r.created_at, r.ready_at)),
+                'Excedeu (min)': r.overage_min == null ? '' : Math.round(Number(r.overage_min) * 10) / 10
+            };
+        }));
+        addSheet('Trocas Detalhe', (data.replacement_details || []).map(function(r) {
+            return {
+                'Data/Hora': fmtOccDate(r.created_at), Pedido: r.daily_seq || '', Substituiu: r.replaced_name || '', Por: r.product_name, 'Estação': r.station || ''
+            };
+        }));
+    }
+
     async function exportPDF(from, to, byDay) {
         try {
             var { jsPDF } = window.jspdf;
@@ -1965,14 +2447,11 @@ if (document.readyState === 'loading') {
             }
 
             if (byDay) {
-                var fromD = new Date(from + 'T00:00:00');
-                var toD = new Date(to + 'T00:00:00');
-                var days = [];
-                for (var d = new Date(fromD); d <= toD; d.setDate(d.getDate() + 1)) { days.push(new Date(d)); }
+                var days = listDays(from, to);
                 var firstPage = true;
                 for (var i = 0; i < days.length; i++) {
                     if (exportProgress) exportProgress.textContent = 'Gerando p\u00E1gina ' + (i + 1) + ' de ' + days.length + '...';
-                    var ds = days[i].toISOString().split('T')[0];
+                    var ds = days[i];
                     var parts = ds.split('-');
                     var dayLabel = parts[2] + '/' + parts[1] + '/' + parts[0];
                     var sid = effectiveStationId();
@@ -2037,14 +2516,11 @@ if (document.readyState === 'loading') {
             if (!data) { throw new Error('Sem dados carregados'); }
 
             if (byDay) {
-                var fromD = new Date(from + 'T00:00:00');
-                var toD = new Date(to + 'T00:00:00');
-                var days = [];
-                for (var d = new Date(fromD); d <= toD; d.setDate(d.getDate() + 1)) { days.push(new Date(d)); }
+                var days = listDays(from, to);
                 if (days.length > 31) { showToast('Por dia limitado a 31 dias.', 'warn'); state.exporting = false; if (exportProgress) exportProgress.style.display = 'none'; return; }
                 var sheetsAdded = 0;
                 for (var i = 0; i < days.length; i++) {
-                    var ds = days[i].toISOString().split('T')[0];
+                    var ds = days[i];
                     var parts = ds.split('-');
                     var sid = effectiveStationId();
                     var params = 'from=' + ds + '&to=' + ds + (sid ? '&station_id=' + encodeURIComponent(sid) : '');
@@ -2065,6 +2541,7 @@ if (document.readyState === 'loading') {
                             XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dd.cancel_reasons.slice(0, 20)), (name + '_canc').substring(0, 31));
                         }
                         appendPerformanceExcel(wb, dayPerformance, name + '_');
+                        appendDetailSheets(wb, dd, name + '_');
                         sheetsAdded++;
                     } catch (err) {
                         console.error('Erro ao carregar dia ' + ds + ':', err && err.message ? err.message : err);
@@ -2086,6 +2563,7 @@ if (document.readyState === 'loading') {
                     ['weekday_seasonality', 'Sazonalidade'], ['speed_by_hour', 'Velocidade Cozinha']
                 ];
                 sheets.forEach(function(ab) { if (data[ab[0]] && data[ab[0]].length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data[ab[0]]), ab[1].substring(0, 31)); });
+                appendDetailSheets(wb, data, '');
                 appendPerformanceExcel(wb, await fetchExportPerformance(from, to), '');
             }
             var wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });

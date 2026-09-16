@@ -3,6 +3,7 @@ import { DinnerAutoConfig, DinnerTrigger, DinnerActivationResult } from '../type
 import { ensureTodayMenu } from './menu.service';
 import { recomputeStationQueue } from './queue.service';
 import { computeDailyScores } from './performance.service';
+import { brDayOf } from './period.service';
 
 // Jantar automático (spec docs/superpowers/specs/2026-09-11-jantar-auto-design.md).
 // Dia/hora canônicos: America/Sao_Paulo, calculados no banco para não depender
@@ -134,20 +135,20 @@ export async function activateDinnerShift(
 
     const { rows: sourceRows } = await client.query<{ kitchen_station_id: string | null }>(
       `SELECT DISTINCT kitchen_station_id FROM demands
-       WHERE status = 'pending' AND created_at::date = $1 AND kitchen_station_id <> $2`,
+       WHERE status = 'pending' AND ${brDayOf('created_at')} = $1 AND kitchen_station_id <> $2`,
       [today, jantarId]
     );
 
     const { rows: countRows } = await client.query<{ cnt: string }>(
       `SELECT COUNT(*)::int AS cnt FROM demands
-       WHERE status = 'pending' AND created_at::date = $1 AND kitchen_station_id <> $2`,
+       WHERE status = 'pending' AND ${brDayOf('created_at')} = $1 AND kitchen_station_id <> $2`,
       [today, jantarId]
     );
     const pendingLunchDemands = parseInt(countRows[0].cnt, 10);
 
     const { rows: transferred } = await client.query<{ id: string }>(
       `UPDATE demands SET origin_station_id = COALESCE(origin_station_id, kitchen_station_id), kitchen_station_id = $1
-       WHERE status = 'pending' AND created_at::date = $2 AND kitchen_station_id <> $1
+       WHERE status = 'pending' AND ${brDayOf('created_at')} = $2 AND kitchen_station_id <> $1
        RETURNING id`,
       [jantarId, today]
     );

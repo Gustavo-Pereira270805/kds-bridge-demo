@@ -15,6 +15,7 @@ import { computeDailyScores, getWeights } from '../services/performance.service'
 import { recomputeStationQueue } from '../services/queue.service';
 import { ensureTodayMenu } from '../services/menu.service';
 import { requireAuth } from '../middleware/auth';
+import { brDay, brDayFrom, brDayOf } from '../services/period.service';
 import { lastHeartbeat } from '../socket/handlers';
 import { clearObservation } from '../services/observation.service';
 
@@ -220,7 +221,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     '/menus/:id/set-today', async (request, reply) => {
     try {
       const { id } = request.params;
-      const today = new Date().toISOString().split('T')[0];
+      const today = brDay(0);
       await query(
         `INSERT INTO daily_menus (date, menu_id) VALUES ($1, $2)
          ON CONFLICT (date) DO UPDATE SET menu_id = $2, updated_at = now()`,
@@ -441,7 +442,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
       const annulledBy = request.user?.email ?? 'gerente';
       const wasPending = demand.status === 'pending';
       const stationId = demand.kitchen_station_id;
-      const demandDate = new Date(demand.created_at).toISOString().split('T')[0];
+      const demandDate = brDayFrom(demand.created_at);
 
       await client.query('BEGIN');
 
@@ -504,7 +505,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
       if (!stepDayRow.is_today) { client.release(); return reply.code(403).send({ error: 'Só é possível anular demandas do dia atual' }); }
 
       const by = request.user?.email ?? 'gerente';
-      const demandDate = new Date(demand.created_at).toISOString().split('T')[0];
+      const demandDate = brDayFrom(demand.created_at);
 
       // Passo 'created' equivale à anulação total (mesmo efeito do botão Anular)
       if (step === 'created') {
@@ -709,7 +710,7 @@ export default async function adminRoutes(fastify: FastifyInstance) {
 
       const { rows: transferred } = await client.query<{ id: string; kitchen_station_id: string }>(
         `UPDATE demands SET kitchen_station_id = origin_station_id, origin_station_id = NULL
-         WHERE status = 'pending' AND created_at::date = $1 AND kitchen_station_id = $2
+         WHERE status = 'pending' AND ${brDayOf('created_at')} = $1 AND kitchen_station_id = $2
            AND origin_station_id IS NOT NULL
          RETURNING id, kitchen_station_id`,
         [today, jantarId]
