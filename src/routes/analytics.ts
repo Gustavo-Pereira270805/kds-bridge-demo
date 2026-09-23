@@ -64,8 +64,8 @@ function resolveDashboardPeriod(
     if (diffDays < 0) {
       return { error: 'A data inicial deve ser anterior ou igual à data final' };
     }
-    if (diffDays > 31) {
-      return { error: 'O período máximo é de 31 dias' };
+    if (diffDays > 179) {
+      return { error: 'O período máximo é de 180 dias' };
     }
   } else if (range === 'week') {
     dateFrom = brDay(-7);
@@ -926,8 +926,8 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           if (dateFrom > dateTo) {
             return reply.code(400).send({ error: 'A data inicial deve ser anterior ou igual à data final' });
           }
-          if (intervaloInclusivo(dateFrom, dateTo) > 31) {
-            return reply.code(400).send({ error: 'O período máximo é de 31 dias' });
+          if (intervaloInclusivo(dateFrom, dateTo) > 180) {
+            return reply.code(400).send({ error: 'O período máximo é de 180 dias' });
           }
         } else if (range === 'week') {
           dateFrom = brDay(-7);

@@ -473,7 +473,7 @@
         <div class="modal-group">
             <div class="modal-label">Agrupamento</div>
             <label class="radio-row"><input type="radio" name="exportGrouping" value="consolidado" checked> Consolidado (período inteiro)</label>
-            <label class="radio-row"><input type="radio" name="exportGrouping" value="dia"> Por dia (uma página/aba por dia)</label>
+            <label class="radio-row"><input type="radio" name="exportGrouping" value="dia"> Por dia (uma página/aba por dia, até 31 dias)</label>
         </div>
         <div id="exportWarn" class="export-warn" style="display:none;">Períodos com mais de 7 dias podem demorar na exportação "Por dia". Recomendamos o modo Consolidado.</div>
         <div id="exportProgress" class="export-progress" style="display:none;"></div>
@@ -2224,7 +2224,7 @@ if (document.readyState === 'loading') {
             if (isNaN(d1.getTime()) || isNaN(d2.getTime())) { showToast('Datas inv\u00E1lidas.', 'warn'); return; }
             if (d1 > d2) { showToast('A data de in\u00EDcio deve ser anterior \u00E0 data final.', 'warn'); return; }
             var diff = Math.round((d2 - d1) / 86400000);
-            if (diff > 31) { showToast('O per\u00EDodo m\u00E1ximo \u00E9 de 31 dias.', 'warn'); return; }
+            if (diff > 179) { showToast('O per\u00EDodo m\u00E1ximo \u00E9 de 180 dias.', 'warn'); return; }
             periodSelector.querySelectorAll('.period-btn').forEach(function(b) { b.classList.remove('active'); b.setAttribute('aria-pressed', 'false'); });
             loadDashboard({ from: from, to: to });
         });
@@ -2311,9 +2311,28 @@ if (document.readyState === 'loading') {
     function updateExportWarn() {
         if (!exportWarn) return;
         var rGrp = document.getElementsByName('exportGrouping');
-        var byDay = false;
-        for (var i = 0; i < rGrp.length; i++) { if (rGrp[i].checked && rGrp[i].value === 'dia') byDay = true; }
-        exportWarn.style.display = byDay && getDaySpan() > 7 ? '' : 'none';
+        var diaRadio = null, consolidadoRadio = null;
+        for (var i = 0; i < rGrp.length; i++) {
+            if (rGrp[i].value === 'dia') diaRadio = rGrp[i];
+            if (rGrp[i].value === 'consolidado') consolidadoRadio = rGrp[i];
+        }
+        var span = getDaySpan();
+        if (span > 31) {
+            // Exportação "Por dia" disponível apenas até 31 dias: força o agregado.
+            if (diaRadio) diaRadio.disabled = true;
+            if (consolidadoRadio) consolidadoRadio.checked = true;
+            exportWarn.textContent = 'Exportação "Por dia" disponível apenas até 31 dias. Acima disso, somente Consolidado.';
+            exportWarn.style.display = '';
+            return;
+        }
+        if (diaRadio) diaRadio.disabled = false;
+        var byDay = diaRadio && diaRadio.checked;
+        if (byDay && span > 7) {
+            exportWarn.textContent = 'Períodos com mais de 7 dias podem demorar na exportação "Por dia". Recomendamos o modo Consolidado.';
+            exportWarn.style.display = '';
+        } else {
+            exportWarn.style.display = 'none';
+        }
     }
 
     var groupingRadios = document.getElementsByName('exportGrouping');
@@ -2331,6 +2350,12 @@ if (document.readyState === 'loading') {
             state.exporting = true;
             if (exportProgress) exportProgress.style.display = '';
             var dates = getExportDates();
+            if (byDay && getDaySpan() > 31) {
+                showToast('Exportação "Por dia" disponível apenas até 31 dias. Use o modo Consolidado.', 'warn');
+                state.exporting = false;
+                if (exportProgress) exportProgress.style.display = 'none';
+                return;
+            }
 
             if (fmt === 'pdf') exportPDF(dates.from, dates.to, byDay);
             else exportExcel(dates.from, dates.to, byDay);
