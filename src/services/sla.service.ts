@@ -1,5 +1,6 @@
 import { query } from '../db/client';
 import { logDemandEvent } from './demand-events.service';
+import { getPickupTolerance } from './performance.service';
 
 export async function evaluateCookingSla(demandId: string): Promise<void> {
   const [d] = await query<{
@@ -32,10 +33,7 @@ export async function evaluateCookingSla(demandId: string): Promise<void> {
 }
 
 export async function evaluatePickupSla(demandId: string): Promise<void> {
-  const [{ value: toleranceStr }] = await query<{ value: string }>(
-    `SELECT value FROM system_settings WHERE key = 'pickup_tolerance_minutes'`
-  );
-  const tolerance = Number(toleranceStr);
+  const tolerance = await getPickupTolerance();
 
   const [d] = await query<{ ready_at: string; retrieved_at: string }>(
     `SELECT ready_at, retrieved_at FROM demands WHERE id = $1`,

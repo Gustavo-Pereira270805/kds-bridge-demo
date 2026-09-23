@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyRequest } from 'fastify';
 import { query, pool } from '../db/client';
 import { DailyMenu, Demand, Menu, PiAction, PiTarget, Product } from '../types';
 import { runCleanup, getRetentionDays } from '../services/cleanup.service';
@@ -11,7 +11,7 @@ import {
   todaySP,
 } from '../services/shift.service';
 import { logDemandEvent } from '../services/demand-events.service';
-import { computeDailyScores, getWeights } from '../services/performance.service';
+import { computeDailyScores, getPickupTolerance, getWeights } from '../services/performance.service';
 import { recomputeStationQueue } from '../services/queue.service';
 import { ensureTodayMenu } from '../services/menu.service';
 import { requireAuth } from '../middleware/auth';
@@ -56,6 +56,21 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     if (role === 'admin' || role === 'gerente') return;
     return reply.code(403).send({ error: 'Permissão insuficiente para esta operação' });
   });
+
+  // Recálculo retroativo das notas em background (não trava a request HTTP).
+  // Usado por tudo que muda parâmetros da nota (pesos e tolerância do salão).
+  function scheduleRetroactiveRecompute(request: FastifyRequest): void {
+    query<{ date: any }>(
+      `SELECT DISTINCT date FROM performance_scores ORDER BY date`
+    ).then(async (dates) => {
+      request.log.info(`Iniciando recálculo retroativo para ${dates.length} datas...`);
+      for (const row of dates) {
+        const dateStr = row.date instanceof Date ? row.date.toISOString().slice(0, 10) : String(row.date);
+        await computeDailyScores(dateStr).catch(e => request.log.error(e));
+      }
+      request.log.info('Recálculo retroativo concluído.');
+    }).catch(e => request.log.error('Erro ao buscar datas para recálculo', e));
+  }
 
   // Produtos: criar
   fastify.post<{ Body: { name: string; category?: string; kitchen_station_id?: string | null; sla_minutes_normal?: number; sla_minutes_urgente?: number } }>(
@@ -871,21 +886,44 @@ export default async function adminRoutes(fastify: FastifyInstance) {
 
       // Recálculo retroativo: dispara o recálculo em background
       // sem travar a request HTTP do usuário
-      query<{ date: any }>(
-        `SELECT DISTINCT date FROM performance_scores ORDER BY date`
-      ).then(async (dates) => {
-        request.log.info(`Iniciando recálculo retroativo para ${dates.length} datas...`);
-        for (const row of dates) {
-          const dateStr = row.date instanceof Date ? row.date.toISOString().slice(0, 10) : String(row.date);
-          await computeDailyScores(dateStr).catch(e => request.log.error(e));
-        }
-        request.log.info('Recálculo retroativo concluído.');
-      }).catch(e => request.log.error('Erro ao buscar datas para recálculo', e));
+      scheduleRetroactiveRecompute(request);
 
       return { success: true, message: 'Recálculo em background iniciado.' };
     } catch (error) {
       request.log.error(error);
       reply.code(500).send({ error: 'Erro ao salvar pesos' });
+    }
+  });
+
+  // GET: Tolerância de retirada do salão (minutos entre "pronto" e a retirada)
+  fastify.get('/settings/pickup-tolerance', async (request, reply) => {
+    try {
+      return { minutes: await getPickupTolerance() };
+    } catch (error) {
+      request.log.error(error);
+      reply.code(500).send({ error: 'Erro ao buscar a tolerância de retirada' });
+    }
+  });
+
+  // PUT: Atualiza a tolerância de retirada do salão (0,5 a 60 minutos).
+  // Vale para a avaliação das próximas retiradas e recalcula as notas já geradas.
+  fastify.put<{ Body: { minutes?: number } }>('/settings/pickup-tolerance', async (request, reply) => {
+    try {
+      const minutes = request.body?.minutes;
+      if (typeof minutes !== 'number' || !Number.isFinite(minutes) || minutes < 0.5 || minutes > 60) {
+        return reply.code(400).send({ error: 'Tolerância inválida: informe um valor entre 0,5 e 60 minutos' });
+      }
+      const rounded = Math.round(minutes * 10) / 10;
+      await query(
+        `INSERT INTO system_settings (key, value) VALUES ('pickup_tolerance_minutes', $1)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [rounded.toString()]
+      );
+      scheduleRetroactiveRecompute(request);
+      return { success: true, minutes: rounded, message: 'Recálculo em background iniciado.' };
+    } catch (error) {
+      request.log.error(error);
+      reply.code(500).send({ error: 'Erro ao salvar a tolerância de retirada' });
     }
   });
 

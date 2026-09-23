@@ -54,6 +54,17 @@ function formatDate(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : String(value);
 }
 
+// Tolerância (em minutos) entre o pedido ficar pronto e a retirada pelo salão
+// antes de contar como estouro de SLA. Editável no painel admin
+// (Critérios de Avaliação). Fallback 3 min para base antiga/sem valor.
+export async function getPickupTolerance(): Promise<number> {
+  const [row] = await query<{ value: string }>(
+    `SELECT value FROM system_settings WHERE key = 'pickup_tolerance_minutes'`
+  );
+  const parsed = parseFloat(row?.value || '3');
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 3;
+}
+
 export async function getWeights(): Promise<PerformanceWeights> {
   const keys = [
     'score_weight_sla_min',
@@ -204,33 +215,53 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
   }
 
   // -- Salão --
-  const [tolRow] = await query<{ value: string }>(
-    `SELECT value FROM system_settings WHERE key = 'pickup_tolerance_minutes'`
+  const tolerance = await getPickupTolerance();
+
+  // Corte do turno jantar: no dia em que o jantar foi iniciado, demandas
+  // criadas a partir do início pertencem ao salao_jantar. O "Salão" (turno do
+  // almoço/geral) fica restrito ao que veio antes do início para não puxar
+  // penalidades do jantar.
+  // O dia do início do jantar é derivado em BRT pela própria query — o valor
+  // gravado por `now()::text` depende do fuso da sessão do banco (UTC em produção).
+  const [dinnerStartRow] = await query<{ value: string; start_day: string | null }>(
+    `SELECT value,
+       CASE WHEN value IS NULL OR value = '' THEN NULL
+         ELSE (value::timestamptz AT TIME ZONE '${BR_TZ}')::date::text END AS start_day
+     FROM system_settings WHERE key = 'shift_dinner_started_at'`
   );
-  const toleranceValue = parseFloat(tolRow?.value || '3');
-  const tolerance = Number.isFinite(toleranceValue) && toleranceValue > 0 ? toleranceValue : 3;
+  const dinnerStart = (dinnerStartRow?.value || '').trim();
+  const dinnerOnThisDay = Boolean(dinnerStart) && dinnerStartRow?.start_day === dateStr;
+  const lunchCutoff = dinnerOnThisDay ? dinnerStart : null;
 
   const sSlaRows = await query<SlaTimingRow>(
     `SELECT created_at, ready_at, retrieved_at
-     FROM demands WHERE ${brDayOf('created_at')} = $1 AND sla_breached_salao = true AND status != 'annulled'`,
-    [dateStr]
+     FROM demands WHERE ${brDayOf('created_at')} = $1
+       AND ($2::timestamptz IS NULL OR created_at < $2::timestamptz)
+       AND sla_breached_salao = true AND status != 'annulled'`,
+    [dateStr, lunchCutoff]
   );
   const sSla = sSlaRows.length;
   const sCancel = await safeCount(
-    `SELECT COUNT(*)::int AS cnt FROM demands WHERE ${brDayOf('created_at')} = $1 AND status = 'cancelled_salao' AND status != 'annulled'`,
-    [dateStr]
+    `SELECT COUNT(*)::int AS cnt FROM demands WHERE ${brDayOf('created_at')} = $1
+       AND ($2::timestamptz IS NULL OR created_at < $2::timestamptz)
+       AND status = 'cancelled_salao' AND status != 'annulled'`,
+    [dateStr, lunchCutoff]
   );
   // Zeramento dentro do SLA (ou sem veredito, dados antigos): detrator do salão.
   // Zeramento com SLA estourado vai para o estouro da cozinha (bloco acima).
   const sStock = await safeCount(
-    `SELECT COUNT(*)::int AS cnt FROM demands WHERE ${brDayOf('created_at')} = $1 AND stockout_reported = true
+    `SELECT COUNT(*)::int AS cnt FROM demands WHERE ${brDayOf('created_at')} = $1
+      AND ($2::timestamptz IS NULL OR created_at < $2::timestamptz)
+      AND stockout_reported = true
       AND (stockout_sla_factor IS NULL OR stockout_sla_factor <= 1) AND status != 'annulled'`,
-    [dateStr]
+    [dateStr, lunchCutoff]
   );
 
   const sTotal = await safeCount(
-    `SELECT COUNT(*)::int AS cnt FROM demands WHERE ${brDayOf('created_at')} = $1 AND status != 'annulled'`,
-    [dateStr]
+    `SELECT COUNT(*)::int AS cnt FROM demands WHERE ${brDayOf('created_at')} = $1
+       AND ($2::timestamptz IS NULL OR created_at < $2::timestamptz)
+       AND status != 'annulled'`,
+    [dateStr, lunchCutoff]
   );
 
   const sSlaDedRaw = round2(sSlaRows.reduce((sum, row) => {
@@ -247,16 +278,7 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
 
   // -- Salão Jantar: mesma fórmula, só com demandas criadas após ativar o jantar --
   // (sem janela de jantar no dia, registra 5.0 zerado como as demais entidades)
-  // O dia do início do jantar é derivado em BRT pela própria query — o valor
-  // gravado por `now()::text` depende do fuso da sessão do banco (UTC em produção).
-  const [dinnerStartRow] = await query<{ value: string; start_day: string | null }>(
-    `SELECT value,
-       CASE WHEN value IS NULL OR value = '' THEN NULL
-         ELSE (value::timestamptz AT TIME ZONE '${BR_TZ}')::date::text END AS start_day
-     FROM system_settings WHERE key = 'shift_dinner_started_at'`
-  );
-  const dinnerStart = (dinnerStartRow?.value || '').trim();
-  if (!dinnerStart || dinnerStartRow?.start_day !== dateStr) {
+  if (!dinnerOnThisDay) {
     await upsertScore('salao_jantar', dateStr, 5.0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
   } else {
     const jSlaRows = await query<SlaTimingRow>(
@@ -296,6 +318,7 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
 
   // -- Operação: média simples das entidades com movimento no dia --
   // (só entra quem tem demandas; estação vazia em 5.0 não infla a média)
+  // salao e salao_jantar são turnos distintos (almoço × jantar) — os dois entram.
   const opLeaves = await query<{
     entity: string; final_score: string; total_demands: string;
     sla_breaches: string; sla_breach_deduction: string;
@@ -308,7 +331,7 @@ export async function computeDailyScores(dateStr: string): Promise<void> {
        returned, returned_deduction
      FROM performance_scores
      WHERE date = $1 AND total_demands > 0
-       AND entity IN ('cozinha_quente_a','cozinha_quente_b','cozinha_fria','cozinha_jantar','salao')`,
+       AND entity IN ('cozinha_quente_a','cozinha_quente_b','cozinha_fria','cozinha_jantar','salao','salao_jantar')`,
     [dateStr]
   );
 
@@ -554,22 +577,28 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
   }
 
   if (entity === 'salao' || entity === 'salao_jantar') {
-    const [tolRow] = await query<{ value: string }>(
-      `SELECT value FROM system_settings WHERE key = 'pickup_tolerance_minutes'`
-    );
-    const toleranceValue = parseFloat(tolRow?.value || '3');
-    const tolerance = Number.isFinite(toleranceValue) && toleranceValue > 0 ? toleranceValue : 3;
+    const tolerance = await getPickupTolerance();
     const stationLabel = entity === 'salao_jantar' ? 'Salão Jantar' : 'Salão';
 
-    // Jantar: só ocorrências de demandas criadas após ativar o turno.
-    let dinnerCutoff: string | null = null;
-    if (entity === 'salao_jantar') {
-      const [startRow] = await query<{ value: string }>(
-        `SELECT value FROM system_settings WHERE key = 'shift_dinner_started_at'`
-      );
-      dinnerCutoff = (startRow?.value || '').trim() || null;
-      if (!dinnerCutoff) return results;
-    }
+    // Corte do turno jantar (mesma regra de computeDailyScores): no dia em que
+    // o jantar foi iniciado, demandas criadas a partir do início pertencem ao
+    // salao_jantar — o "Salão" (almoço/geral) não as contabiliza.
+    const [startRow] = await query<{ value: string; start_day: string | null }>(
+      `SELECT value,
+         CASE WHEN value IS NULL OR value = '' THEN NULL
+           ELSE (value::timestamptz AT TIME ZONE '${BR_TZ}')::date::text END AS start_day
+       FROM system_settings WHERE key = 'shift_dinner_started_at'`
+    );
+    const dinnerCutoff = (startRow?.value || '').trim() || null;
+    const dinnerCutoffDay = dinnerCutoff ? startRow?.start_day || null : null;
+    if (entity === 'salao_jantar' && (!dinnerCutoff || !dinnerCutoffDay)) return results;
+
+    // Só a data do início do jantar tem janela de jantar (demais dias ficam
+    // inteiramente com o salão do almoço/turno geral).
+    const dinnerWindowFilter = entity === 'salao_jantar'
+      ? `AND created_at >= $3::timestamptz AND ${brDayOf('created_at')} = $4::date`
+      : `AND NOT ($3::timestamptz IS NOT NULL AND $4::date IS NOT NULL AND created_at >= $3::timestamptz AND ${brDayOf('created_at')} = $4::date)`;
+    const dinnerWindowParams = [dateFrom, dateTo, dinnerCutoff, dinnerCutoffDay];
 
     const sSlaRows = await query<{
       id: string; product_name: string; created_at: string | Date; ready_at: string | Date | null;
@@ -577,8 +606,8 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
     }>(
       `SELECT id, product_name, created_at, ready_at, retrieved_at
        FROM demands WHERE ${brDayOf('created_at')} >= $1 AND ${brDayOf('created_at')} <= $2 AND sla_breached_salao = true AND status != 'annulled'
-       AND ($3::timestamptz IS NULL OR created_at >= $3::timestamptz)`,
-      [dateFrom, dateTo, dinnerCutoff]
+       ${dinnerWindowFilter}`,
+      dinnerWindowParams
     );
     sSlaRows.forEach(r => {
       const factor = slaFactor(r.ready_at, r.retrieved_at, tolerance);
@@ -594,8 +623,8 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
     const sCancelRows = await query<{ id: string; product_name: string; created_at: string | Date; cancel_reason: string | null }>(
       `SELECT id, product_name, created_at, cancel_reason
        FROM demands WHERE ${brDayOf('created_at')} >= $1 AND ${brDayOf('created_at')} <= $2 AND status = 'cancelled_salao'
-       AND ($3::timestamptz IS NULL OR created_at >= $3::timestamptz)`,
-      [dateFrom, dateTo, dinnerCutoff]
+       ${dinnerWindowFilter}`,
+      dinnerWindowParams
     );
     sCancelRows.forEach(r => results.push({
       type: 'Cancelamento', date: formatDate(r.created_at),
@@ -608,8 +637,8 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
       `SELECT id, product_name, created_at
        FROM demands WHERE ${brDayOf('created_at')} >= $1 AND ${brDayOf('created_at')} <= $2 AND stockout_reported = true
         AND (stockout_sla_factor IS NULL OR stockout_sla_factor <= 1) AND status != 'annulled'
-       AND ($3::timestamptz IS NULL OR created_at >= $3::timestamptz)`,
-      [dateFrom, dateTo, dinnerCutoff]
+       ${dinnerWindowFilter}`,
+      dinnerWindowParams
     );
     sStockRows.forEach(r => results.push({
       type: 'Zerado', date: formatDate(r.created_at),
@@ -629,10 +658,10 @@ export async function getDetractorDates(entity: string, dateFrom: string, dateTo
     }
   }
 
-  // Operação: ocorrências de todas as cozinhas + salão do dia inteiro
-  // (salao_jantar já está contido no salão — não incluir para não duplicar).
+  // Operação: ocorrências de todas as cozinhas + os dois turnos do salão
+  // (salao = almoço/geral; salao_jantar = janela do jantar — sem duplicidade).
   if (entity === 'operacao') {
-    const subEntities = ['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'cozinha_jantar', 'salao'];
+    const subEntities = ['cozinha_quente_a', 'cozinha_quente_b', 'cozinha_fria', 'cozinha_jantar', 'salao', 'salao_jantar'];
     for (const sub of subEntities) {
       const subResults = await getDetractorDates(sub, dateFrom, dateTo);
       results.push(...subResults);

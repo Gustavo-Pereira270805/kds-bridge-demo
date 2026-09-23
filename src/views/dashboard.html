@@ -725,6 +725,14 @@ if (document.readyState === 'loading') {
         return parts.length === 3 ? parts[2] + '/' + parts[1] + '/' + parts[0] : String(iso || '');
     }
 
+    // Sazonalidade/heatmap comparam dias da semana: com filtro de um único dia o
+    // backend amplia a janela para a semana corrente e devolve `weekday_window`
+    // (null quando o filtro já cobre vários dias).
+    function weekdayScopeNote(wk, suffix) {
+        if (!wk || !wk.from || !wk.to) return '';
+        return 'Semana de ' + fmtBrDate(wk.from) + ' a ' + fmtBrDate(wk.to) + (suffix || '');
+    }
+
     // Descreve a janela de comparação dos deltas dos KPIs (mesmo tamanho,
     // imediatamente antes do período atual — calculada no servidor).
     function comparisonLabel(cmpPeriod) {
@@ -756,9 +764,19 @@ if (document.readyState === 'loading') {
             { key: 'atrasos-salao', eyebrow: 'ATRASOS SAL\u00c3O', value: atrasosSalao.toLocaleString('pt-BR'), delta: k.comparison ? k.comparison.atrasos_salao ? k.comparison.atrasos_salao.delta_pct : null : null, unit: '%', invert: true, status: statusForAtrasos(atrasosSalao), target: '#sla' },
         ];
 
-        var occMedia = (data.occupancy_by_shift || []).length > 0
-            ? data.occupancy_by_shift.reduce(function(acc, s) { return acc + (parseFloat(s.pct_ociosa) || 0); }, 0) / data.occupancy_by_shift.length
-            : 0;
+        // Ociosidade global ponderada por capacidade-minuto (pondera o peso de
+        // cada turno pelo tamanho real — média simples deixaria o Jantar mandar).
+        var occRows = data.occupancy_by_shift || [];
+        var occCapSum = 0, occMinSum = 0;
+        occRows.forEach(function(s) {
+            occCapSum += parseFloat(s.capacidade_min) || 0;
+            occMinSum += parseFloat(s.minutos_ocupados) || 0;
+        });
+        var occMedia = occCapSum > 0
+            ? Math.max(0, Math.min(100, 100 - (occMinSum / occCapSum) * 100))
+            : (occRows.length > 0
+                ? occRows.reduce(function(acc, s) { return acc + (parseFloat(s.pct_ociosa) || 0); }, 0) / occRows.length
+                : 0);
         var secondaryCards = [
             { key: 'zerados', label: 'PRODUTOS ZERADOS', value: (k.total_roturas || 0).toLocaleString('pt-BR') },
             { key: 'cancelados', label: 'CANCELADOS', value: (k.total_cancelados || 0).toLocaleString('pt-BR') },
@@ -818,13 +836,23 @@ if (document.readyState === 'loading') {
 
     function renderDonut(title, segments, colors) {
         var total = segments.reduce(function(s, a) { return s + a.value; }, 0);
-        if(!total) return '';
+        if(!total) {
+            return '<div class="panel"><div class="section-title">' + title + '</div>' +
+                '<p style="color:var(--c-text-muted);padding:20px 0;text-align:center;">Sem ocorrências no período</p></div>';
+        }
         var cx = 70, cy = 70, r = 55, ir = 35;
         var svg = '<svg width="160" height="160" viewBox="0 0 140 140"><g transform="translate(' + cx + ',' + cy + ')">';
         var a = -Math.PI / 2;
         segments.forEach(function(seg, i) {
             var slice = (seg.value / total) * 2 * Math.PI;
             if(slice < 0.01) return;
+            // Fatia de 360° (só uma medida não zerada): o arco com início=fim não
+            // renderiza nada — desenha um anel cheio com stroke (como no export).
+            if (slice > Math.PI * 2 - 0.001) {
+                svg += '<circle cx="0" cy="0" r="' + ((r + ir) / 2) + '" fill="none" stroke="' + colors[i % colors.length] + '" stroke-width="' + (r - ir) + '"/>';
+                a += slice;
+                return;
+            }
             var x1 = Math.cos(a) * r, y1 = Math.sin(a) * r;
             var x2 = Math.cos(a + slice) * r, y2 = Math.sin(a + slice) * r;
             var x3 = Math.cos(a + slice) * ir, y3 = Math.sin(a + slice) * ir;
@@ -833,7 +861,7 @@ if (document.readyState === 'loading') {
             svg += '<path d="M ' + x1 + ' ' + y1 + ' A ' + r + ' ' + r + ' 0 ' + large + ' 1 ' + x2 + ' ' + y2 + ' L ' + x3 + ' ' + y3 + ' A ' + ir + ' ' + ir + ' 0 ' + large + ' 0 ' + x4 + ' ' + y4 + ' Z" fill="' + colors[i % colors.length] + '"/>';
             a += slice;
         });
-        svg += '<text text-anchor="middle" dy="0.35em" font-size="16" font-weight="800" fill="#1e1e1e">' + total + '</text>';
+        svg += '<text text-anchor="middle" dy="0.35em" font-size="16" font-weight="800" style="fill:var(--c-text-body)">' + total + '</text>';
         svg += '</g></svg>';
         var legend = '<div class="donut-legend">';
         segments.forEach(function(seg, i) {
@@ -1339,7 +1367,7 @@ if (document.readyState === 'loading') {
         demandGrid.innerHTML = '';
 
         demandGrid.innerHTML += '<article class="panel panel-tall" data-cols="12">' +
-            '<header class="panel-header"><h3 class="panel-title">Heatmap Hora x Dia da Semana</h3><p class="panel-subtitle">Passe o mouse para ver o volume \u00b7 clique em uma c\u00e9lula para listar as demandas</p></header>' +
+            '<header class="panel-header"><h3 class="panel-title">Heatmap Hora x Dia da Semana</h3><p class="panel-subtitle">' + (data.weekday_window ? weekdayScopeNote(data.weekday_window, ' \u00b7 ') : '') + 'Passe o mouse para ver o volume \u00b7 clique em uma c\u00e9lula para listar as demandas</p></header>' +
             '<div class="panel-body">' + renderHeatmap(data.heatmap) + '<div id="heatmap-detail" style="display:none;margin-top:10px;"></div></div></article>';
 
         if (!demandGrid._heatClickSet) {
@@ -1374,7 +1402,9 @@ if (document.readyState === 'loading') {
 
         if (data.weekday_seasonality && data.weekday_seasonality.length) {
             demandGrid.innerHTML += '<article class="panel" data-cols="5">' +
-                '<header class="panel-header"><h3 class="panel-title">Sazonalidade por Dia</h3></header>' +
+                '<header class="panel-header"><h3 class="panel-title">Sazonalidade por Dia</h3>' +
+                (data.weekday_window ? '<p class="panel-subtitle">' + weekdayScopeNote(data.weekday_window, ' \u2014 n\u00e3o segue o filtro de per\u00edodo') + '</p>' : '') +
+                '</header>' +
                 '<div class="panel-body">' + renderBars('', data.weekday_seasonality, 'dia', 'total', '#457b9d') + '</div></article>';
         }
 
@@ -1439,13 +1469,18 @@ if (document.readyState === 'loading') {
         if (data.occupancy_by_shift && data.occupancy_by_shift.length) {
             var occBars = '';
             data.occupancy_by_shift.forEach(function(d) {
-                var ocupPct = Math.round((100 - parseFloat(d.pct_ociosa || 0)) * 10) / 10;
-                var ociosaPct = Math.round(parseFloat(d.pct_ociosa || 0) * 10) / 10;
+                var ocupPct = d.pct_ocupada != null
+                    ? Math.round(parseFloat(d.pct_ocupada) * 10) / 10
+                    : Math.round((100 - parseFloat(d.pct_ociosa || 0)) * 10) / 10;
+                var ociosaPct = Math.round((100 - ocupPct) * 10) / 10;
                 var color = ocupPct < 40 ? '#2a9d8f' : ocupPct < 70 ? '#f4a261' : '#e63946';
-                occBars += '<div class="bar-row"><div class="bar-label">' + d.turno + '</div><div class="bar-track" style="display:flex;"><div class="bar-fill" style="width:' + ocupPct + '%;background:' + color + ';height:100%;">' + (ocupPct > 15 ? '<span>' + ocupPct + '% ocupado</span>' : '') + '</div><div class="bar-fill" style="width:' + ociosaPct + '%;background:#e5e7eb;height:100%;">' + (ociosaPct > 15 ? '<span style="color:#6b7280;">' + ociosaPct + '% ociosa</span>' : '') + '</div></div><div class="bar-value" style="width:80px;">' + ocupPct + '%</div></div>';
+                var ocupMin = Math.round(parseFloat(d.minutos_ocupados) || 0);
+                var capMin = Math.round(parseFloat(d.capacidade_min) || 0);
+                var tip = capMin > 0 ? ' title="' + ocupMin + ' min de preparo de ' + capMin + ' min de capacidade disponível no período"' : '';
+                occBars += '<div class="bar-row"' + tip + '><div class="bar-label">' + d.turno + '</div><div class="bar-track" style="display:flex;"><div class="bar-fill" style="width:' + ocupPct + '%;background:' + color + ';height:100%;">' + (ocupPct > 15 ? '<span>' + ocupPct + '% ocupado</span>' : '') + '</div><div class="bar-fill" style="width:' + ociosaPct + '%;background:#e5e7eb;height:100%;">' + (ociosaPct > 15 ? '<span style="color:#6b7280;">' + ociosaPct + '% ociosa</span>' : '') + '</div></div><div class="bar-value" style="width:80px;">' + ocupPct + '%</div></div>';
             });
             slaGrid.innerHTML += '<article class="panel" data-cols="6">' +
-                '<header class="panel-header"><h3 class="panel-title">Ocupação por Turno</h3></header>' +
+                '<header class="panel-header"><h3 class="panel-title">Ocupação por Turno</h3><p class="panel-subtitle">Minutos de preparo executados vs capacidade das estações (bocas &times; duração do turno)</p></header>' +
                 '<div class="panel-body"><div style="max-height:200px;overflow-y:auto;">' + occBars + '</div><div style="margin-top:4px;font-size:10px;color:var(--c-text-muted);">Barra colorida = % ocupado | Cinza = % ocioso</div></div></article>';
         }
 
@@ -2457,10 +2492,11 @@ if (document.readyState === 'loading') {
     function exportReportHtml(data, perf, title, index, includeVolume) {
         var k = data.kpis || {};
         var donutHtml = '<div class="export-two">' + exportDonut('Status das demandas', [{label:'Pendentes',value:Number(data.funnel && data.funnel.pending_now || 0)},{label:'Prontas',value:Math.max(0,Number(data.funnel && data.funnel.ready || 0)-Number(data.funnel && data.funnel.retrieved || 0))},{label:'Retiradas',value:Number(data.funnel && data.funnel.retrieved || 0)},{label:'Canceladas',value:Number(k.total_cancelados||0)}], ['#d4a574','#6b9080','#2a9d8f','#e63946']) + exportDonut('Origem das urgências', [{label:'Urgentes puros',value:Number(k.urgentes_puros||0)},{label:'Por zerou',value:Number(k.urgentes_rotura||0)}], ['#e63946','#f4a261']) + '</div>';
+        var wkNote = data.weekday_window ? '<p class="export-muted">' + exportEscape(weekdayScopeNote(data.weekday_window)) + '</p>' : '';
         return '<div class="export-report"><header><div><small>KDS BRIDGE / RELATÓRIO OPERACIONAL</small><h1>Dashboard de operação</h1><p>' + exportEscape(title) + '</p></div><strong>WARM<br>OBSIDIAN</strong></header>' +
             exportKpisHtml(k) + '<div class="export-two"><div class="export-panel"><h3>Funil de demandas</h3>' + exportBars([{label:'Criadas',value:Number(data.funnel && data.funnel.created || 0)},{label:'Iniciaram preparo',value:Number(data.funnel && data.funnel.ready || 0)},{label:'Prontas',value:Number(data.funnel && data.funnel.ready || 0)},{label:'Retiradas',value:Number(data.funnel && data.funnel.retrieved || 0)}], 'label', 'value', '#d4a574') + '</div>' + donutHtml + '</div>' +
-            '<div class="export-two"><div class="export-panel"><h3>Produtos mais demandados</h3>' + exportBars((data.produtos||[]).slice(0,10), 'product_name', function(r){return Number(r.total_qty||r.total_demandas||0);}, '#d4a574') + '</div><div class="export-panel"><h3>Sazonalidade</h3>' + exportBars(data.weekday_seasonality||[], 'dia', 'total', '#6b9080') + '</div></div>' +
-            '<div class="export-panel"><h3>Heatmap hora x dia da semana</h3>' + renderHeatmap(data.heatmap) + '</div><div class="export-two">' + (includeVolume ? '<div class="export-panel"><h3>Volume diário</h3><canvas id="exportVolume' + index + '" width="400" height="230"></canvas></div>' : '') + '<div class="export-panel"><h3>Fila por hora</h3><canvas id="exportQueue' + index + '" width="400" height="230"></canvas></div><div class="export-panel"><h3>Velocidade da cozinha</h3><canvas id="exportSpeed' + index + '" width="400" height="230"></canvas></div><div class="export-panel"><h3>Tempo de retirada</h3><canvas id="exportPickup' + index + '" width="400" height="230"></canvas></div></div>' +
+            '<div class="export-two"><div class="export-panel"><h3>Produtos mais demandados</h3>' + exportBars((data.produtos||[]).slice(0,10), 'product_name', function(r){return Number(r.total_qty||r.total_demandas||0);}, '#d4a574') + '</div><div class="export-panel"><h3>Sazonalidade</h3>' + wkNote + exportBars(data.weekday_seasonality||[], 'dia', 'total', '#6b9080') + '</div></div>' +
+            '<div class="export-panel"><h3>Heatmap hora x dia da semana</h3>' + wkNote + renderHeatmap(data.heatmap) + '</div><div class="export-two">' + (includeVolume ? '<div class="export-panel"><h3>Volume diário</h3><canvas id="exportVolume' + index + '" width="400" height="230"></canvas></div>' : '') + '<div class="export-panel"><h3>Fila por hora</h3><canvas id="exportQueue' + index + '" width="400" height="230"></canvas></div><div class="export-panel"><h3>Velocidade da cozinha</h3><canvas id="exportSpeed' + index + '" width="400" height="230"></canvas></div><div class="export-panel"><h3>Tempo de retirada</h3><canvas id="exportPickup' + index + '" width="400" height="230"></canvas></div></div>' +
             '<div class="export-two"><div class="export-panel"><h3>SLA por produto</h3>' + exportBars(data.sla_by_product||[], 'product_name', function(r){return Number(r.breached||0);}, '#e76f51') + '</div><div class="export-panel"><h3>Cancelamentos</h3>' + exportBars(data.cancel_reasons||[], 'label', 'total', '#e63946') + '</div></div>' + exportExamplesHtml(data) + exportPerformanceHtml(perf) + '</div>';
     }
 

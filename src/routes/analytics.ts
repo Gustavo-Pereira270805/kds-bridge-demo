@@ -110,6 +110,26 @@ function resolveDashboardPeriod(
   return { range, dateFrom, dateTo, dateFilter, dateFilterD, stationFilter, stationFilterD, baseParams, rangeNum };
 }
 
+// Sazonalidade e heatmap comparam dias da semana e precisam de uma janela com
+// vários dias. Quando o filtro é de um único dia (ex.: "Hoje", "Ontem" ou uma
+// data avulsa), essas duas visualizações passam a usar a semana corrente
+// (domingo a sábado, BRT) do dia final — o restante do dashboard continua no
+// recorte selecionado. O drill-down do heatmap usa a mesma regra para o detalhe
+// bater com a célula agregada.
+function resolveWeekdayPeriod(
+  q: { range?: string; from?: string; to?: string; station_id?: string }
+): ResolvedDashboardPeriod | { error: string } {
+  const base = resolveDashboardPeriod(q);
+  if ('error' in base) return base;
+  if (base.dateFrom !== base.dateTo) return base;
+  const dow = new Date(`${base.dateTo}T12:00:00Z`).getUTCDay();
+  return resolveDashboardPeriod({
+    from: shiftDay(base.dateTo, -dow),
+    to: shiftDay(base.dateTo, 6 - dow),
+    station_id: q.station_id,
+  });
+}
+
 // v2.5 (§5.6) — indicadores diários embutidos em cada dia do week_comparison;
 // a data fica no objeto externo, então `day` é omitida do sub-objeto
 type DayIndicatorValues = Omit<DayIndicators, 'day'>;
@@ -348,7 +368,9 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         if (!Number.isInteger(dow) || dow < 0 || dow > 6 || !Number.isInteger(hora) || hora < 0 || hora > 23) {
           return reply.code(400).send({ error: 'Parâmetros dow/hora inválidos' });
         }
-        const period = resolveDashboardPeriod(request.query);
+        // Mesma regra do agregado do dashboard: com um único dia selecionado, o
+        // heatmap cobre a semana corrente (resolveWeekdayPeriod).
+        const period = resolveWeekdayPeriod(request.query);
         if ('error' in period) {
           return reply.code(400).send({ error: period.error });
         }
@@ -386,7 +408,16 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         if ('error' in period) {
           return reply.code(400).send({ error: period.error });
         }
+        const weekdayPeriod = resolveWeekdayPeriod(request.query);
+        if ('error' in weekdayPeriod) {
+          return reply.code(400).send({ error: weekdayPeriod.error });
+        }
         const { range, dateFrom, dateTo, dateFilter, dateFilterD, stationFilter, stationFilterD, baseParams, rangeNum } = period;
+        // Deltas de dia da semana (sazonalidade/heatmap) usam a semana quando o
+        // filtro é de um único dia; exposto no payload para o frontend rotular.
+        const weekdayWindow = period.dateFrom === period.dateTo
+          ? { from: weekdayPeriod.dateFrom, to: weekdayPeriod.dateTo }
+          : null;
         const { station_id } = request.query;
 
         async function safeQuery<T>(step: string, sql: string, p: unknown[]): Promise<T[]> {
@@ -539,22 +570,56 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
            GROUP BY ks.name ORDER BY ks.name`, baseParams
         );
 
-         // ── 6. % Capacidade ociosa por turno ──
+         // ── 6. Ocupação por turno (bocas ocupadas ÷ capacidade) ──
+        // Ocupação = minutos de preparo executados (cooking_started_at até
+        // ready/cancelamento/agora) ÷ (capacidade das estações × duração do
+        // turno). A fila garante no máximo `capacity` preparos simultâneos por
+        // estação, então a soma das durações equivale à integral de concorrência.
         const shiftOrder: Record<string, number> = { 'Manhã': 1, 'Almoço': 2, 'Tarde': 3, 'Jantar': 4 };
-        const occRaw = await safeQuery<{ turno: string; pct_ociosa: string }>('6.Occupancy',
-          `SELECT
-            CASE
-              WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo') BETWEEN 6 AND 11 THEN 'Manhã'
-              WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo') BETWEEN 12 AND 14 THEN 'Almoço'
-              WHEN EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo') BETWEEN 15 AND 17 THEN 'Tarde'
-              ELSE 'Jantar'
-            END AS turno,
-            ROUND((1 - (COUNT(*) FILTER (WHERE status = 'pending')::numeric / NULLIF(COUNT(*),0))) * 100, 1) AS pct_ociosa
-           FROM demands WHERE ${dateFilter} AND status != 'annulled' ${stationFilter} GROUP BY 1`,
+        const SHIFT_MINUTES: Record<string, number> = { 'Manhã': 360, 'Almoço': 180, 'Tarde': 180, 'Jantar': 720 };
+        const occRaw = await safeQuery<{ turno: string; minutos_ocupados: string; capacidade: string }>('6.Occupancy',
+          `WITH ocupacao AS (
+             SELECT
+               CASE
+                 WHEN EXTRACT(HOUR FROM d.cooking_started_at AT TIME ZONE '${BR_TZ}') BETWEEN 6 AND 11 THEN 'Manhã'
+                 WHEN EXTRACT(HOUR FROM d.cooking_started_at AT TIME ZONE '${BR_TZ}') BETWEEN 12 AND 14 THEN 'Almoço'
+                 WHEN EXTRACT(HOUR FROM d.cooking_started_at AT TIME ZONE '${BR_TZ}') BETWEEN 15 AND 17 THEN 'Tarde'
+                 ELSE 'Jantar'
+               END AS turno,
+               d.kitchen_station_id,
+               ks.capacity,
+               EXTRACT(EPOCH FROM (COALESCE(d.ready_at, d.cancelled_at, now()) - d.cooking_started_at)) / 60.0 AS minutos_ocupados
+             FROM demands d
+             JOIN kitchen_stations ks ON ks.id = d.kitchen_station_id
+             WHERE ${dateFilterD} AND d.status != 'annulled' AND d.cooking_started_at IS NOT NULL ${stationFilterD}
+           ),
+           por_estacao AS (
+             SELECT turno, kitchen_station_id, MAX(capacity)::int AS capacity, SUM(minutos_ocupados) AS minutos_ocupados
+             FROM ocupacao GROUP BY 1, 2
+           )
+           SELECT turno, SUM(minutos_ocupados) AS minutos_ocupados, SUM(capacity) AS capacidade
+           FROM por_estacao GROUP BY turno`,
           baseParams
         );
+        const occupancyDays = Math.round(
+          (new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / 86400000
+        ) + 1;
         const occupancyByShift = occRaw
           .filter(r => r.turno)
+          .map(r => {
+            const minutos = Math.max(0, parseFloat(r.minutos_ocupados) || 0);
+            const capacidadeMin = (parseInt(r.capacidade, 10) || 0) * (SHIFT_MINUTES[r.turno] || 0) * occupancyDays;
+            const pctOcupada = capacidadeMin > 0
+              ? Math.min(100, Math.round((minutos / capacidadeMin) * 1000) / 10)
+              : 0;
+            return {
+              turno: r.turno,
+              pct_ocupada: pctOcupada,
+              pct_ociosa: Math.round((100 - pctOcupada) * 10) / 10,
+              minutos_ocupados: Math.round(minutos),
+              capacidade_min: Math.round(capacidadeMin),
+            };
+          })
           .sort((a, b) => (shiftOrder[a.turno] || 9) - (shiftOrder[b.turno] || 9));
 
         // ── 7. SLA por produto (Pareto) ──
@@ -681,14 +746,15 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         }
 
         // ── 11. Sazonalidade dia da semana ──
+        // Com filtro de um único dia usa a semana corrente (ver resolveWeekdayPeriod).
         const diasSemana = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
         const weekdayRaw = await safeQuery<{ dow: string; total: string }>('11.Weekday',
           `SELECT EXTRACT(DOW FROM created_at AT TIME ZONE '${BR_TZ}')::int AS dow, COUNT(*)::int AS total
-           FROM demands WHERE ${dateFilter} AND status != 'annulled' ${stationFilter} GROUP BY 1 ORDER BY 1`, baseParams
+           FROM demands WHERE ${weekdayPeriod.dateFilter} AND status != 'annulled' ${weekdayPeriod.stationFilter} GROUP BY 1 ORDER BY 1`, weekdayPeriod.baseParams
         );
         const weekdayData: WeekdayRow[] = diasSemana.map((dia, idx) => {
           const found = weekdayRaw.find((r: any) => parseInt(r.dow) === idx);
-          return { dia, total: found ? parseInt(found.total) : 0, avg: rangeNum > 0 ? Math.round((found ? parseInt(found.total) : 0) / rangeNum * 10) / 10 : 0 };
+          return { dia, total: found ? parseInt(found.total) : 0, avg: weekdayPeriod.rangeNum > 0 ? Math.round((found ? parseInt(found.total) : 0) / weekdayPeriod.rangeNum * 10) / 10 : 0 };
         });
 
         // ── 12. Tempo médio de preparo por produto (agregado no servidor) ──
@@ -710,12 +776,13 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
         );
 
         // ── 13. Heatmap hora × dia da semana ──
+        // Com filtro de um único dia usa a semana corrente (ver resolveWeekdayPeriod).
         const heatmap = await safeQuery<HeatmapRow>('13.Heatmap',
           `SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE '${BR_TZ}')::int AS hora,
             EXTRACT(DOW FROM created_at AT TIME ZONE '${BR_TZ}')::int AS dia_semana,
             COUNT(*)::int AS total
-           FROM demands WHERE ${dateFilter} AND status != 'annulled' ${stationFilter}
-           GROUP BY 1, 2 ORDER BY 2, 1`, baseParams
+           FROM demands WHERE ${weekdayPeriod.dateFilter} AND status != 'annulled' ${weekdayPeriod.stationFilter}
+           GROUP BY 1, 2 ORDER BY 2, 1`, weekdayPeriod.baseParams
         );
 
         // ── 14. Funil de demandas ──
@@ -887,6 +954,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           pickup_by_hour: pickupByHour,
           volume_ma: volumeMA,
           weekday_seasonality: weekdayData,
+          weekday_window: weekdayWindow,
           prep_by_product: prepByProduct,
           heatmap,
           funnel,

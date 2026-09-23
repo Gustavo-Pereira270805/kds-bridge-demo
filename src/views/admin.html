@@ -311,40 +311,63 @@
        </table>
    </div>
 
-    <!-- Painel: Critérios de Avaliação (Pesos de Performance) -->
+    <!-- Painel: Critérios de Avaliação (Pesos de Performance + Tolerância do Salão) -->
     <div class="panel" id="panel-weights">
          <h2>Critérios de Avaliação (Pesos da Nota de Performance)</h2>
          <p style="color:var(--c-text-secondary); font-size:14px; margin-bottom: 24px;">
              Ajuste os pesos da nota automática. A nota base é 5.0; cancelamentos e zerados do salão usam os valores abaixo, enquanto o estouro de SLA usa uma curva entre o mínimo e o máximo, com teto fixo em 2,5 vezes o SLA. As alterações recalcularão as notas já geradas.
         </p>
-         <div style="max-width: 620px; display: flex; flex-direction: column; gap: 14px;">
-             <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
-                 <label style="flex:1; font-weight:600; color:var(--c-text-body);">Cancelamento (Cozinha)</label>
-                 <input type="number" step="0.01" min="0" max="5" id="weightCancellationCozinha" class="sla-input" style="width:110px;">
-            </div>
-             <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
-                 <label style="flex:1; font-weight:600; color:var(--c-text-body);">Cancelamento (Salão)</label>
-                 <input type="number" step="0.01" min="0" max="5" id="weightCancellationSalao" class="sla-input" style="width:110px;">
-            </div>
-             <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
-                 <label style="flex:1; font-weight:600; color:var(--c-text-body);">Zerou (Reportado pelo Salão)</label>
-                 <input type="number" step="0.01" min="0" max="5" id="weightStockoutSalao" class="sla-input" style="width:110px;">
-            </div>
-             <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
-                 <label style="flex:1; font-weight:600; color:var(--c-text-body);">Devolvida pelo salão (cozinha)</label>
-                 <input type="number" step="0.01" min="0" max="5" id="weightReturned" class="sla-input" style="width:110px;">
-            </div>
-             <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
-                 <label style="flex:1; font-weight:600; color:var(--c-text-body);">SLA — penalidade mínima</label>
-                 <input type="number" step="0.01" min="0" max="5" id="weightSlaMin" class="sla-input" style="width:110px;">
-            </div>
-             <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
-                 <label style="flex:1; font-weight:600; color:var(--c-text-body);">SLA — penalidade máxima</label>
-                 <input type="number" step="0.01" min="0" max="5" id="weightSlaMax" class="sla-input" style="width:110px;">
-            </div>
-            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:8px;">
-                <button class="btn-success" onclick="saveWeights()">Salvar e Recalcular</button>
-           </div>
+         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr)); gap:24px; align-items:start;">
+             <section aria-labelledby="weightsColTitle">
+                 <h3 id="weightsColTitle" style="margin-top:0;">Pesos da nota (0 a 5)</h3>
+                 <div style="display: flex; flex-direction: column; gap: 14px;">
+                     <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                         <label style="flex:1; font-weight:600; color:var(--c-text-body);">Cancelamento (Cozinha)</label>
+                         <input type="number" step="0.01" min="0" max="5" id="weightCancellationCozinha" class="sla-input" style="width:110px;">
+                    </div>
+                     <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                         <label style="flex:1; font-weight:600; color:var(--c-text-body);">Cancelamento (Salão)</label>
+                         <input type="number" step="0.01" min="0" max="5" id="weightCancellationSalao" class="sla-input" style="width:110px;">
+                    </div>
+                     <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                         <label style="flex:1; font-weight:600; color:var(--c-text-body);">Zerou (Reportado pelo Salão)</label>
+                         <input type="number" step="0.01" min="0" max="5" id="weightStockoutSalao" class="sla-input" style="width:110px;">
+                    </div>
+                     <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                         <label style="flex:1; font-weight:600; color:var(--c-text-body);">Devolvida pelo salão (cozinha)</label>
+                         <input type="number" step="0.01" min="0" max="5" id="weightReturned" class="sla-input" style="width:110px;">
+                    </div>
+                     <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                         <label style="flex:1; font-weight:600; color:var(--c-text-body);">SLA — penalidade mínima</label>
+                         <input type="number" step="0.01" min="0" max="5" id="weightSlaMin" class="sla-input" style="width:110px;">
+                    </div>
+                     <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                         <label style="flex:1; font-weight:600; color:var(--c-text-body);">SLA — penalidade máxima</label>
+                         <input type="number" step="0.01" min="0" max="5" id="weightSlaMax" class="sla-input" style="width:110px;">
+                    </div>
+                    <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:8px;">
+                        <button class="btn-success" onclick="saveWeights()">Salvar e Recalcular</button>
+                   </div>
+               </div>
+           </section>
+             <section aria-labelledby="timingColTitle">
+                 <h3 id="timingColTitle" style="margin-top:0;">Tempos operacionais</h3>
+                 <div style="display: flex; flex-direction: column; gap: 14px;">
+                     <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 16px; background:var(--c-bg-page); border-radius:10px;">
+                         <label for="pickupToleranceMinutes" style="flex:1; font-weight:600; color:var(--c-text-body);">Tolerância de retirada do salão (minutos)</label>
+                         <div style="display:flex; align-items:center; gap:8px;">
+                             <input type="number" step="0.5" min="0.5" max="60" id="pickupToleranceMinutes" class="sla-input" style="width:110px;">
+                             <span style="font-weight:600; color:var(--c-text-secondary);">min</span>
+                         </div>
+                    </div>
+                     <p style="margin:0; color:var(--c-text-secondary); font-size:13px; line-height:1.5;">
+                         Tempo máximo, em minutos, entre a cozinha marcar o pedido como <strong>pronto</strong> e o salão <strong>retirar</strong>. Retiradas acima disso contam como estouro de SLA do salão e descontam a nota (padrão: 3 min).
+                    </p>
+                    <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:8px;">
+                        <button class="btn-success" onclick="savePickupTolerance()">Salvar e Recalcular</button>
+                   </div>
+               </div>
+           </section>
        </div>
    </div>
 
@@ -463,7 +486,7 @@ function switchTab(name) {
     if (name === 'menus') loadMenus();
     if (name === 'unidades') loadUnitsPanel();
     if (name === 'reasons') loadReasons();
-    if (name === 'weights') loadWeights();
+    if (name === 'weights') { loadWeights(); loadPickupTolerance(); }
     if(name==='pis'){ /* nada a carregar, heartbeat cuida */ }
     if (name === 'turno') loadDinnerAutoSettings();
 }
@@ -495,6 +518,29 @@ function saveWeights() {
         body: JSON.stringify(body)
     }).then(function(data) {
         toast('Pesos salvos! As notas de todas as datas serão recalculadas.', true);
+    }).catch(function(err) { toast(err.message, false); });
+}
+
+// === TOLERÂNCIA DE RETIRADA (SALÃO) ===
+function loadPickupTolerance() {
+    api('/api/v1/admin/settings/pickup-tolerance').then(function(data) {
+        document.getElementById('pickupToleranceMinutes').value = data.minutes;
+    }).catch(function(err) { toast(err.message, false); });
+}
+
+function savePickupTolerance() {
+    var minutes = parseFloat(document.getElementById('pickupToleranceMinutes').value);
+    if (!isFinite(minutes) || minutes < 0.5 || minutes > 60) {
+        toast('Tolerância inválida: informe um valor entre 0,5 e 60 minutos.', false);
+        return;
+    }
+    api('/api/v1/admin/settings/pickup-tolerance', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ minutes: minutes })
+    }).then(function(data) {
+        document.getElementById('pickupToleranceMinutes').value = data.minutes;
+        toast('Tolerância salva: ' + String(data.minutes).replace('.', ',') + ' min. As notas de todas as datas serão recalculadas.', true);
     }).catch(function(err) { toast(err.message, false); });
 }
 
