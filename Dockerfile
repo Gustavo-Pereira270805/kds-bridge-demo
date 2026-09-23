@@ -1,5 +1,7 @@
 # ---- Estágio 1: build (compila TS e copia views) ----
-FROM node:24-bookworm-slim AS build
+# Imagem base fixada por digest (índice multi-arch) para o cache do BuildKit não
+# invalidar quando a tag node:24-bookworm-slim se move no registry.
+FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -10,7 +12,7 @@ COPY src ./src
 RUN npm run build
 
 # ---- Estágio 2: runtime (só produção) ----
-FROM node:24-bookworm-slim
+FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
 WORKDIR /app
 ENV NODE_ENV=production
 
