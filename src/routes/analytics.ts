@@ -10,6 +10,7 @@ import {
   SpeedByHourRow,
   QueueTimeByStationRow,
   SlaByProductRow,
+  PickupSlaByProductRow,
   PickupByHourRow,
   VolumeMARow,
   WeekdayRow,
@@ -20,7 +21,7 @@ import {
   ReplacementRow,
   PerformanceScoreRow,
 } from '../types';
-import { ensureScoresForDate, buildDetractors, getDetractorDates, getWeights } from '../services/performance.service';
+import { ensureScoresForDate, buildDetractors, getDetractorDates, getWeights, getPickupTolerance } from '../services/performance.service';
 import { BR_TZ, brDay, brDayOf, shiftDay } from '../services/period.service';
 import { requireRole } from '../middleware/auth';
 
@@ -657,6 +658,43 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           baseParams
         );
 
+        // ── 7c. SLA de retirada do salão por produto (Pareto espelhado) ──
+        // Mesma base do KPI "Atrasos do Salão": flags gravados na retirada.
+        const pickupSlaByProduct = await safeQuery<PickupSlaByProductRow>('7c.PickupSlaByProduct',
+          `SELECT product_name, COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE sla_breached_salao = true)::int AS breached,
+            ROUND((COUNT(*) FILTER (WHERE sla_breached_salao = false)::numeric / NULLIF(COUNT(*),0)) * 100, 1) AS pct_ok,
+            ROUND(COALESCE(AVG(sla_breach_minutes_salao) FILTER (WHERE sla_breached_salao = true), 0)::numeric, 1) AS avg_overage_min
+           FROM demands WHERE ${dateFilter} AND retrieved_at IS NOT NULL AND ready_at IS NOT NULL AND status != 'annulled' ${stationFilter}
+           GROUP BY product_name ORDER BY breached DESC, total DESC`,
+          baseParams
+        );
+
+        // ── 7d. Detalhamento dos estouros de retirada (drill-down do Pareto do salão) ──
+        const pickupSlaDetails = await safeQuery<{
+          id: string; product_name: string; daily_seq: number; ready_at: string | null;
+          retrieved_at: string | null; overage_min: number | null; station: string | null;
+        }>('7d.PickupSlaDetails',
+          `WITH ranked AS (
+             SELECT d.id, d.product_name, d.created_at, d.ready_at, d.retrieved_at, d.status,
+               d.sla_breached_salao, d.sla_breach_minutes_salao, d.kitchen_station_id,
+               ROW_NUMBER() OVER (
+                 PARTITION BY (d.created_at AT TIME ZONE 'America/Sao_Paulo')::date
+                 ORDER BY d.created_at, d.id
+               ) AS daily_seq
+             FROM demands d
+             WHERE ${dateFilterD} ${stationFilterD}
+           )
+           SELECT r.id, r.product_name, r.daily_seq, r.ready_at, r.retrieved_at,
+             r.sla_breach_minutes_salao AS overage_min, ks.name AS station
+           FROM ranked r
+           LEFT JOIN kitchen_stations ks ON ks.id = r.kitchen_station_id
+           WHERE r.sla_breached_salao = true AND r.retrieved_at IS NOT NULL
+             AND r.ready_at IS NOT NULL AND r.status != 'annulled'
+           ORDER BY r.retrieved_at DESC NULLS LAST`,
+          baseParams
+        );
+
         // ── 8. Motivos de cancelamento ──
         const cancelReasons = await safeQuery<{ label: string; category: string; reason_text: string | null; total: string }>('8.CancelReasons',
           `SELECT COALESCE(cr.label, d.cancel_reason, 'Sem motivo') AS label, COALESCE(cr.category, 'outro') AS category,
@@ -948,6 +986,9 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
           occupancy_by_shift: occupancyByShift,
           sla_by_product: slaByProduct,
           sla_details: slaDetails,
+          pickup_sla_by_product: pickupSlaByProduct,
+          pickup_sla_details: pickupSlaDetails,
+          pickup_tolerance_min: await getPickupTolerance(),
           cancel_reasons: cancelReasons,
           cancel_reason_details: cancelReasonDetails,
           stockout_details: stockoutDetails,

@@ -32,6 +32,33 @@ export async function evaluateCookingSla(demandId: string): Promise<void> {
   }
 }
 
+// Reescreve os flags de SLA de retirada com a tolerância vigente. Usado pelo
+// recálculo retroativo do admin (pesos/tolerância) para o KPI, os painéis e as
+// notas contarem a mesma história. O log de eventos (demand_events) é preservado
+// como auditoria do que o sistema avaliou na hora da retirada.
+export async function recomputePickupSlaFlags(): Promise<number> {
+  const tolerance = await getPickupTolerance();
+  const rows = await query<{ id: string }>(
+    `UPDATE demands d
+     SET sla_breached_salao = c.breached, sla_breach_minutes_salao = c.overage
+     FROM (
+       SELECT id,
+         (EXTRACT(EPOCH FROM (retrieved_at - ready_at)) / 60) > $1::numeric AS breached,
+         CASE WHEN (EXTRACT(EPOCH FROM (retrieved_at - ready_at)) / 60) > $1::numeric
+              THEN ROUND((EXTRACT(EPOCH FROM (retrieved_at - ready_at)) / 60) - $1::numeric, 2)
+              ELSE NULL END AS overage
+       FROM demands
+       WHERE retrieved_at IS NOT NULL AND ready_at IS NOT NULL AND status != 'annulled'
+     ) c
+     WHERE d.id = c.id
+       AND (d.sla_breached_salao IS DISTINCT FROM c.breached
+         OR d.sla_breach_minutes_salao IS DISTINCT FROM c.overage)
+     RETURNING d.id`,
+    [tolerance]
+  );
+  return rows.length;
+}
+
 export async function evaluatePickupSla(demandId: string): Promise<void> {
   const tolerance = await getPickupTolerance();
 

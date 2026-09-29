@@ -11,6 +11,7 @@ import {
   todaySP,
 } from '../services/shift.service';
 import { logDemandEvent } from '../services/demand-events.service';
+import { recomputePickupSlaFlags } from '../services/sla.service';
 import { computeDailyScores, getPickupTolerance, getWeights } from '../services/performance.service';
 import { recomputeStationQueue } from '../services/queue.service';
 import { ensureTodayMenu } from '../services/menu.service';
@@ -63,6 +64,13 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     query<{ date: any }>(
       `SELECT DISTINCT date FROM performance_scores ORDER BY date`
     ).then(async (dates) => {
+      // Flags de retirada primeiro: os detratores de salão (computeDailyScores)
+      // filtram por sla_breached_salao, então precisam ler os valores novos.
+      const flagsChanged = await recomputePickupSlaFlags()
+        .catch(e => { request.log.error(e, 'Erro ao recalcular flags de SLA de retirada'); return null; });
+      if (flagsChanged != null) {
+        request.log.info(`Flags de SLA de retirada recalculados (${flagsChanged} pedidos atualizados).`);
+      }
       request.log.info(`Iniciando recálculo retroativo para ${dates.length} datas...`);
       for (const row of dates) {
         const dateStr = row.date instanceof Date ? row.date.toISOString().slice(0, 10) : String(row.date);

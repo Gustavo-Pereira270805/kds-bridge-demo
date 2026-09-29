@@ -313,6 +313,13 @@ export interface SlaByProductRow {
   pct_ok: number;
   avg_overage_min: number;
 }
+export interface PickupSlaByProductRow {
+  product_name: string;
+  total: number;
+  breached: number;
+  pct_ok: number;
+  avg_overage_min: number;
+}
 export interface PickupByHourRow {
   hora: number;
   avg_min: number;

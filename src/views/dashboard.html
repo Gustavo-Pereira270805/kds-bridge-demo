@@ -1302,6 +1302,54 @@ if (document.readyState === 'loading') {
         return '<div style="max-height:260px;overflow-y:auto;">' + rows + '</div>';
     }
 
+    // Espelho do painel de SLA da cozinha para a retirada do salão. Mesma base
+    // do KPI "Atrasos do Salão": flags gravados no momento da retirada.
+    function pickupTolLabel(data) {
+        var tol = data && data.pickup_tolerance_min;
+        if (tol == null || !isFinite(Number(tol))) return '\u2014';
+        return String(Math.round(Number(tol) * 10) / 10).replace('.', ',');
+    }
+
+    function renderPickupSlaPanel(data) {
+        var products = (data && data.pickup_sla_by_product) || [];
+        if (!products.length) return '';
+        var details = (data && data.pickup_sla_details) || [];
+        var tolLabel = pickupTolLabel(data);
+        var byProduct = {};
+        details.forEach(function(row) {
+            if (!byProduct[row.product_name]) byProduct[row.product_name] = [];
+            byProduct[row.product_name].push(row);
+        });
+        var slaMax = 1;
+        products.forEach(function(d) { if (d.breached > slaMax) slaMax = d.breached; });
+        var rows = '';
+        products.slice(0, 10).forEach(function(d, i) {
+            var pct = slaMax > 0 ? (d.breached / slaMax) * 100 : 0;
+            var color = d.pct_ok >= 90 ? '#2a9d8f' : d.pct_ok >= 70 ? '#f4a261' : '#e63946';
+            var list = (byProduct[d.product_name] || []).slice();
+            list.sort(function(a, b) { return String(b.retrieved_at).localeCompare(String(a.retrieved_at)); });
+            var detailRows = list.map(function(occ) {
+                return [
+                    '<span style="font-family:var(--font-mono);white-space:nowrap;">' + exportEscape(fmtOccDate(occ.retrieved_at)) + '</span>',
+                    occ.daily_seq ? '#' + occ.daily_seq : '\u2014',
+                    exportEscape(occ.station || '\u2014'),
+                    fmtRealMinutes(occ.ready_at, occ.retrieved_at) + ' min',
+                    (occ.overage_min == null ? '\u2014' : (Math.round(Number(occ.overage_min) * 10) / 10) + ' min')
+                ];
+            });
+            rows += drillRowHtml({
+                prefix: 'pickup-sla', rowClass: 'pickup-sla-row', idx: i,
+                label: d.product_name, value: d.pct_ok + '%', valueLabel: d.breached + ' estouro' + (d.breached === 1 ? '' : 's'), pct: pct, color: color,
+                rowTitle: d.product_name + ': ' + d.breached + ' estouros de retirada \u00b7 ' + d.pct_ok + '% das retiradas dentro do SLA (toler\u00e2ncia: ' + tolLabel + ' min)',
+                barTitle: 'Barra proporcional aos ' + d.breached + ' estouros de retirada (produto com mais estouros = barra cheia)',
+                valueTitle: d.pct_ok + '% das retiradas deste produto ficaram dentro do SLA',
+                head: list.length + ' estouro' + (list.length === 1 ? '' : 's') + ' \u00b7 ' + d.pct_ok + '% dentro do SLA \u00b7 toler\u00e2ncia ' + tolLabel + ' min',
+                table: drillTableHtml(['Data/Hora', 'Pedido', 'Esta\u00e7\u00e3o', 'Espera real', 'Excedeu'], detailRows)
+            });
+        });
+        return '<div style="max-height:260px;overflow-y:auto;">' + rows + '</div>';
+    }
+
     // Tempo médio de preparo por produto (agregado no servidor — sem o enviesamento
     // do antigo `qty_vs_time` com ORDER BY quantity LIMIT 200).
     function renderPrepHtml(data) {
@@ -1429,7 +1477,10 @@ if (document.readyState === 'loading') {
                 '<header class="panel-header"><h3 class="panel-title">SLA por Produto</h3><p class="panel-subtitle">Ordenado por estouros · tamanho da barra = n° de estouros (vs o pior produto) · % = pedidos dentro do SLA · clique para detalhar</p></header>' +
                 '<div class="panel-body">' + renderSlaProductPanel(data) + '</div></article>';
         }
-        wireDrillGrid(slaGrid, [{ selector: '.sla-product-row', prefix: 'sla' }]);
+        wireDrillGrid(slaGrid, [
+            { selector: '.sla-product-row', prefix: 'sla' },
+            { selector: '.pickup-sla-row', prefix: 'pickup-sla' },
+        ]);
 
         if (data.prep_by_product && data.prep_by_product.length) {
             slaGrid.innerHTML += '<article class="panel" data-cols="6">' +
@@ -1458,6 +1509,12 @@ if (document.readyState === 'loading') {
             slaGrid.innerHTML += '<article class="panel" data-cols="6">' +
                 '<header class="panel-header"><h3 class="panel-title">Tempo de Fila por Estação</h3></header>' +
                 '<div class="panel-body">' + qhtml + '</div></article>';
+        }
+
+        if (data.pickup_sla_by_product && data.pickup_sla_by_product.length) {
+            slaGrid.innerHTML += '<article class="panel" data-cols="6">' +
+                '<header class="panel-header"><h3 class="panel-title">SLA de Retirada do Sal\u00e3o por Produto</h3><p class="panel-subtitle">Ordenado por estouros \u00b7 barra = n\u00b0 de estouros (vs o pior produto) \u00b7 % = retiradas dentro do SLA \u00b7 toler\u00e2ncia atual: ' + pickupTolLabel(data) + ' min \u00b7 clique para detalhar</p></header>' +
+                '<div class="panel-body">' + renderPickupSlaPanel(data) + '</div></article>';
         }
 
         if (data.queue_time_by_hour && data.queue_time_by_hour.length) {
@@ -2489,6 +2546,29 @@ if (document.readyState === 'loading') {
             '</div>';
     }
 
+    function exportPickupSlaHtml(data) {
+        var rows = (data.pickup_sla_details || []).slice(0, 8).map(function(r) {
+            var wait = fmtRealMinutes(r.ready_at, r.retrieved_at);
+            return [
+                fmtOccDate(r.retrieved_at),
+                r.product_name || '-',
+                r.station || '\u2014',
+                wait === '\u2014' ? '\u2014' : wait + ' min',
+                r.overage_min == null ? '\u2014' : (Math.round(Number(r.overage_min) * 10) / 10) + ' min'
+            ];
+        });
+        var table = rows.length
+            ? '<table class="export-table"><thead><tr>' +
+              ['Data/Hora', 'Produto', 'Esta\u00e7\u00e3o', 'Espera real', 'Excedeu'].map(function(h) { return '<th>' + h + '</th>'; }).join('') +
+              '</tr></thead><tbody>' +
+              rows.map(function(cells) { return '<tr>' + cells.map(function(c) { return '<td>' + exportEscape(c) + '</td>'; }).join('') + '</tr>'; }).join('') +
+              '</tbody></table>'
+            : '<p class="export-muted">Sem estouros de retirada no per\u00edodo.</p>';
+        return '<div class="export-two"><div class="export-panel"><h3>SLA de retirada do sal\u00e3o por produto (toler\u00e2ncia: ' + exportEscape(pickupTolLabel(data)) + ' min)</h3>' +
+            exportBars(data.pickup_sla_by_product || [], 'product_name', function(r) { return Number(r.breached || 0); }, '#e76f51') + '</div>' +
+            '<div class="export-panel"><h3>Retiradas \u2014 exemplos recentes</h3>' + table + '</div></div>';
+    }
+
     function exportReportHtml(data, perf, title, index, includeVolume) {
         var k = data.kpis || {};
         var donutHtml = '<div class="export-two">' + exportDonut('Status das demandas', [{label:'Pendentes',value:Number(data.funnel && data.funnel.pending_now || 0)},{label:'Prontas',value:Math.max(0,Number(data.funnel && data.funnel.ready || 0)-Number(data.funnel && data.funnel.retrieved || 0))},{label:'Retiradas',value:Number(data.funnel && data.funnel.retrieved || 0)},{label:'Canceladas',value:Number(k.total_cancelados||0)}], ['#d4a574','#6b9080','#2a9d8f','#e63946']) + exportDonut('Origem das urgências', [{label:'Urgentes puros',value:Number(k.urgentes_puros||0)},{label:'Por zerou',value:Number(k.urgentes_rotura||0)}], ['#e63946','#f4a261']) + '</div>';
@@ -2497,7 +2577,7 @@ if (document.readyState === 'loading') {
             exportKpisHtml(k) + '<div class="export-two"><div class="export-panel"><h3>Funil de demandas</h3>' + exportBars([{label:'Criadas',value:Number(data.funnel && data.funnel.created || 0)},{label:'Iniciaram preparo',value:Number(data.funnel && data.funnel.ready || 0)},{label:'Prontas',value:Number(data.funnel && data.funnel.ready || 0)},{label:'Retiradas',value:Number(data.funnel && data.funnel.retrieved || 0)}], 'label', 'value', '#d4a574') + '</div>' + donutHtml + '</div>' +
             '<div class="export-two"><div class="export-panel"><h3>Produtos mais demandados</h3>' + exportBars((data.produtos||[]).slice(0,10), 'product_name', function(r){return Number(r.total_qty||r.total_demandas||0);}, '#d4a574') + '</div><div class="export-panel"><h3>Sazonalidade</h3>' + wkNote + exportBars(data.weekday_seasonality||[], 'dia', 'total', '#6b9080') + '</div></div>' +
             '<div class="export-panel"><h3>Heatmap hora x dia da semana</h3>' + wkNote + renderHeatmap(data.heatmap) + '</div><div class="export-two">' + (includeVolume ? '<div class="export-panel"><h3>Volume diário</h3><canvas id="exportVolume' + index + '" width="400" height="230"></canvas></div>' : '') + '<div class="export-panel"><h3>Fila por hora</h3><canvas id="exportQueue' + index + '" width="400" height="230"></canvas></div><div class="export-panel"><h3>Velocidade da cozinha</h3><canvas id="exportSpeed' + index + '" width="400" height="230"></canvas></div><div class="export-panel"><h3>Tempo de retirada</h3><canvas id="exportPickup' + index + '" width="400" height="230"></canvas></div></div>' +
-            '<div class="export-two"><div class="export-panel"><h3>SLA por produto</h3>' + exportBars(data.sla_by_product||[], 'product_name', function(r){return Number(r.breached||0);}, '#e76f51') + '</div><div class="export-panel"><h3>Cancelamentos</h3>' + exportBars(data.cancel_reasons||[], 'label', 'total', '#e63946') + '</div></div>' + exportExamplesHtml(data) + exportPerformanceHtml(perf) + '</div>';
+            '<div class="export-two"><div class="export-panel"><h3>SLA por produto</h3>' + exportBars(data.sla_by_product||[], 'product_name', function(r){return Number(r.breached||0);}, '#e76f51') + '</div><div class="export-panel"><h3>Cancelamentos</h3>' + exportBars(data.cancel_reasons||[], 'label', 'total', '#e63946') + '</div></div>' + exportPickupSlaHtml(data) + exportExamplesHtml(data) + exportPerformanceHtml(perf) + '</div>';
     }
 
     function exportChartData(data, date) {
@@ -2566,6 +2646,14 @@ if (document.readyState === 'loading') {
             return {
                 'Data/Hora': fmtOccDate(r.ready_at || r.created_at), Pedido: r.daily_seq || '', Produto: r.product_name, 'Estação': r.station || '',
                 'Tempo real (min)': fmtRealMinutes(r.created_at, r.ready_at) === '\u2014' ? '' : Number(fmtRealMinutes(r.created_at, r.ready_at)),
+                'Excedeu (min)': r.overage_min == null ? '' : Math.round(Number(r.overage_min) * 10) / 10
+            };
+        }));
+        addSheet('SLA Retirada Detalhe', (data.pickup_sla_details || []).map(function(r) {
+            var wait = fmtRealMinutes(r.ready_at, r.retrieved_at);
+            return {
+                'Data/Hora': fmtOccDate(r.retrieved_at), Pedido: r.daily_seq || '', Produto: r.product_name, 'Estação': r.station || '',
+                'Espera real (min)': wait === '\u2014' ? '' : Number(wait),
                 'Excedeu (min)': r.overage_min == null ? '' : Math.round(Number(r.overage_min) * 10) / 10
             };
         }));
@@ -2729,6 +2817,7 @@ if (document.readyState === 'loading') {
                     ['produtos', 'Produtos'], ['cancel_reasons', 'Cancelamentos'],
                     ['replacements', 'Trocas'], ['queue_time_by_hour', 'Fila por Hora'],
                     ['sla_by_product', 'SLA por Produto'], ['pickup_by_hour', 'Retirada por Hora'],
+                    ['pickup_sla_by_product', 'SLA Retirada'],
                     ['weekday_seasonality', 'Sazonalidade'], ['speed_by_hour', 'Velocidade Cozinha']
                 ];
                 sheets.forEach(function(ab) { if (data[ab[0]] && data[ab[0]].length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data[ab[0]]), ab[1].substring(0, 31)); });
