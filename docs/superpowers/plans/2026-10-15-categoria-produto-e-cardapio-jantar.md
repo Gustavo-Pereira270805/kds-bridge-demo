@@ -74,11 +74,27 @@ colunas da view anterior) + espelho no `seedDatabase()` do boot.
 | Banco (nuvem) | view com o filtro novo (`tem_filtro_novo = t`), **0 duplicatas** em `daily_menu_effective`, hoje com 101 itens / 101 distintos |
 | Verificação pós-deploy (somente leitura) | `outputs/categoria-e-jantar/final_runs/run_nuvem/` — categoria editável + dropdown com 15 opções + 22 itens reais da Cozinha Jantar, sem erros de console |
 
-## Achado extra (não corrigido — fora do escopo aprovado)
+## Achado extra corrigido e deployado (2026-10-16)
 
-`runCleanup` (`src/services/cleanup.service.ts:39,44,48`) falha toda noite às 03:00
-com `operator does not exist: date < integer` (`CURRENT_DATE - $1` com parâmetro sem
-cast resolve `$1` como date). O log registra "[Cleanup] Erro na limpeza automática
-(não crítico)" — ou seja, a retenção de dados nunca executou. Correção: usar o mesmo
-padrão das duas primeiras queries (`NOW() - ($1 || ' days')::INTERVAL`) ou
-`CURRENT_DATE - $1::int`. Bug pré-existente, sem efeito na operação.
+`runCleanup` (`src/services/cleanup.service.ts:39,44,48`) falhava toda noite às 03:00
+com `operator does not exist: date < integer` (42883): `CURRENT_DATE - $1` sem cast
+resolvia `$1` como `date` (`date - date` → integer). O log registrava
+"[Cleanup] Erro na limpeza automática (não crítico)" — **a retenção nunca executou**.
+
+- Correção: `CURRENT_DATE - $1::int` nas três queries (override/menus/notas); os dois
+  DELETEs por `created_at` já usavam intervalo e funcionavam.
+- Verificação local (`tmp_teste_cleanup.mjs` / `tmp_teste_cleanup2.mjs`): fixtures de
+  200 dias apagadas e recentes preservadas; caminho do job automático usa
+  `system_settings.data_retention_days` (testado com 30).
+- Deploy: commit `e9546c8` → `kds-server-amd`, container healthy, 0 erros level>=40.
+- Verificação na nuvem (no-op com `older_than_days: 36500`):
+  `{"demand_events":0,"demands":0,"daily_menu_overrides":0,"daily_menus":0,"performance_scores":0,"retention_days":36500}`
+  — as queries rodam sem erro e nada é apagado; dados intactos
+  (2838 demands, 10238 eventos, 44 menus, 1288 notas, 776 overrides).
+
+**Atenção (decisão do usuário):** com a retenção de 180 dias funcionando, a próxima
+execução automática (03:00 UTC = 00:00 BRT) apaga **208 linhas** de
+`performance_scores` de **2026-03-24 a 2026-04-18** (órfãs: a demanda mais antiga é de
+2026-09-03). Backup criado na nuvem antes do deploy:
+`performance_scores_bkp_20261016` (208 linhas). Para mantê-las de vez, aumentar
+`system_settings.data_retention_days`; para restaurar, copiar do backup.
