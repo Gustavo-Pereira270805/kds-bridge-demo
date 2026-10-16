@@ -437,6 +437,46 @@ async function seedDatabase() {
          END $$`
       );
 
+      // Cardápio efetivo sem duplicatas (espelha supabase/migrations/2026-10-15-daily-menu-effective-sem-duplicatas.sql):
+      // o turno jantar adiciona via override os produtos da Cozinha Jantar que já
+      // podem estar na base do cardápio do dia — a adição manual não pode repetir
+      // um item que já está na base (aparecia duas vezes no salão e no /gerente).
+      await client.query(
+        `CREATE OR REPLACE VIEW daily_menu_effective AS
+         SELECT dm.date,
+           dm.id AS daily_menu_id,
+           mp.product_id,
+           p.name,
+           p.category,
+           'base'::text AS origin,
+           NULL::text AS default_unit
+         FROM daily_menus dm
+           JOIN menu_products mp ON mp.menu_id = dm.menu_id
+           JOIN products p ON p.id = mp.product_id AND p.active = true
+         WHERE NOT EXISTS (
+           SELECT 1 FROM daily_menu_overrides dmo
+           WHERE dmo.daily_menu_id = dm.id
+             AND dmo.product_id = mp.product_id
+             AND dmo.action::text = 'remove'::text
+         )
+         UNION ALL
+         SELECT dm.date,
+           dm.id AS daily_menu_id,
+           dmo.product_id,
+           p.name,
+           p.category,
+           'manual_add'::text AS origin,
+           NULL::text AS default_unit
+         FROM daily_menus dm
+           JOIN daily_menu_overrides dmo ON dmo.daily_menu_id = dm.id AND dmo.action::text = 'add'::text
+           JOIN products p ON p.id = dmo.product_id AND p.active = true
+         WHERE NOT EXISTS (
+           SELECT 1 FROM menu_products mp
+           WHERE mp.menu_id = dm.menu_id
+             AND mp.product_id = dmo.product_id
+         )`
+      );
+
       const { rows: ksRows } = await client.query('SELECT id, code FROM kitchen_stations');
       const stationMap: Record<string, string> = {};
       for (const ks of ksRows) { stationMap[ks.code] = ks.id; }

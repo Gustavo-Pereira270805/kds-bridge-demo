@@ -15,6 +15,7 @@ import { recomputePickupSlaFlags } from '../services/sla.service';
 import { computeDailyScores, getPickupTolerance, getWeights } from '../services/performance.service';
 import { recomputeStationQueue } from '../services/queue.service';
 import { ensureTodayMenu } from '../services/menu.service';
+import { listDinnerMenu, setDinnerMenuProduct } from '../services/dinner-menu.service';
 import { requireAuth } from '../middleware/auth';
 import { brDay, brDayFrom, brDayOf } from '../services/period.service';
 import { lastHeartbeat } from '../socket/handlers';
@@ -255,6 +256,60 @@ export default async function adminRoutes(fastify: FastifyInstance) {
     } catch (error) {
       request.log.error(error);
       reply.code(500).send({ error: 'Erro ao definir cardápio do dia' });
+    }
+  });
+
+  // Cardápio Jantar: pseudo-cardápio = produtos ativos da Cozinha Jantar.
+  // Fica em namespace próprio (/dinner-menu/*) para não colidir com as rotas
+  // /menus/:id — o jantar não é uma linha da tabela menus (rotação 1..14).
+  // Mesmo contrato de /menus/:id/products para o front reaproveitar a tela.
+  fastify.get('/dinner-menu/products', async (request, reply) => {
+    try {
+      return await listDinnerMenu();
+    } catch (error) {
+      request.log.error(error);
+      const status = (error as { statusCode?: number }).statusCode ?? 500;
+      reply.code(status).send({ error: 'Erro ao buscar o cardápio jantar' });
+    }
+  });
+
+  // Cardápio Jantar: adicionar produto (move para a Cozinha Jantar)
+  fastify.post<{ Body: { product_id: string } }>(
+    '/dinner-menu/products', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['product_id'],
+        properties: {
+          product_id: { type: 'string', minLength: 1 },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    try {
+      const result = await setDinnerMenuProduct(request.body.product_id, 'add');
+      fastify.io.emit('product:updated', result.product);
+      if (result.today_menu_changed) fastify.io.to('salao').emit('menu:updated');
+      return { ok: true, ...result };
+    } catch (error) {
+      request.log.error(error);
+      const status = (error as { statusCode?: number }).statusCode ?? 500;
+      reply.code(status).send({ error: 'Erro ao adicionar produto ao cardápio jantar' });
+    }
+  });
+
+  // Cardápio Jantar: remover produto (deixa o produto "Sem cozinha")
+  fastify.delete<{ Params: { productId: string } }>(
+    '/dinner-menu/products/:productId', async (request, reply) => {
+    try {
+      const result = await setDinnerMenuProduct(request.params.productId, 'remove');
+      fastify.io.emit('product:updated', result.product);
+      if (result.today_menu_changed) fastify.io.to('salao').emit('menu:updated');
+      return { ok: true, ...result };
+    } catch (error) {
+      request.log.error(error);
+      const status = (error as { statusCode?: number }).statusCode ?? 500;
+      reply.code(status).send({ error: 'Erro ao remover produto do cardápio jantar' });
     }
   });
 

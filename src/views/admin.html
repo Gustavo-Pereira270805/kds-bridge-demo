@@ -234,9 +234,14 @@
     <div id="panel-menus" class="panel">
         <h2>Produtos por Cardápio</h2>
         <div class="row">
-            <div class="form-group"><label>Cardápio #</label><select id="menuSelect" onchange="loadMenuProducts()" style="width:150px;"></select></div>
-            <div class="form-group"><label>&nbsp;</label><button class="btn-primary" onclick="setTodayMenu()">Usar Hoje</button></div>
+            <div class="form-group"><label>Cardápio #</label><select id="menuSelect" onchange="loadMenuProducts()" style="width:230px;"></select></div>
+            <div class="form-group"><label>&nbsp;</label><button class="btn-primary" id="setTodayMenuBtn" onclick="setTodayMenu()">Usar Hoje</button></div>
         </div>
+        <p id="dinnerMenuHint" style="display:none;color:var(--c-text-secondary);font-size:14px;margin:0 0 14px;">
+            <strong>Jantar</strong> é a lista de produtos da <strong>Cozinha Jantar</strong> (o turno jantar injeta esses itens no cardápio do dia).
+            <em>Adicionar</em> move o produto para a Cozinha Jantar; <em>Remover</em> deixa o produto <strong>Sem cozinha</strong> — ajuste a cozinha depois na aba Produtos.
+            Os itens flexíveis (INHAME COZIDO, DELÍCIA DE PEIXE, DELÍCIA DE FRANGO) migram sozinhos entre almoço e jantar conforme o turno.
+        </p>
         <div class="row">
             <div class="form-group"><label>Pesquisar produtos</label><input type="text" id="menuProductSearch" placeholder="Ex: arroz, feijão..." oninput="applyMenuProductFilter()" style="width:250px;"></div>
         </div>
@@ -591,7 +596,7 @@ function loadProducts() {
             }
             return '<tr>' +
                 '<td><strong>' + esc(p.name) + '</strong></td>' +
-                '<td>' + esc(p.category) + '</td>' +
+                '<td><input type="text" value="' + escAttr(p.category) + '" onchange="updateProduct(\'' + p.id + '\',\'category\',this.value)" style="width:170px;"></td>' +
                 '<td><select onchange="updateProduct(\'' + p.id + '\',\'kitchen_station_id\',this.value)" style="width:200px;">' +
                     '<option value="">--</option>' +
                     allStations.map(function(s) { return '<option value="' + s.id + '"' + (p.kitchen_station_id === s.id ? ' selected' : '') + '>' + esc(s.name) + '</option>'; }).join('') +
@@ -618,7 +623,11 @@ function applyProductFilter() {
     var input = document.getElementById('productSearch');
     var q = normSearch(input && input.value.trim());
     document.querySelectorAll('#productsTable tbody tr').forEach(function(tr) {
-        tr.style.display = (!q || normSearch(tr.textContent).indexOf(q) !== -1) ? '' : 'none';
+        // Categoria/SLA estão em <input>: value não aparece no textContent,
+        // então concatena os valores antes de comparar.
+        var texto = tr.textContent;
+        tr.querySelectorAll('input').forEach(function(inp) { texto += ' ' + (inp.value || ''); });
+        tr.style.display = (!q || normSearch(texto).indexOf(q) !== -1) ? '' : 'none';
     });
 }
 
@@ -644,11 +653,17 @@ function addProduct() {
 function updateProduct(id, field, value) {
     var body = {};
     body[field] = field.includes('sla') ? parseInt(value) : value;
+    if (field.includes('sla') && !(body[field] >= 1)) { toast('SLA deve ser >= 1 minuto', false); loadProducts(); return; }
     api('/api/v1/admin/products/' + id, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
-    }).catch(function(err) { console.error(err); });
+    }).catch(function(err) {
+        // Erro visível: sem isso o valor digitado ficaria na tela como se tivesse salvado.
+        console.error(err);
+        toast(err && err.message ? err.message : 'Erro ao salvar produto', false);
+        loadProducts();
+    });
 }
 
 function toggleProduct(id) {
@@ -714,22 +729,46 @@ function updateCapacity(id) {
 }
 
 // === MENUS ===
+// "Jantar" é um pseudo-cardápio: a lista de produtos da Cozinha Jantar. O jantar
+// não é uma linha da tabela menus (rotação fixa 1..14); a API usa o namespace
+// /admin/dinner-menu/* com o MESMO contrato dos cardápios numerados.
+var DINNER_MENU_ID = 'jantar';
+
+function isDinnerMenu(menuId) {
+    return menuId === DINNER_MENU_ID;
+}
+
+function menuProductsUrl(menuId) {
+    return isDinnerMenu(menuId)
+        ? '/api/v1/admin/dinner-menu/products'
+        : '/api/v1/admin/menus/' + menuId + '/products';
+}
+
 function loadMenus() {
     api('/api/v1/admin/menus').then(function(menus) {
         var sel = document.getElementById('menuSelect');
-        sel.innerHTML = menus.map(function(m) { return '<option value="' + m.id + '">Cardápio ' + m.number + ' — ' + esc(m.name) + '</option>'; }).join('');
+        sel.innerHTML = menus.map(function(m) { return '<option value="' + m.id + '">Cardápio ' + m.number + ' — ' + esc(m.name) + '</option>'; }).join('') +
+            '<option value="' + DINNER_MENU_ID + '">Jantar — Cozinha Jantar</option>';
         loadMenuProducts();
-    });
+    }).catch(function(err) { console.error(err); toast('Erro ao carregar cardápios', false); });
 }
 
 function loadMenuProducts() {
     var menuId = document.getElementById('menuSelect').value;
     if (!menuId) return;
-    api('/api/v1/admin/menus/' + menuId + '/products').then(function(data) {
+    var dinner = isDinnerMenu(menuId);
+    var setTodayBtn = document.getElementById('setTodayMenuBtn');
+    // "Usar Hoje" não se aplica ao jantar: quem coloca os itens do jantar no
+    // cardápio do dia é a ativação do turno (botão da tela do gerente).
+    if (setTodayBtn) setTodayBtn.style.display = dinner ? 'none' : '';
+    var hint = document.getElementById('dinnerMenuHint');
+    if (hint) hint.style.display = dinner ? '' : 'none';
+
+    api(menuProductsUrl(menuId)).then(function(data) {
         var menuProds = data.menu_products || [];
         var allProds = data.all_products || [];
         document.getElementById('menuProductList').innerHTML = menuProds.length === 0
-            ? '<p style="color:var(--c-text-secondary);">Nenhum produto neste cardápio</p>'
+            ? '<p style="color:var(--c-text-secondary);">' + (dinner ? 'Nenhum produto no cardápio jantar' : 'Nenhum produto neste cardápio') + '</p>'
             : menuProds.slice().sort(function(a, b) { return (a.name || '').localeCompare(b.name || '', 'pt-BR'); }).map(function(p) {
                 return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid var(--c-border-default);">' +
                     '<span>' + esc(p.name) + ' <small style="color:var(--c-text-secondary);">(' + esc(p.category) + ')</small></span>' +
@@ -743,7 +782,7 @@ function loadMenuProducts() {
                 '<button class="btn-sm btn-success" onclick="addToMenu(\'' + menuId + '\',\'' + p.id + '\')">Adicionar</button></div>';
         }).join('');
         applyMenuProductFilter();
-    });
+    }).catch(function(err) { console.error(err); toast(err && err.message ? err.message : 'Erro ao carregar produtos do cardápio', false); });
 }
 
 function applyMenuProductFilter() {
@@ -760,21 +799,31 @@ function applyMenuProductFilter() {
 }
 
 function addToMenu(menuId, productId) {
-    api('/api/v1/admin/menus/' + menuId + '/products', {
+    api(menuProductsUrl(menuId), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ product_id: productId })
-    }).then(function() { loadMenuProducts(); toast('Produto adicionado ao cardápio', true); }).catch(function(e) { toast(e.message, false); });
+    }).then(function() {
+        loadMenuProducts();
+        // O jantar mexe na cozinha do produto: mantém a aba Produtos coerente.
+        if (isDinnerMenu(menuId)) loadProducts();
+        toast(isDinnerMenu(menuId) ? 'Produto adicionado ao cardápio jantar' : 'Produto adicionado ao cardápio', true);
+    }).catch(function(e) { toast(e.message, false); });
 }
 
 function removeFromMenu(menuId, productId) {
-    api('/api/v1/admin/menus/' + menuId + '/products/' + productId, { method: 'DELETE' })
-        .then(function() { loadMenuProducts(); toast('Produto removido do cardápio', true); }).catch(function(e) { toast(e.message, false); });
+    api(menuProductsUrl(menuId) + '/' + productId, { method: 'DELETE' })
+        .then(function() {
+            loadMenuProducts();
+            if (isDinnerMenu(menuId)) loadProducts();
+            toast(isDinnerMenu(menuId) ? 'Produto removido do cardápio jantar' : 'Produto removido do cardápio', true);
+        }).catch(function(e) { toast(e.message, false); });
 }
 
 function setTodayMenu() {
     var menuId = document.getElementById('menuSelect').value;
     if (!menuId) { toast('Selecione um cardápio', false); return; }
+    if (isDinnerMenu(menuId)) { toast('O cardápio jantar é aplicado automaticamente na ativação do turno', false); return; }
     api('/api/v1/admin/menus/' + menuId + '/set-today', { method: 'POST' })
         .then(function() { toast('Cardápio definido como o de hoje!', true); })
         .catch(function(e) { toast(e.message, false); });
