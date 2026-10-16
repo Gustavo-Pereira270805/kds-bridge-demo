@@ -36,16 +36,16 @@ export async function runCleanup(olderThanDays?: number): Promise<CleanupResult>
     );
     const dmo = await client.query(
       `DELETE FROM daily_menu_overrides WHERE daily_menu_id IN (
-         SELECT id FROM daily_menus WHERE date < CURRENT_DATE - $1
+         SELECT id FROM daily_menus WHERE date < CURRENT_DATE - $1::int
        )`,
       [days]
     );
     const dm = await client.query(
-      `DELETE FROM daily_menus WHERE date < CURRENT_DATE - $1`,
+      `DELETE FROM daily_menus WHERE date < CURRENT_DATE - $1::int`,
       [days]
     );
     const ps = await client.query(
-      `DELETE FROM performance_scores WHERE date < CURRENT_DATE - $1`,
+      `DELETE FROM performance_scores WHERE date < CURRENT_DATE - $1::int`,
       [days]
     );
     await client.query('COMMIT');
