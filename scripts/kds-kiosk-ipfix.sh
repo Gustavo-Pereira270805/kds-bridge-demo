@@ -11,12 +11,19 @@
 # Sintoma idêntico ao do userland-proxy do Docker (ver AGENTS.md).
 #
 # SOLUÇÃO
-# Exceção estreita ANTES do ts-postrouting: tráfego com origem na tailnet
-# (100.64.0.0/10) e destino em rede privada de container (172.16.0.0/12) não é
-# mascarado, então o Caddy enxerga o IP do Pi.
+# 1) Preferencial (durável): `tailscale set --snat-subnet-routes=false` — esta
+#    VM não é subnet router nem exit node, então o SNAT do Tailscale não tem
+#    função aqui. É o que zera a regra de MASQUERADE do ts-postrouting (o
+#    Tailscale ainda pode deixar o jump, mas a chain fica vazia).
+# 2) Exceção estreita ANTES do ts-postrouting: tráfego com origem na tailnet
+#    (100.64.0.0/10) e destino em rede privada de container (172.16.0.0/12) não é
+#    mascarado, então o Caddy enxerga o IP do Pi. É a rede de segurança para
+#    quando o tailscaled reinsere o jump na posição 1 (ele INSERE no início, não
+#    anexa) ou se a pref voltar ao padrão.
 #
 # Uso (root): bash kds-kiosk-ipfix.sh
-# Instalação permanente: kds-kiosk-ipfix.service (ver docs/FIX_QUIOSQUE_SNAT_TAILSCALE_2026-10-30.md)
+# Instalação permanente: kds-kiosk-ipfix.service + kds-kiosk-ipfix-watch.service
+# (ver docs/FIX_QUIOSQUE_SNAT_TAILSCALE_2026-10-30.md)
 #
 # Conferir depois: sudo iptables -t nat -S POSTROUTING | head -3
 #   A regra precisa ser a PRIMEIRA (antes do `-j ts-postrouting`).

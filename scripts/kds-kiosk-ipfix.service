@@ -1,13 +1,14 @@
 [Unit]
 Description=KDS: preserva o IP dos quiosques (evita SNAT do Tailscale para a rede Docker)
-Documentation=docs/FIX_QUIOSQUE_SNAT_TAILSCALE_2026-10-30.md
+Documentation=file:///opt/kds/docs/FIX_QUIOSQUE_SNAT_TAILSCALE_2026-10-30.md
 After=tailscaled.service docker.service
 PartOf=tailscaled.service
 Wants=tailscaled.service
 
 [Service]
 Type=oneshot
-RemainAfterExit=yes
+# Sem RemainAfterExit: o kds-kiosk-ipfix-watch.service reexecuta este unit
+# periodicamente, e com RemainAfterExit o `systemctl start` seria no-op.
 ExecStart=/usr/local/sbin/kds-kiosk-ipfix.sh
 
 [Install]

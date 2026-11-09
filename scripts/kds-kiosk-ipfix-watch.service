@@ -1,0 +1,14 @@
+[Unit]
+Description=KDS: vigia a excecao de IP dos quiosques (SNAT do Tailscale x Docker)
+Documentation=file:///opt/kds/docs/FIX_QUIOSQUE_SNAT_TAILSCALE_2026-10-30.md
+After=tailscaled.service docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/kds-kiosk-ipfix-watch.sh
+Restart=always
+RestartSec=10
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

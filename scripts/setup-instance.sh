@@ -85,22 +85,64 @@ chmod 755 /usr/local/sbin/kds-kiosk-ipfix.sh
 cat > /etc/systemd/system/kds-kiosk-ipfix.service <<'EOF'
 [Unit]
 Description=KDS: preserva o IP dos quiosques (evita SNAT do Tailscale para a rede Docker)
-Documentation=docs/FIX_QUIOSQUE_SNAT_TAILSCALE_2026-10-30.md
+Documentation=file:///opt/kds/docs/FIX_QUIOSQUE_SNAT_TAILSCALE_2026-10-30.md
 After=tailscaled.service docker.service
 PartOf=tailscaled.service
 Wants=tailscaled.service
 
 [Service]
 Type=oneshot
-RemainAfterExit=yes
 ExecStart=/usr/local/sbin/kds-kiosk-ipfix.sh
 
 [Install]
 WantedBy=multi-user.target
 EOF
+
+# O tailscaled INSERE o jump ts-postrouting no INÍCIO do POSTROUTING a cada
+# upgrade/reconfiguração (aconteceu em 30/10 e 08/11), empurrando a exceção para
+# a posição 2. Este vigia reaplica a cada 30s (idempotente) e é o que segura o
+# bypass no dia a dia; o serviço acima cobre boot e restart do tailscaled.
+cat > /usr/local/sbin/kds-kiosk-ipfix-watch.sh <<'EOF'
+#!/bin/bash
+# Cópia canônica: scripts/kds-kiosk-ipfix-watch.sh (manter iguais).
+set -u
+INTERVALO="${KDS_IPFIX_INTERVALO:-30}"
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+while :; do
+  /usr/local/sbin/kds-kiosk-ipfix.sh || true
+  sleep "$INTERVALO"
+done
+EOF
+chmod 755 /usr/local/sbin/kds-kiosk-ipfix-watch.sh
+
+cat > /etc/systemd/system/kds-kiosk-ipfix-watch.service <<'EOF'
+[Unit]
+Description=KDS: vigia a excecao de IP dos quiosques (SNAT do Tailscale x Docker)
+After=tailscaled.service docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/kds-kiosk-ipfix-watch.sh
+Restart=always
+RestartSec=10
+Nice=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 systemctl daemon-reload
-systemctl enable --now kds-kiosk-ipfix.service
+systemctl enable --now kds-kiosk-ipfix.service kds-kiosk-ipfix-watch.service
+
+# Fix de raiz: esta VM não é subnet router nem exit node, então o SNAT do
+# Tailscale não tem função — desligá-lo esvazia o ts-postrouting. O Tailscale é
+# instalado fora deste script; se já estiver presente, aplica agora.
+if command -v tailscale >/dev/null 2>&1; then
+  tailscale set --snat-subnet-routes=false || true
+fi
+
 iptables -t nat -S POSTROUTING | head -3
+iptables -t nat -S ts-postrouting
 
 echo "==> [6/7] Preparando o projeto"
 if [ ! -d /opt/kds ]; then

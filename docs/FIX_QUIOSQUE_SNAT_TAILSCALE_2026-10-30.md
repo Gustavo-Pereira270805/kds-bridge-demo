@@ -44,20 +44,34 @@ Persistência (a regra sozinha não sobrevive a reboot nem a um restart do `tail
 Verificação rápida em produção:
 
 ```bash
-sudo iptables -t nat -S POSTROUTING | head -3
-systemctl is-enabled kds-kiosk-ipfix.service && systemctl is-active kds-kiosk-ipfix.service
+sudo iptables -t nat -S POSTROUTING | head -3   # RETURN na 1ª posição
+sudo iptables -t nat -S ts-postrouting          # só "-N ts-postrouting" (vazio)
+systemctl is-active kds-kiosk-ipfix-watch.service
 # no Pi:
 curl -s -o /dev/null -w '%{http_code}\n' http://100.81.149.114/cozinha-fria   # 200
 ```
 
+## Reincidência em 08/11/2026 — e a correção definitiva
+
+O bug voltou 9 dias depois, com o Tailscale indo de **1.104.4 para 1.104.5** (08/11, 21:57 UTC):
+
+- o `tailscaled` **insere** o jump `-A POSTROUTING -j ts-postrouting` no **início** da chain (não anexa no fim), então a nossa regra foi empurrada da posição 1 para a 2 — e o `MASQUERADE` voltou a mascarar o IP do Pi;
+- o `kds-kiosk-ipfix.service` **rodou** no restart (`PartOf=tailscaled.service`, registrado às 21:57:38), mas o tailscaled aplica as regras de rede de forma assíncrona, **depois** de o serviço reportar `started` — ou seja, havia uma corrida que o serviço perdia.
+
+Correções aplicadas em 09/11:
+
+1. **Raiz — `tailscale set --snat-subnet-routes=false`.** A VM não é subnet router nem exit node (`AdvertiseRoutes: null`, `RouteAll: false`, `ExitNodeID: ""`), então esse SNAT não tem função. Resultado: `iptables -t nat -S ts-postrouting` fica **vazio** e o Tailscale pode reinserir o jump à vontade — não há mais o que mascarar.
+2. **Rede de segurança — `kds-kiosk-ipfix-watch.service`** (`scripts/kds-kiosk-ipfix-watch.sh`): loop de 30s que roda o `kds-kiosk-ipfix.sh`. Cobre o caso de a pref voltar ao padrão ou de alguma outra regra empurrar a exceção para baixo. Testado: regra removida → volta em ~15s; regra empurrada para a posição 2 → reordenada em ~30s.
+3. **Timer do systemd não serve aqui:** nesta VM (systemd 259) o `OnCalendar=*:0/2` carrega com `next_elapse` no passado e `NextElapseUSecRealtime` vazio (`Trigger: n/a`), e nunca dispara. Por isso o vigia é um loop, não um `.timer`.
+
 ## Alternativas (para janela de manutenção)
 
-1. **`tailscale set --snat-subnet-routes=false`** — desliga o SNAT na origem (é o remédio indicado no issue tailscale#10205). Como esta VM **não** é subnet router nem exit node (`AdvertiseRoutes: null`, `RouteAll: false`, `ExitNodeID: ""`), não há efeito colateral. Não foi aplicado durante o almoço porque mexer nas prefs do `tailscaled` pode derrubar a tailnet por alguns segundos — e o SSH de gestão da VM é justamente pela tailnet.
+1. ~~`tailscale set --snat-subnet-routes=false`~~ — **aplicado em 09/11** (ver seção acima). Zero efeito colateral nesta VM.
 2. **Caddy com `network_mode: host`** — elimina a classe inteira do problema (sem DNAT para bridge, o pacote é LOCAL e não passa por `ts-forward`). Exige `ports` do Caddy fora, `reverse_proxy 127.0.0.1:3000` e publicar o app em `127.0.0.1:3000`.
 3. `tailscale up --netfilter-mode=nodivert` — o Tailscale para de religar os próprios jumps; exige gerenciar `ts-*` à mão (não recomendado).
 
 ## Lições
 
 - Atualização automática do Tailscale é mudança de infraestrutura de rede: o bypass por IP depende do **IP de origem chegar intacto** até o app, e cada camada (Docker, Tailscale, proxy) pode mascarar.
-- `ts-postrouting` pode voltar a cada upgrade/restart do `tailscaled`; o `PartOf=tailscaled.service` cobre isso, mas vale reconferir a **posição 1** da regra após atualizações.
+- `ts-postrouting` pode voltar a cada upgrade/restart do `tailscaled`; o `PartOf=tailscaled.service` **não basta** (corrida contra a aplicação assíncrona das regras) — daí a pref `snat-subnet-routes=false` + o vigia de 30s.
 - Antes de suspeitar do código, medir: `curl` do próprio Pi para o vhost tailnet (`200` × `302`) + `iptables -t nat -L POSTROUTING -n -v` durante o request identificam a camada que está mascarando.
