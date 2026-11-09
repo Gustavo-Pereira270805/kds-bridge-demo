@@ -63,6 +63,7 @@ Correções aplicadas em 09/11:
 1. **Raiz — `tailscale set --snat-subnet-routes=false`.** A VM não é subnet router nem exit node (`AdvertiseRoutes: null`, `RouteAll: false`, `ExitNodeID: ""`), então esse SNAT não tem função. Resultado: `iptables -t nat -S ts-postrouting` fica **vazio** e o Tailscale pode reinserir o jump à vontade — não há mais o que mascarar.
 2. **Rede de segurança — `kds-kiosk-ipfix-watch.service`** (`scripts/kds-kiosk-ipfix-watch.sh`): loop de 30s que roda o `kds-kiosk-ipfix.sh`. Cobre o caso de a pref voltar ao padrão ou de alguma outra regra empurrar a exceção para baixo. Testado: regra removida → volta em ~15s; regra empurrada para a posição 2 → reordenada em ~30s.
 3. **Timer do systemd não serve aqui:** nesta VM (systemd 259) o `OnCalendar=*:0/2` carrega com `next_elapse` no passado e `NextElapseUSecRealtime` vazio (`Trigger: n/a`), e nunca dispara. Por isso o vigia é um loop, não um `.timer`.
+4. **Auto-update do Tailscale desligado** (09/11): `tailscale set --auto-update=false`. Ele continua **checando** versões (`AutoUpdate.Check: true`), mas não instala (`Apply: false`). As duas quebras vieram de atualizações automáticas (`tailscale update --yes` disparado pelo próprio tailscaled, visível em `journalctl -u tailscaled`). Atualização agora é manual e em janela de manutenção: `tailscale update` (ou `apt-get install tailscale=<versão>`) e, depois, o teste do `curl` do Pi.
 
 ## Alternativas (para janela de manutenção)
 
